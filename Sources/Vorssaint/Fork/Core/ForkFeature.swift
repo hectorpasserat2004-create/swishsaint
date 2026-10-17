@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Hector Passerat
 
-import Foundation
+import SwiftUI
 
 /// The fork's features, each with its own switch on the Extras page.
 ///
@@ -10,6 +10,7 @@ import Foundation
 enum ForkFeature: String, CaseIterable, Identifiable {
     case trackpadGestures
     case claudeUsage
+    case dictation
 
     var id: String { rawValue }
 
@@ -18,6 +19,7 @@ enum ForkFeature: String, CaseIterable, Identifiable {
         switch self {
         case .trackpadGestures: return ForkDefaultsKey.gesturesEnabled
         case .claudeUsage: return ForkDefaultsKey.claudeUsageEnabled
+        case .dictation: return ForkDefaultsKey.dictationEnabled
         }
     }
 
@@ -25,6 +27,25 @@ enum ForkFeature: String, CaseIterable, Identifiable {
         switch self {
         case .trackpadGestures: return "hand.draw"
         case .claudeUsage: return "gauge.with.dots.needle.33percent"
+        case .dictation: return "waveform"
+        }
+    }
+
+    /// The tile behind the symbol in the Extras list.
+    var tint: Color {
+        switch self {
+        case .trackpadGestures: return .blue
+        case .claudeUsage: return .orange
+        case .dictation: return .purple
+        }
+    }
+
+    /// Whether it watches input or acts on other apps, which takes
+    /// Accessibility.
+    var needsAccessibility: Bool {
+        switch self {
+        case .trackpadGestures, .dictation: return true
+        case .claudeUsage: return false
         }
     }
 
@@ -32,6 +53,7 @@ enum ForkFeature: String, CaseIterable, Identifiable {
         switch self {
         case .trackpadGestures: return text.gesturesTitle
         case .claudeUsage: return text.claudeUsageTitle
+        case .dictation: return text.dictationTitle
         }
     }
 
@@ -39,6 +61,7 @@ enum ForkFeature: String, CaseIterable, Identifiable {
         switch self {
         case .trackpadGestures: return text.gesturesSummary
         case .claudeUsage: return text.claudeUsageSummary
+        case .dictation: return text.dictationSummary
         }
     }
 
@@ -49,6 +72,7 @@ enum ForkFeature: String, CaseIterable, Identifiable {
         switch self {
         case .trackpadGestures: ForkGestures.sync()
         case .claudeUsage: if !isEnabled { ForkClaudeUsage.reset() }
+        case .dictation: ForkDictationService.sync()
         }
     }
 }
