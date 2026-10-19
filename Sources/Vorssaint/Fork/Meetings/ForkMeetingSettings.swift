@@ -923,6 +923,8 @@ private struct ForkMeetingMicrophonePicker: View {
                 Divider()
                 Text(text.microphoneOff).tag(ForkMeetingMicrophoneChoice.off.storageValue)
             }
+            // Finish D: turned off, the microphone's kept sound goes at once.
+            .onChange(of: microphone) { _, _ in ForkMeetingService.shared.syncListening() }
             if let caption {
                 Text(caption)
                     .font(.caption)

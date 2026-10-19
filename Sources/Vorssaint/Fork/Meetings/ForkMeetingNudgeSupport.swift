@@ -270,6 +270,14 @@ struct ForkMeetingListenPlan: Equatable {
         return before.keeps && (!after.keeps || old.meeting != new.meeting)
     }
 
+    /// Whether the microphone's kept sound must go while the meeting's own
+    /// stays: the microphone turned off on the page, or its permission
+    /// gone. It is never kept again for that meeting.
+    static func clearsMicrophone(from old: Facts, to new: Facts) -> Bool {
+        let before = plan(old), after = plan(new)
+        return before.keeps && before.microphone && !after.microphone
+    }
+
 }
 
 /// A few minutes of one sound, in memory only: 16 kHz mono, 16-bit, a
@@ -280,8 +288,9 @@ struct ForkMeetingListenPlan: Equatable {
 /// It is never written anywhere by itself. A recording that starts lets it
 /// go on past the click until its own sound for that track comes (`cut`),
 /// then writes it once into the meeting's folder
-/// (`ForkMeetingLookbackFile`). `clear` fills it with zeros and lets its
-/// memory go. Thread safe.
+/// (`ForkMeetingLookbackFile`). `clear` fills it with zeros, lets its
+/// memory go and closes it: a buffer still on its way never opens it again.
+/// Thread safe.
 final class ForkMeetingLookbackRing: @unchecked Sendable {
     static let sampleRate: Double = 16_000
     /// What the offer keeps, and says it keeps.
@@ -305,6 +314,7 @@ final class ForkMeetingLookbackRing: @unchecked Sendable {
     private var endHost: Double?
     /// Nothing from this host time on (`cut`).
     private var limit: Double?
+    private var closed = false
 
     init(seconds: TimeInterval = ForkMeetingLookbackRing.seconds + ForkMeetingLookbackRing.margin) {
         capacity = max(1, Int(seconds * Self.sampleRate))
@@ -314,6 +324,7 @@ final class ForkMeetingLookbackRing: @unchecked Sendable {
     func append(_ samples: UnsafeBufferPointer<Float>, startHost: Double) {
         guard !samples.isEmpty, startHost.isFinite else { return }
         lock.withLock {
+            guard !closed else { return }
             var count = samples.count
             if let limit {
                 count = min(count, Int(((limit - startHost) * Self.sampleRate).rounded()))
@@ -370,6 +381,9 @@ final class ForkMeetingLookbackRing: @unchecked Sendable {
         lock.withLock { limit = min(limit ?? host, host) }
     }
 
+    /// Emptied for good: nothing it takes any more.
+    var isClosed: Bool { lock.withLock { closed } }
+
     /// The samples from host time `from`, `count` of them, as floats;
     /// zeros where it holds nothing (before its start, after its end).
     func read(from: Double, count: Int) -> [Float] {
@@ -389,13 +403,15 @@ final class ForkMeetingLookbackRing: @unchecked Sendable {
         }
     }
 
-    /// Fills it with zeros and lets its memory go: what was kept is gone.
+    /// Fills it with zeros, lets its memory go and closes it: what was kept
+    /// is gone, and nothing arriving later is kept.
     func clear() {
         lock.withLock {
             for index in storage.indices { storage[index] = 0 }
             storage = []
             written = 0
             endHost = nil
+            closed = true
         }
     }
 }

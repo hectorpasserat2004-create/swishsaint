@@ -66,6 +66,11 @@ extension ForkMeetingService {
             kept.clear()
             listening.lookback = nil
             log.notice("kept sound emptied")
+        } else if let kept = listening.lookback, ForkMeetingListenPlan.clearsMicrophone(from: old, to: facts) {
+            // The microphone turned off, or its permission gone: its kept
+            // sound goes now, and is never handed to a recording.
+            kept.microphone.clear()
+            log.notice("kept microphone sound emptied")
         }
         if facts.meeting == nil { listening.nudges.forget() }
         var keptNew = false
@@ -141,9 +146,12 @@ extension ForkMeetingService {
 
     /// The kept sound of the meeting a recording starts for, handed to its
     /// engine with the listener that keeps filling it until the recording's
-    /// own sound comes; `nil` for any other start. Main thread.
+    /// own sound comes; `nil` for any other start. A recording without the
+    /// microphone never gets the microphone's kept sound: it goes here.
+    /// Main thread.
     func takeLookback(for config: ForkMeetingCaptureConfig) -> ForkMeetingLookbackHandOver? {
         guard let lookback = listening.lookback, config.meeting?.identity == lookback.meeting else { return nil }
+        if !config.recordsMicrophone { lookback.microphone.clear() }
         let handOver = ForkMeetingLookbackHandOver(lookback: lookback, listener: listening.listener)
         listening.lookback = nil
         listening.listener = nil

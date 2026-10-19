@@ -240,6 +240,9 @@ enum ForkMeetingFinishDTests {
         suite.expect(ring.bytesHeld == 0 && ring.span == nil && ring.storedSeconds == 0
                         && ring.read(from: 1_100, count: 10).allSatisfy { $0 == 0 },
                      "emptied: zeros first, then its memory let go")
+        second.withUnsafeBufferPointer { ring.append($0, startHost: 5_000) }
+        suite.expect(ring.storedSeconds == 0 && ring.bytesHeld == 0 && ring.isClosed,
+                     "and closed: a buffer still on its way never opens it again")
         suite.expect(ForkMeetingLookbackRing().capacity == 305 * 16_000,
                      "5 minutes, and 5 s more for the seconds after the click")
     }
@@ -445,6 +448,12 @@ enum ForkMeetingFinishDTests {
 
         var folder = ForkMeetingFolder.contents(of: [".recording.mp4", ForkMeetingFolder.lookbackName, "meeting.json"],
                                                 folderName: "2026-10-19 10h00 — Point hebdo")
+        // Privacy: the microphone turned off empties its kept sound alone.
+        let both = facts { $0.lookbackOn = true }
+        suite.expect(ForkMeetingListenPlan.clearsMicrophone(from: both, to: facts { $0.lookbackOn = true; $0.microphoneAllowed = false })
+                        && !ForkMeetingListenPlan.clears(from: both, to: facts { $0.lookbackOn = true; $0.microphoneAllowed = false })
+                        && !ForkMeetingListenPlan.clearsMicrophone(from: both, to: both),
+                     "the microphone off: its kept sound goes, the meeting app's stays")
         suite.expect(folder.hasLookback && folder.video == nil && folder.audio == nil,
                      "the kept file is the folder's own, never taken for its sound")
         folder.hasMaster = false
