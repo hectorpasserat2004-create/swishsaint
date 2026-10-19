@@ -268,6 +268,9 @@ struct ForkMeetingSidecar: Equatable {
     /// What the last summary on this Mac did (`ForkMeetingSummaryRecord`),
     /// kept as raw JSON like `transcript`.
     var summary: ForkMeetingJSON?
+    /// Where the meeting is in a CRM of the recorder contract
+    /// (`ForkCastralRecord`), kept as raw JSON like `summary`.
+    var castral: ForkMeetingJSON?
     /// The kept minutes' file is whole (Finish D): per source track, how
     /// many seconds past the click its kept sound goes, where the master's
     /// own sound for it takes over. Gone once the final pass joined them.
@@ -398,7 +401,7 @@ extension ForkMeetingSidecar: Codable {
     private enum Field: String, CaseIterable {
         case schema, id, state, origin, title, titleSource, provider, meetCode, app, startedAt, endedAt,
              recordedSeconds, pauses, capture, gaps, stopReason, recovered, finalPass, calendarEventID, notes,
-             exports, transcript, markers, summary, lookbackJoins
+             exports, transcript, markers, summary, castral, lookbackJoins
     }
 
     private struct Key: CodingKey {
@@ -444,6 +447,7 @@ extension ForkMeetingSidecar: Codable {
         transcript = field(.transcript)
         markers = field(.markers)
         summary = field(.summary)
+        castral = field(.castral)
         lookbackJoins = field(.lookbackJoins)
         let known = Set(Field.allCases.map(\.rawValue))
         for key in container.allKeys where !known.contains(key.stringValue) {
@@ -484,6 +488,7 @@ extension ForkMeetingSidecar: Codable {
         try put(transcript, .transcript)
         try put(markers, .markers)
         try put(summary, .summary)
+        try put(castral, .castral)
         try put(lookbackJoins, .lookbackJoins)
         for (key, value) in preserved where !written.contains(key) {
             try container.encode(value, forKey: Key(key))
@@ -671,6 +676,8 @@ struct ForkMeetingSidecarPatch: Equatable {
     var export: ForkMeetingSidecar.Export?
     /// A moment marked, appended to `markers`.
     var marker: ForkMeetingSidecar.Marker?
+    /// The CRM's record, replaced whole.
+    var castral: ForkMeetingJSON?
     // MARK: Finish D
     /// The start, once known: earlier than the folder's by the kept minutes.
     var startedAt: Date?
@@ -703,6 +710,7 @@ struct ForkMeetingSidecarPatch: Equatable {
         }
         if let recovered { result.recovered = recovered }
         if let finalPass { result.finalPass = finalPass }
+        if let castral { result.castral = castral }
         if let startedAt { result.startedAt = startedAt }
         if let lookbackJoins { result.lookbackJoins = lookbackJoins }
         if dropsLookback { result = result.withoutLookback }

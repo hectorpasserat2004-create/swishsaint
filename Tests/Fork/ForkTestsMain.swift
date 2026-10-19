@@ -63,6 +63,8 @@ struct ForkTests {
             ("fork-meetings-finish-b", { ForkMeetingFinishBTests.run(suite) }),
             ("fork-meetings-finish-e", { ForkMeetingFinishETests.run(suite) }),
             ("fork-meetings-finish", { ForkMeetingFinishTests.run(suite) }),
+            ("fork-immich", { ForkImmichTests.run(suite) }),
+            ("fork-meetings-castral", { ForkMeetingCastralTests.run(suite) }),
             ("fork-meetings-finish-d", { ForkMeetingFinishDTests.run(suite) }),
         ]
         var selected = Set<String>()

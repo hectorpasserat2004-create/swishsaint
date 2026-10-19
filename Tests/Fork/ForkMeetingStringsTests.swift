@@ -31,7 +31,9 @@ enum ForkMeetingStringsTests {
         let english = Dictionary(uniqueKeysWithValues: fields(.enUS))
         // Figures and units only, the frame rate's in the official
         // recorder's words: the same in most languages.
-        let figuresOnly: Set<String> = ["qualitySpecFormat"]
+        // A CRM's generic name, the word "token" kept as such in several
+        // languages, and the FLAC line's figures and units (W2 H).
+        let figuresOnly: Set<String> = ["qualitySpecFormat", "castralKindName", "castralToken", "castralSoundFormat"]
         var untranslated: [String] = []
         for language in languages where language != .enUS {
             for (label, value) in fields(.strings(language)) where value == english[label] && !figuresOnly.contains(label) {

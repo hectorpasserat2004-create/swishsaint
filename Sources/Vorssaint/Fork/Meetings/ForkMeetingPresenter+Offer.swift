@@ -63,6 +63,18 @@ extension ForkMeetingPresenter {
             ui.open = !offer.collapsed
         }
         ui.offer = offer
+        // A CRM's appointment for this call, read now (B7): a line, later.
+        ForkCastralDirectory.shared.offered(meetCode: offer.candidate.meetCode)
+        renderOffer()
+    }
+
+    /// The offer drawn again where it is: a line read after it opened.
+    func redrawOffer() {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { self.redrawOffer() }
+            return
+        }
+        guard offerUI.offer != nil else { return }
         renderOffer()
     }
 
@@ -90,6 +102,8 @@ extension ForkMeetingPresenter {
         ui.offer = nil
         ui.open = false
         ui.attention = false
+        // The offer's appointment never outlives it (B2).
+        ForkCastralDirectory.shared.forget()
         removeIslandCard(.offer)
         hideOfferBubble(.offer)
         ui.reminder.hide()
@@ -281,6 +295,8 @@ extension ForkMeetingPresenter {
             seenInShares: seenInShares, hasWindow: filmed != nil)
         facts.mainWindow = ForkMeetingAppsSupport.filmsMainWindow(candidate, found: filmed)
         facts.microphoneSignal = ForkMeetingMicWatcher.isSupported
+        // Like the name: not in an island seen in screen shares.
+        facts.booking = seenInShares ? nil : ForkCastralDirectory.shared.line(meetCode: candidate.meetCode, text: text)
         var actions = OfferActions(record: { service.acceptOffer() }, notNow: { service.dismissOffer(.thisTime) },
                                    always: { service.alwaysForOffer() }, never: { service.dismissOffer(.never) },
                                    copyAnnouncement: { service.copyAnnouncement() }, fix: failureAction)
@@ -360,6 +376,8 @@ extension ForkMeetingPresenter {
         var mainWindow = false
         /// This Mac can say which app uses the microphone: "Always" can start.
         var microphoneSignal = true
+        /// A CRM's appointment for this call's code ("Appointment: ACME · 10:00").
+        var booking: String?
     }
 
     /// What the offer's buttons and menu do. `fix` runs a refusal's way out
@@ -401,6 +419,7 @@ extension ForkMeetingPresenter {
             mainWindow: facts.mainWindow,
             sound: ForkMeetingOfferText.sound(setting: settings.systemAudio, providerDefault: candidate.defaultSound),
             soundApp: facts.soundApp, microphone: facts.microphone, strings: text))
+        if let booking = facts.booking { card.lines.append(booking) }
         if facts.consentReminder { card.info = text.consentRemind }
         let notNow = ForkMeetingCard.Action(title: text.offerNotNow, perform: actions.notNow)
         var record = ForkMeetingCard.Action(title: text.offerRecord, prominent: true, recordDot: true,

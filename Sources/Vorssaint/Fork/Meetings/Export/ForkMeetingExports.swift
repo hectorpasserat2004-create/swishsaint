@@ -56,18 +56,47 @@ final class ForkMeetingExports: ObservableObject {
     /// Keychain calls under way, for the harness's `isIdle`.
     @Published private(set) var keychainCalls = 0
 
+    // MARK: CRM (`ForkMeetingExports+Castral`)
+
+    /// Each CRM's profile as the Keychain last gave it, by exporter id.
+    @Published var castralProfiles: [String: ForkCastralProfile] = [:]
+    /// What the last look at each CRM found, by exporter id.
+    @Published var castralLinks: [String: ForkCastralLink] = [:]
+    @Published var castralChecking: Set<String> = []
+    /// Each meeting's CRM record, by its folder's standardized path.
+    @Published var castralRecords: [String: ForkCastralRecord] = [:]
+    /// The share of the sound sent, by `key(folder, target)`.
+    @Published var castralProgress: [String: Double] = [:]
+    /// The server's own sentence of a send refused, by `key(folder, target)`.
+    @Published var castralSaid: [String: String] = [:]
+    /// The appointment to choose before a send by hand: the library's sheet.
+    @Published var castralChoice: ForkCastralChoice?
+    /// The meetings whose status the follow stopped asking for now.
+    @Published var castralResting: Set<String> = []
+    /// The appointment chosen for a send waiting on the queue.
+    var castralRequests: [String: ForkCastralRequest] = [:]
+
     let defaults: UserDefaults
     let store: ForkMeetingStore
     let keychain: ForkMeetingKeychain
     /// The webhook's view of certificates: the system's, always, in the
     /// app (the recipe harness alone gives its own).
     var trust: ForkWebhookExporter.Trust = .system
+    /// A CRM's addresses as dialled: `nil` (the profile's own), always, in
+    /// the app; the recipe harness alone maps its made-up hosts to its local
+    /// server, after every check of the profile's origins.
+    var castralRoute: ((URL) -> URL)?
     /// The folders this app records or finishes now.
     private let writing: () -> Set<String>
     /// The Meetings feature, read at the moment of each automatic send.
     private let wanted: () -> Bool
     /// An automatic send failed for this meeting: the notice.
     private let failed: (URL) -> Void
+    /// A send to a CRM ended, or the CRM failed a meeting: its notice
+    /// (folder, the CRM's name, sent).
+    let castralNoticed: (URL, String, Bool) -> Void
+    /// Follows the deposits on their CRM.
+    private(set) lazy var castralTracker = ForkCastralTracker(exports: self, store: store, wanted: wanted)
     let queue = DispatchQueue(label: "fork.meetings.export", qos: .utility)
     /// Every Keychain call of the page and the library, in order.
     let keychainQueue = DispatchQueue(label: "fork.meetings.export.keychain", qos: .userInitiated)
@@ -83,13 +112,17 @@ final class ForkMeetingExports: ObservableObject {
          keychain: ForkMeetingKeychain = .shared,
          writing: @escaping () -> Set<String> = { ForkMeetingService.shared.writingFolders },
          wanted: @escaping () -> Bool = { ForkMeetingService.isWanted },
-         failed: @escaping (URL) -> Void = { ForkMeetingService.shared.exportFailed($0) }) {
+         failed: @escaping (URL) -> Void = { ForkMeetingService.shared.exportFailed($0) },
+         castralNoticed: @escaping (URL, String, Bool) -> Void = {
+             ForkMeetingService.shared.castralNotice(folder: $0, name: $1, sent: $2)
+         }) {
         self.defaults = defaults
         self.store = store
         self.keychain = keychain
         self.writing = writing
         self.wanted = wanted
         self.failed = failed
+        self.castralNoticed = castralNoticed
         reload()
     }
 
@@ -114,7 +147,7 @@ final class ForkMeetingExports: ObservableObject {
     }
 
     /// A Keychain call on its queue, its answer on the main thread.
-    private func askKeychain<Value>(_ job: @escaping () -> Value, then: @escaping (Value) -> Void) {
+    func askKeychain<Value>(_ job: @escaping () -> Value, then: @escaping (Value) -> Void) {
         keychainCalls += 1
         keychainQueue.async { [self] in
             let value = job()
@@ -134,11 +167,11 @@ final class ForkMeetingExports: ObservableObject {
         let stored = defaults.string(forKey: ForkDefaultsKey.meetingsExporters)
         askKeychain({ [self] () -> (Set<String>, ForkMeetingExporterList.State) in
             moveLegacySecrets(configs)
-            return (Set(configs.compactMap(\.secretAccount).filter(keychain.exists)), state(of: stored))
+            return (Set(configs.flatMap(\.secretAccounts).filter(keychain.exists)), state(of: stored))
         }) { [self] secrets, state in
             savedSecrets = secrets
             listState = state
-            done?()
+            refreshCastralProfiles(done)
         }
     }
 
@@ -178,7 +211,7 @@ final class ForkMeetingExports: ObservableObject {
     /// list read is not the one it wrote, nothing it changes is kept, and
     /// the fingerprint moves on only from the list it last confirmed.
     @discardableResult
-    private func store(_ configs: [ForkMeetingExporterConfig]) -> Bool {
+    func store(_ configs: [ForkMeetingExporterConfig]) -> Bool {
         guard !listChanged else { return false }
         let previous = defaults.string(forKey: ForkDefaultsKey.meetingsExporters)
         let stored = ForkMeetingExporterList.encode(configs)
@@ -210,13 +243,28 @@ final class ForkMeetingExports: ObservableObject {
 
     func config(_ id: String) -> ForkMeetingExporterConfig? { configs.first { $0.id == id } }
 
+    /// A send refused before it began: said beside the exporter.
+    func refuse(_ folder: URL, _ target: String, _ failure: ForkMeetingExportFailure) {
+        refusals[Self.key(folder, target)] = failure
+    }
+
     func exporter(_ config: ForkMeetingExporterConfig) -> ForkMeetingExporter {
         switch config.kind {
         case .dropFolder:
             return ForkDropFolderExporter(config: config, libraryRoot: store.root())
         case .webhook:
             return webhook(config)
+        case .castral:
+            return castralExporter(config, request: nil)
+        case .immich:
+            return immich(config)
         }
+    }
+
+    private func immich(_ config: ForkMeetingExporterConfig) -> ForkImmichExporter {
+        let keychain = self.keychain
+        return ForkImmichExporter(config: config, secret: { keychain.read($0) }, hasSecret: { keychain.exists($0) },
+                                  trust: trust)
     }
 
     private func webhook(_ config: ForkMeetingExporterConfig) -> ForkWebhookExporter {
@@ -245,11 +293,16 @@ final class ForkMeetingExports: ObservableObject {
         store(next)
     }
 
-    /// Removes the exporter and its own secret.
+    /// Removes the exporter and its own secrets.
     func remove(_ id: String) {
         guard let config = config(id), store(configs.filter({ $0.id != id })) else { return }
-        guard let account = config.secretAccount else { return }
-        askKeychain({ [self] in keychain.delete(account) }) { [self] _ in savedSecrets.remove(account) }
+        let accounts = config.secretAccounts
+        castralProfiles[id] = nil
+        castralLinks[id] = nil
+        guard !accounts.isEmpty else { return }
+        askKeychain({ [self] in accounts.forEach { keychain.delete($0) } }) { [self] _ in
+            accounts.forEach { savedSecrets.remove($0) }
+        }
     }
 
     enum AddressChange: Equatable {
@@ -272,7 +325,7 @@ final class ForkMeetingExports: ObservableObject {
     func saveWebhook(_ id: String, address: String, secret: String, confirmed: Bool,
                      done: @escaping (AddressChange) -> Void) {
         guard !listChanged else { return done(.listUnconfirmed) }
-        guard let config = config(id), config.kind == .webhook else { return done(.saved) }
+        guard let config = config(id), config.usesAddress else { return done(.saved) }
         let verdict = ForkMeetingOriginPolicy.destination(address)
         guard case let .approved(url, origin) = verdict else { return done(.refused(verdict.refusal ?? .unreadable)) }
         let oldAccount = config.origin.flatMap { $0 != origin.name ? config.secretAccount : nil }
@@ -322,6 +375,8 @@ final class ForkMeetingExports: ObservableObject {
             refusals[Self.key(folder, target)] = .listChanged
             return
         }
+        // A CRM asks which appointment first, unless a deposit is under way.
+        if config.kind == .castral { return askCastralChoice(folder, config) }
         enqueue(folder, config, automatic: false)
     }
 
@@ -355,18 +410,23 @@ final class ForkMeetingExports: ObservableObject {
         Set(pending.compactMap { $0.split(separator: "\n", maxSplits: 1).first.map(String.init) })
     }
 
-    private func enqueue(_ folder: URL, _ config: ForkMeetingExporterConfig, automatic: Bool) {
+    func enqueue(_ folder: URL, _ config: ForkMeetingExporterConfig, automatic: Bool,
+                 request: ForkCastralRequest? = nil) {
         let key = Self.key(folder, config.id)
         guard !pending.contains(key) else { return }
         pending.insert(key)
         refusals[key] = nil
+        castralSaid[key] = nil
         let live = writing().contains(folder.standardizedFileURL.path)
-        let exporter = exporter(config)
+        let exporter = config.kind == .castral ? castralExporter(config, request: request, key: key) : exporter(config)
         let job = Self.generation
+        let progress = castralProgressReporter(key)
         queue.async { [self] in
-            let outcome = send(folder, exporter: exporter, live: live, automatic: automatic, generation: job)
+            let outcome = send(folder, exporter: exporter, live: live, automatic: automatic, generation: job,
+                               progress: progress)
             DispatchQueue.main.async { [self] in
                 pending.remove(key)
+                castralProgress[key] = nil
                 switch outcome {
                 case .skipped: break
                 case let .refused(failure):
@@ -375,7 +435,11 @@ final class ForkMeetingExports: ObservableObject {
                 case let .recorded(at, exports, didFail):
                     publish(at, exports)
                     if exports.last?.reason == ForkMeetingExportFailure.listChanged.code { refresh() }
-                    if automatic, didFail { failedOnItsOwn(at) }
+                    if config.kind == .castral {
+                        castralSent(at, config: config, failed: didFail)
+                    } else if automatic, didFail {
+                        failedOnItsOwn(at)
+                    }
                 }
             }
         }
@@ -408,7 +472,7 @@ final class ForkMeetingExports: ObservableObject {
     /// that list is the page's.
     /// - `generation`: the feature's, when it was asked.
     func send(_ folder: URL, exporter asked: ForkMeetingExporter, live: Bool, automatic: Bool,
-              generation job: Int? = nil) -> SendOutcome {
+              generation job: Int? = nil, progress: @escaping (Double) -> Void = { _ in }) -> SendOutcome {
         dispatchPrecondition(condition: .onQueue(queue))
         if automatic {
             guard job.map({ $0 == Self.generation }) ?? true, wanted() else {
@@ -458,8 +522,11 @@ final class ForkMeetingExports: ObservableObject {
         do {
             if let planned { throw planned }
             try exporter.check()
-            let package = try Self.blocking { try await Self.prepare(folder, sidecar: meeting, staging: staging) }
-            let receipt = try Self.blocking { try await exporter.export(package, progress: { _ in }) }
+            var package = try Self.blocking { try await Self.prepare(folder, sidecar: meeting, staging: staging) }
+            package.folder = folder
+            package.automatic = automatic
+            let ready = package
+            let receipt = try Self.blocking { try await exporter.export(ready, progress: progress) }
             record = ForkMeetingExportHistory.record(receipt)
             log.notice("exported to \(exporter.kind.rawValue, privacy: .public) in \(Int(Date().timeIntervalSince(started) * 1000), privacy: .public) ms")
         } catch {
@@ -512,8 +579,12 @@ final class ForkMeetingExports: ObservableObject {
                 let url = temporary.appendingPathComponent(name)
                 let modified = (try? manager.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
                 let body = name.hasSuffix(".body")
-                    && ForkMeetingLeftovers.removable(name, prefix: ForkWebhookExporter.bodyPrefix, pid: pid, modified: modified, now: now)
+                    && [ForkWebhookExporter.bodyPrefix, ForkImmichExporter.bodyPrefix].contains {
+                        ForkMeetingLeftovers.removable(name, prefix: $0, pid: pid, modified: modified, now: now)
+                    }
                 let staged = ForkMeetingLeftovers.removable(name, prefix: Self.stagingPrefix, pid: pid, modified: modified, now: now)
+                    || ForkMeetingLeftovers.removable(name, prefix: ForkCastralExporter.stagingPrefix, pid: pid,
+                                                      modified: modified, now: now)
                 if body || staged { try? manager.removeItem(at: url) }
             }
             folders.forEach { ForkDropFolderExporter.removeDrafts(in: $0, pid: pid, now: now) }
@@ -566,6 +637,7 @@ final class ForkMeetingExports: ObservableObject {
         var package = ForkMeetingExportPackage(folderName: name, sidecar: sidecar, audio: audio, transcript: transcript)
         package.summary = ForkMeetingStore.summaryText(in: folder,
                                                        files: ForkMeetingSummaryRecord(json: sidecar.summary)?.files ?? [])
+        package.video = contents.video.map { folder.appendingPathComponent($0) }
         return package
     }
 
@@ -575,7 +647,11 @@ final class ForkMeetingExports: ObservableObject {
     func refreshResults(_ folder: URL) {
         queue.async { [self] in
             guard case let .success(sidecar) = store.sidecar(in: folder) else { return }
-            DispatchQueue.main.async { [self] in publish(folder, sidecar.exports ?? []) }
+            let record = ForkCastralRecord(json: sidecar.castral)
+            DispatchQueue.main.async { [self] in
+                publish(folder, sidecar.exports ?? [])
+                castralRecords[folder.standardizedFileURL.path] = record
+            }
         }
     }
 
@@ -595,14 +671,21 @@ final class ForkMeetingExports: ObservableObject {
 
     /// The page's "Send a test" for a webhook saved.
     func sendTest(_ id: String) {
-        guard let config = config(id), config.kind == .webhook, !testing.contains(id) else { return }
+        guard let config = config(id), config.usesAddress, !testing.contains(id) else { return }
         testing.insert(id)
         tests[id] = nil
-        let exporter = webhook(config)
+        let test: () async throws -> Int
+        if config.kind == .immich {
+            let exporter = immich(config)
+            test = { try await exporter.sendTest() }
+        } else {
+            let exporter = webhook(config)
+            test = { try await exporter.sendTest() }
+        }
         queue.async { [self] in
             let result: Result<Int, ForkMeetingExportFailure>
             do {
-                result = .success(try Self.blocking { try await exporter.sendTest() })
+                result = .success(try Self.blocking(test))
             } catch {
                 result = .failure(error as? ForkMeetingExportFailure ?? .network)
             }
