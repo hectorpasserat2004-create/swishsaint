@@ -151,11 +151,10 @@ enum ForkMeetingLibraryEffectsTests {
                         && ForkMeetingLibraryText.duration(nil, language: .enUS) == nil
                         && ForkMeetingLibraryText.duration(.nan, language: .enUS) == nil,
                      "under a minute in seconds; nothing for a length unknown")
-        // The Mac's own 12 or 24 hours may override any language's: neither
-        // is assumed here (a Mac set to 12 hours writes "2:05 PM").
+        // The clock follows the Mac's own 12 or 24 hours here too: a 12-hour Mac, as on CI, adds AM or PM.
+        let morning = ForkMeetingLibraryText.time(date(10, 2), language: .fr, calendar: paris)
         let afternoon = ForkMeetingLibraryText.time(date(14, 5), language: .fr, calendar: paris)
-        suite.expect(ForkMeetingLibraryText.time(date(10, 2), language: .fr, calendar: paris).hasPrefix("10:02")
-                        && (afternoon == "14:05" || afternoon.contains("2:05")),
+        suite.expect(morning.hasPrefix("10:02") && (afternoon.hasPrefix("14:05") || afternoon.hasPrefix("2:05")),
                      "the time of day as French writes it, on the Mac's clock")
         let american = ForkMeetingLibraryText.time(date(14, 5), language: .enUS, calendar: paris)
         // The clock follows the Mac's own 12 or 24 hours, whatever the language.
@@ -178,7 +177,7 @@ enum ForkMeetingLibraryEffectsTests {
                             && !ForkMeetingLibraryText.caption(manual, strings: english, language: .enUS).contains("Meet"),
                          "a flagged meeting adds its status; one recorded by hand names no service")
             let spoken = ForkMeetingLibraryText.accessibilityLabel(recovered, strings: french, language: .fr, calendar: paris)
-            suite.expect(spoken.hasPrefix("Weekly sync, 10:02, ") && spoken.contains("Meet") && spoken.hasSuffix("Récupérée"),
+            suite.expect(spoken.hasPrefix("Weekly sync, \(morning), ") && spoken.contains("Meet") && spoken.hasSuffix("Récupérée"),
                          "VoiceOver reads a row's title, time, length, service and status in one sentence")
         }
     }
