@@ -79,7 +79,8 @@ extrait.
 ### Une nouvelle **section** : toutes les lignes (exemple Réunions)
 
 Ajouter un cas à `NotchModule` casse chaque `switch` exhaustif ; le compilateur les liste (`./build.sh --dev`). Pour
-Réunions, 15 lignes :
+Réunions, 17 lignes ajoutées et 1 modifiée dans 6 fichiers officiels (les lignes `notch-meetings*` et `notch-meeting2` de
+`fork/seams.txt`) :
 
 | id | fichier | ligne |
 |---|---|---|
@@ -89,9 +90,10 @@ Réunions, 15 lignes :
 | `notch-meetings4` | `Core/NotchEditorStrings.swift` : `summary(_:)` | `case .meetings: return NotchModule.meetingsHooks.summary()` |
 | `notch-meetings5` | `UI/Notch/NotchView.swift` : le `switch service.selected` et `title(_:)` | `case .meetings: ForkMeetingIslandSection(service:size:)` / `return Self.meetingsHooks.title(language)` |
 | `notch-meetings6` | `UI/Settings/NotchContentEditor.swift` : `NotchPagePreview` et `settingsTint` | l'aperçu, la couleur |
-| `notch-meetings7` | `UI/Settings/NotchSettings.swift` : `moduleOptions`, `moduleFeature`, bouton de l'en-tête | les options, `return nil` (pas d'`AppFeature`), le lien vers Extras quand la feature est coupée |
+| `notch-meetings7` | `UI/Settings/NotchSettings.swift` : `moduleOptions`, `moduleFeature`, bouton de l'en-tête | les options, `return nil` (pas d'`AppFeature`), le lien vers la page Réunions (son interrupteur) quand la feature est coupée |
 | `notch-meetings8` | idem : `activityPage` | la carte de l'onglet Activité |
 | `notch-meetings9` | `Services/Notch/NotchService.swift` : `activateNotice` | un clic sur la notice ouvre la section |
+| `notch-meeting2` (modifiée) | `Services/Notch/NotchSupport.swift` : `NotchCompactActivity.module` | `case .meeting: return .meetings` : un survol de l'île fermée pendant l'enregistrement ouvre la section |
 
 Ce qui vient **sans couture** une fois le cas ajouté : la tuile de la grille Explorer (`NotchSectionsView`, titre, symbole,
 `⌥⌘E`), la recherche des sections, la ligne cochable et réordonnable de l'onglet Contenu (`orderedModules` =
@@ -109,12 +111,15 @@ Règles de la section :
   quand même qu'aucun raccourci global par défaut ne la prend (`Core/GlobalShortcut.swift`).
 - **Disponibilité** : `isAvailable` = l'interrupteur de la feature du fork (comme une section officielle suit son
   `AppFeature`). Feature coupée : la section disparaît de l'île, reste grisée dans Contenu avec le texte officiel
-  « Activez la fonctionnalité… » ; le bouton de l'en-tête mène à Extras (`notch-meetings7`).
+  « Activez la fonctionnalité… » ; le bouton de l'en-tête mène à la page de la feature, où est son interrupteur
+  (`notch-meetings7`). Le clic sur l'activité compacte ouvre la section (`ForkMeetingIslandStrip.open`), comme celle du
+  minuteur ouvre Minuteur.
 - **Symbole** : celui de sa tuile Commandes s'il y en a une (comme `.mixer`, `.timer`, `.calendar`).
 
 ### Une nouvelle **activité compacte**
 
-Le tableau complet est dans l'audit de la finition Réunions (coutures `notch-meeting` … `notch-meeting7`) :
+Les lignes `notch-meeting` … `notch-meeting7` de `fork/seams.txt` (et leurs marqueurs `FORK(notch-meeting…)` dans les
+fichiers officiels) en sont l'exemple complet :
 `NotchCompactActivity` (cas + crochet), son titre et son `module` (la page qu'ouvre un survol : la section si la feature en
 a une), `NotchService.compactActivities` (ordre), `compactGeometry` (ailes), `capsuleStripSize` (capsule), `NotchView`
 (ailes et capsule), `NotchMirrorView` (**les copies sur les autres écrans** : sans elles, l'île est vide ailleurs),
@@ -141,7 +146,8 @@ visible par défaut.
 
 - **Disposition** : rien à faire (boutons automatiques). **Contenu** : la vue d'options de la section
   (`moduleOptions`), dans le `SettingsCard` que la page pose ; une vue à part, comme `NotchAgentsSettingsControls`.
-- **Activité** : une `SettingsCard` de plus après les officielles (une ligne dans le `VStack` d'`activityPage`).
+- **Activité** : une `SettingsCard` de plus après les officielles (une ligne dans le `VStack` d'`activityPage`),
+  montrée seulement une fois la feature activée, comme le choix « au repos » des Agents IA.
 - **Comportement** : en général rien (la réouverture et « ouvrir l'activité » suivent la section).
 - **Compagnon** : rien.
 - **Un seul réglage, plusieurs endroits** : la même clé `fork.<feature>.*` lue par chaque vue (`@AppStorage`), jamais une
@@ -161,7 +167,8 @@ visible par défaut.
 - Une action qui ouvre une fenêtre ou filme : `service.perform { … }` (l'île se replie d'abord).
 - Hauteur : budget compact 180 pt, spacieux 264 pt ; fais tenir l'essentiel dans le compact.
 - **Settings preview** : la même vue est dessinée dans l'onglet Contenu (`NotchPagePreview`) avec
-  `@Environment(\.notchSettingsPreview) == true` : n'y démarre rien (caméra, aperçu, clavier, observateurs).
+  `@Environment(\.notchSettingsPreview) == true` : n'y démarre rien (caméra, aperçu, clavier, observateurs, scan ou
+  lecture du disque : `ForkMeetingIslandSection.scans`).
 
 ## 4. Pièges
 
@@ -180,7 +187,8 @@ visible par défaut.
 - **Performances** : une vue qui suit une progression (transcription, envoi) l'observe seule, pour ne pas redessiner la
   page ; une image en direct ne vit que pendant que la page est ouverte (`ForkMeetingLivePreview`).
 - **Captures d'écran** : jamais l'écran réel ; rendus hors écran des vues (`NSHostingView.cacheDisplay`), avec un faisceau
-  compilé contre toutes les sources (voir les rapports des lots).
+  compilé contre toutes les sources de l'app sauf `main.swift`, hors du dépôt, et une vue qui ne lit rien dans l'aperçu
+  des Réglages (`notchSettingsPreview`).
 
 ## 5. Checklist
 
