@@ -21,6 +21,7 @@ extension ForkMeetingService {
     }
 
     func systemEvent(_ event: ForkMeetingSystemEvents.Event) {
+        listeningEvent(event)
         switch event {
         case .willSleep: send(.willSleep)
         case .didWake: send(.didWake)
@@ -68,7 +69,10 @@ extension ForkMeetingService {
     /// without anything needing it (`ForkMeetingRecorder.stopBlocking`).
     /// Past that, the fragments already written are the next launch's to
     /// recover. A meeting finishing is left as it is: its final pass starts
-    /// again at the next launch.
+    /// again at the next launch. What listens to an offered call stops, and
+    /// the minutes it kept are emptied, before any of that wait: `send`
+    /// ends with `refreshState`, whose `syncListening` sees `terminating`.
+    /// Installing an update quits through here too (`NSApp.terminate`).
     func terminate() {
         guard !terminating else { return }
         terminating = true

@@ -407,6 +407,10 @@ private struct ForkMeetingDetectionSection: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
+            // MARK: Finish D
+            // What the offer does once shown, before how the meeting is
+            // named and how its recording ends.
+            ForkMeetingForgetRows(text: text)
 
             Toggle(isOn: $calendarNaming) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -919,6 +923,8 @@ private struct ForkMeetingMicrophonePicker: View {
                 Divider()
                 Text(text.microphoneOff).tag(ForkMeetingMicrophoneChoice.off.storageValue)
             }
+            // Finish D: turned off, the microphone's kept sound goes at once.
+            .onChange(of: microphone) { _, _ in ForkMeetingService.shared.syncListening() }
             if let caption {
                 Text(caption)
                     .font(.caption)

@@ -62,6 +62,24 @@ struct ForkMeetingCard {
     var stacked = false
     /// The bubble's ×; an offer has "Not Now" instead.
     var closable = true
+
+    // MARK: Finish D
+
+    /// Raised by a nudge: ringed, sprung, the Record button pointed at.
+    var attention = false
+    /// Raised in the island, which springs it in itself
+    /// (`ForkMeetingAttentionStyle`).
+    var attentionInIsland = false
+    /// "+4 min 12 s already kept" since then, counting, in the card's own
+    /// words.
+    var kept: Kept?
+
+    struct Kept {
+        let since: Date
+        let words: (Date) -> String
+        /// What VoiceOver reads at that instant.
+        let spoken: (Date) -> String
+    }
 }
 
 struct ForkMeetingCardView: View {
@@ -116,6 +134,7 @@ struct ForkMeetingCardView: View {
                 }
             }
         }
+        .modifier(ForkMeetingAttention(on: card.attention, inIsland: card.attentionInIsland))
     }
 
     @ViewBuilder
@@ -147,6 +166,11 @@ struct ForkMeetingCardView: View {
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityLabel(card.spokenTitle ?? card.title)
+                if let kept = card.kept {
+                    ForkMeetingKeptText(kept: kept)
+                        .font(.system(size: 11, weight: .medium).monospacedDigit())
+                        .foregroundStyle(Color(nsColor: .systemRed))
+                }
                 if let countdown = card.countdownLine {
                     ForkMeetingCountdownText(countdown: countdown)
                         .font(.system(size: 11, weight: .medium).monospacedDigit())
@@ -225,6 +249,9 @@ struct ForkMeetingCardView: View {
     private func actionButton(_ action: ForkMeetingCard.Action, title: String) -> some View {
         let button = Button(action: action.perform) {
             HStack(spacing: 5) {
+                if action.recordDot, card.attention {
+                    ForkMeetingNudgeArrow(inIsland: card.attentionInIsland)
+                }
                 if action.recordDot {
                     Circle()
                         .fill(Color(nsColor: .systemRed))

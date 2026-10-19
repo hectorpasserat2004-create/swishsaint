@@ -230,6 +230,8 @@ final class ForkMeetingFinalizer: ObservableObject, @unchecked Sendable {
         let draft: URL
         let audio: URL
         let audioDraft: URL
+        /// The minutes kept before the click (Finish D).
+        let kept: URL
         /// Recorded without picture: the final file is the `.m4a`.
         let soundOnly: Bool
 
@@ -243,6 +245,7 @@ final class ForkMeetingFinalizer: ObservableObject, @unchecked Sendable {
                                                             : ForkMeetingFolder.videoDraftName)
             audio = folder.appendingPathComponent("\(name).\(ForkMeetingFolder.audioExtension)")
             audioDraft = folder.appendingPathComponent(ForkMeetingFolder.audioDraftName)
+            kept = folder.appendingPathComponent(ForkMeetingFolder.lookbackName)
         }
     }
 
@@ -271,37 +274,52 @@ final class ForkMeetingFinalizer: ObservableObject, @unchecked Sendable {
         // Told by `meeting.json`, as the library reads it; by the master's
         // own tracks when it cannot say (unreadable, or a capture this
         // version does not know).
-        let target = (try? store.sidecar(in: job.folder).get())?.capture?.target
+        let meeting = try? store.sidecar(in: job.folder).get()
+        let target = meeting?.capture?.target
         let soundOnly: Bool
         if let target { soundOnly = !target.filmsPicture } else { soundOnly = await Self.hasNoPicture(paths.master) }
         if soundOnly { paths = Paths(job.folder, soundOnly: true) }
         let masterBytes = Self.fileSize(paths.master) ?? 0
-        if ForkMeetingFinalPass.route(freeBytes: freeBytes(job.folder), masterBytes: masterBytes) == .promoteMaster {
+        // Finish D: the minutes kept before the click, beside the master.
+        var join = ForkMeetingLookbackJoin.decide(meeting, fileTracks: await Self.audioTrackCount(at: paths.kept))
+        let promotes = ForkMeetingFinalPass.route(freeBytes: freeBytes(job.folder), masterBytes: masterBytes)
+            == .promoteMaster
+        if join == .drop || (promotes && join != .none) {
+            // Their file is not whole, or the master becomes the final file
+            // as it is: the meeting begins at the click, its times moved
+            // back, before anything else is written.
+            store.write(ForkMeetingSidecarPatch(dropsLookback: true), in: job.folder)
+            join = .none
+        }
+        if promotes {
             return await promote(job, paths: paths, masterSeconds: masterSeconds, note: nil)
         }
 
         let layout: ForkMeetingFinalPass.Layout
         let seconds: Double
         do {
-            (layout, seconds) = try await copy(job, paths: paths, masterSeconds: masterSeconds)
+            (layout, seconds) = try await copy(job, paths: paths, masterSeconds: masterSeconds, join: join)
         } catch {
             try? manager.removeItem(at: paths.draft)
             // The disk may have filled during the copy: the master is then
             // the best file there can be.
             if let free = freeBytes(job.folder),
                ForkMeetingFinalPass.route(freeBytes: free, masterBytes: masterBytes) == .promoteMaster {
+                if join != .none { store.write(ForkMeetingSidecarPatch(dropsLookback: true), in: job.folder) }
                 return await promote(job, paths: paths, masterSeconds: masterSeconds, note: "\(error)")
             }
             return failed(job, note: "\(error)", seconds: masterSeconds)
         }
 
-        // The copy is verified and in place: only now the master goes.
+        // The copy is verified and in place: only now the master goes, and
+        // the kept minutes it holds now.
         do {
             try manager.removeItem(at: paths.master)
         } catch {
             // Harmless: the next launch removes it, the final being whole.
             Self.log.error("master kept in \(job.folder.lastPathComponent, privacy: .private): \(error.localizedDescription, privacy: .private)")
         }
+        try? manager.removeItem(at: paths.kept)
 
         var audio: URL?
         var note: String?
@@ -349,6 +367,7 @@ final class ForkMeetingFinalizer: ObservableObject, @unchecked Sendable {
                           seconds: masterSeconds)
         }
         let seconds = await Self.playableSeconds(at: paths.final) ?? masterSeconds
+        try? FileManager.default.removeItem(at: paths.kept)
         publish(1, for: job)
         store.write(ForkMeetingSidecarPatch(state: .complete, finalPass: .skippedDisk), in: job.folder)
         if !paths.soundOnly { store.addToRecentCaptures(paths.final) }
@@ -357,9 +376,15 @@ final class ForkMeetingFinalizer: ObservableObject, @unchecked Sendable {
     }
 
     /// The master stays where it is; `state` stays `finalizing`, so the
-    /// next launch tries again.
+    /// next launch tries again. The kept minutes stay for that try; only
+    /// the last one (`interrupted`) gives them up for good, the master
+    /// then being the meeting as it is (`ForkMeetingLookbackJoin.givenUp`).
     private func failed(_ job: Job, note: String, seconds: Double?) -> Outcome {
         store.write(ForkMeetingSidecarPatch(finalPass: .failed), in: job.folder)
+        if let patch = ForkMeetingLookbackJoin.givenUp((try? store.sidecar(in: job.folder).get())) {
+            store.write(patch, in: job.folder)
+            try? FileManager.default.removeItem(at: Paths(job.folder).kept)
+        }
         return Outcome(folder: job.folder, finalPass: .failed, video: nil, audio: nil, seconds: seconds,
                        videoBytes: nil, audioBytes: nil, note: note)
     }
@@ -368,29 +393,61 @@ final class ForkMeetingFinalizer: ObservableObject, @unchecked Sendable {
 
     /// Writes the draft, verifies it with a fresh asset and puts it in
     /// place. Throws, leaving the master untouched, at the first problem.
-    private func copy(_ job: Job, paths: Paths,
-                      masterSeconds: Double) async throws -> (ForkMeetingFinalPass.Layout, Double) {
+    ///
+    /// With minutes kept before the click (`join`), the sources are read
+    /// through a composition that puts them first (`ForkMeetingLookbackJoin`),
+    /// so they are decoded and encoded again in the master's format; the
+    /// picture, copied as it is, starts that many seconds later.
+    private func copy(_ job: Job, paths: Paths, masterSeconds: Double,
+                      join: ForkMeetingLookbackJoin.Decision = .none) async throws -> (ForkMeetingFinalPass.Layout, Double) {
         let asset = AVURLAsset(url: paths.master, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
         // Without picture, a picture track (never written) would not be
         // copied into an `.m4a` either.
         let video = paths.soundOnly ? nil : try await asset.loadTracks(withMediaType: .video).first
         guard video != nil || paths.soundOnly else { throw PassError.noVideo }
         // By order: an `.mp4` keeps no track identifier the writer could set.
-        let sources = try await asset.loadTracks(withMediaType: .audio).sorted { $0.trackID < $1.trackID }
-        let layout = ForkMeetingFinalPass.layout(audioTracks: sources.count)
-        let duration = try await asset.load(.duration)
+        let masterSources = try await asset.loadTracks(withMediaType: .audio).sorted { $0.trackID < $1.trackID }
+        let layout = ForkMeetingFinalPass.layout(audioTracks: masterSources.count)
+        var duration = try await asset.load(.duration)
 
-        let reader = try AVAssetReader(asset: asset)
+        // The sound read: the master's own tracks, or the composition that
+        // opens each with its kept minutes.
+        var soundAsset: AVAsset = asset
+        var sources = masterSources
+        var shift = CMTime.zero
+        if case let .join(seconds, joins) = join {
+            let composed = try await Self.composition(master: masterSources, kept: paths.kept, seconds: seconds,
+                                                      joins: joins)
+            soundAsset = composed
+            sources = composed.tracks(withMediaType: .audio)
+            shift = CMTime(seconds: seconds, preferredTimescale: 600_000_000)
+            duration = CMTimeAdd(duration, shift)
+        }
+        let decodesSources = soundAsset !== asset
+        let totalSeconds = max(masterSeconds, duration.seconds.isFinite ? duration.seconds : masterSeconds)
+
+        let reader = try AVAssetReader(asset: soundAsset)
         var readers = [reader]
         let videoOutput = video.map { AVAssetReaderTrackOutput(track: $0, outputSettings: nil) }
-        let copyOutputs = sources.map { AVAssetReaderTrackOutput(track: $0, outputSettings: nil) }
-        for output in [videoOutput].compactMap({ $0 }) + copyOutputs {
+        let rate = layout.hasMix ? await Self.sampleRate(of: masterSources[layout.mixed[0]]) : 48_000
+        let copyOutputs = sources.map {
+            AVAssetReaderTrackOutput(track: $0, outputSettings: decodesSources ? Self.mixReadSettings(rate) : nil)
+        }
+        for output in copyOutputs {
             output.alwaysCopiesSampleData = false
             guard reader.canAdd(output) else { throw PassError.cannotSetUp("a copied track") }
             reader.add(output)
         }
+        if let videoOutput {
+            videoOutput.alwaysCopiesSampleData = false
+            // The picture comes from the master itself, never through the
+            // composition: copied as it is.
+            let pictureReader = decodesSources ? try AVAssetReader(asset: asset) : reader
+            guard pictureReader.canAdd(videoOutput) else { throw PassError.cannotSetUp("the picture") }
+            pictureReader.add(videoOutput)
+            if pictureReader !== reader { readers.append(pictureReader) }
+        }
 
-        let rate = layout.hasMix ? await Self.sampleRate(of: sources[layout.mixed[0]]) : 48_000
         var mixOutput: AVAssetReaderAudioMixOutput?
         if layout.hasMix {
             let mixed = layout.mixed.map { sources[$0] }
@@ -409,7 +466,7 @@ final class ForkMeetingFinalizer: ObservableObject, @unchecked Sendable {
             if reader.canAdd(output) {
                 reader.add(output)
             } else {
-                let second = try AVAssetReader(asset: asset)
+                let second = try AVAssetReader(asset: soundAsset)
                 guard second.canAdd(output) else { throw PassError.cannotSetUp("the mix") }
                 second.add(output)
                 readers.append(second)
@@ -446,10 +503,22 @@ final class ForkMeetingFinalizer: ObservableObject, @unchecked Sendable {
             inputs.append(input)
             mixInput = input
         }
+        // Encoded again in the master's own format when they were decoded.
+        let sourceSettings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVSampleRateKey: rate,
+            AVNumberOfChannelsKey: 1,
+            AVEncoderBitRateKey: ForkMeetingQuality.Rates.sourceAudio,
+        ]
+        if decodesSources, !writer.canApply(outputSettings: sourceSettings, forMediaType: .audio) {
+            throw PassError.cannotSetUp("a source track's encoder")
+        }
         var copyInputs: [AVAssetWriterInput] = []
-        for (index, track) in sources.enumerated() {
-            let input = AVAssetWriterInput(mediaType: .audio, outputSettings: nil,
-                                           sourceFormatHint: try await track.load(.formatDescriptions).first)
+        for (index, track) in masterSources.enumerated() {
+            let input = decodesSources
+                ? AVAssetWriterInput(mediaType: .audio, outputSettings: sourceSettings)
+                : AVAssetWriterInput(mediaType: .audio, outputSettings: nil,
+                                     sourceFormatHint: try await track.load(.formatDescriptions).first)
             input.metadata = job.titles.title(layout.copied[index]).map(Self.titled) ?? []
             // Only the mix plays: two sources and a mix on at once would
             // play the meeting three times over.
@@ -481,12 +550,12 @@ final class ForkMeetingFinalizer: ObservableObject, @unchecked Sendable {
         // The progress follows the picture, or the first track copied
         // without one.
         let progress: @Sendable (Double) -> Void = { [self] seconds in
-            publish(ForkMeetingFinalPass.progress(copy: seconds / masterSeconds, extractsAudio: extractsAudio),
+            publish(ForkMeetingFinalPass.progress(copy: seconds / totalSeconds, extractsAudio: extractsAudio),
                     for: job)
         }
         var pairs: [Pair] = []
         if let videoOutput, let videoInput {
-            pairs.append(Pair(output: videoOutput, input: videoInput, label: "video", onAppend: progress))
+            pairs.append(Pair(output: videoOutput, input: videoInput, label: "video", onAppend: progress, shift: shift))
         }
         if let mixOutput, let mixInput {
             pairs.append(Pair(output: mixOutput, input: mixInput, label: "mix", onAppend: pairs.isEmpty ? progress : nil))
@@ -514,6 +583,47 @@ final class ForkMeetingFinalizer: ObservableObject, @unchecked Sendable {
         }
         try ForkMeetingStore.replace(paths.final, with: paths.draft)
         return (layout, seconds)
+    }
+
+    // MARK: Finish D
+
+    /// The master's sources, each opened by its kept minutes: the kept
+    /// sound up to the click and past it by its join, then the master's own
+    /// from there (`ForkMeetingLookbackJoin.pieces`).
+    private static func composition(master: [AVAssetTrack], kept url: URL, seconds: Double,
+                                    joins: [Double]) async throws -> AVMutableComposition {
+        let kept = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
+        let keptTracks = try await kept.loadTracks(withMediaType: .audio).sorted { $0.trackID < $1.trackID }
+        let composition = AVMutableComposition()
+        let scale: CMTimeScale = 48_000
+        func time(_ value: Double) -> CMTime { CMTime(seconds: value, preferredTimescale: scale) }
+        for (index, source) in master.enumerated() {
+            guard let track = composition.addMutableTrack(withMediaType: .audio,
+                                                          preferredTrackID: kCMPersistentTrackID_Invalid) else {
+                throw PassError.cannotSetUp("the joined sound")
+            }
+            let keptTrack = index < keptTracks.count ? keptTracks[index] : nil
+            let keptLength = try await keptTrack?.load(.timeRange).end.seconds ?? 0
+            let masterLength = try await source.load(.timeRange).end.seconds
+            let pieces = ForkMeetingLookbackJoin.pieces(seconds: seconds, join: index < joins.count ? joins[index] : 0,
+                                                        keptLength: keptLength, masterLength: masterLength)
+            for piece in pieces {
+                guard let from = piece.source == .kept ? keptTrack : source else { continue }
+                try track.insertTimeRange(CMTimeRange(start: time(piece.from), end: time(piece.to)), of: from,
+                                          at: time(piece.at))
+            }
+        }
+        return composition
+    }
+
+    /// How many sound tracks a file opens with; `nil` when it is missing or
+    /// does not open.
+    static func audioTrackCount(at url: URL) async -> Int? {
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        let asset = AVURLAsset(url: url)
+        guard let readable = try? await asset.load(.isReadable), readable,
+              let tracks = try? await asset.loadTracks(withMediaType: .audio), !tracks.isEmpty else { return nil }
+        return tracks.count
     }
 
     /// The M4A of a final file whose own was never made (the app quit right
@@ -618,6 +728,8 @@ final class ForkMeetingFinalizer: ObservableObject, @unchecked Sendable {
         /// Each appended sample's time, in seconds: the picture's gives the
         /// progress.
         var onAppend: (@Sendable (Double) -> Void)?
+        /// Added to every sample's times: the picture after kept minutes.
+        var shift: CMTime = .zero
     }
 
     /// Cancels a pass whose samples stopped moving. Called once, from the
@@ -722,8 +834,8 @@ final class ForkMeetingFinalizer: ObservableObject, @unchecked Sendable {
             // AVFoundation calls this block on `queue` only.
             pair.input.requestMediaDataWhenReady(on: queue) {
                 while pair.input.isReadyForMoreMediaData {
-                    guard !flow.isStalled, let sample = pair.output.copyNextSampleBuffer(),
-                          pair.input.append(sample) else {
+                    guard !flow.isStalled, let read = pair.output.copyNextSampleBuffer(),
+                          let sample = shifted(read, by: pair.shift), pair.input.append(sample) else {
                         if once.claim() {
                             pair.input.markAsFinished()
                             continuation.resume()
@@ -738,6 +850,29 @@ final class ForkMeetingFinalizer: ObservableObject, @unchecked Sendable {
                 }
             }
         }
+    }
+
+    /// The same sample `shift` later (every timing entry); itself without one.
+    private static func shifted(_ sample: CMSampleBuffer, by shift: CMTime) -> CMSampleBuffer? {
+        guard shift != .zero else { return sample }
+        var count: CMItemCount = 0
+        CMSampleBufferGetSampleTimingInfoArray(sample, entryCount: 0, arrayToFill: nil, entriesNeededOut: &count)
+        var timings = [CMSampleTimingInfo](repeating: CMSampleTimingInfo(), count: count)
+        guard count > 0, CMSampleBufferGetSampleTimingInfoArray(sample, entryCount: count, arrayToFill: &timings,
+                                                                 entriesNeededOut: &count) == noErr else { return sample }
+        for index in timings.indices {
+            if timings[index].presentationTimeStamp.isNumeric {
+                timings[index].presentationTimeStamp = CMTimeAdd(timings[index].presentationTimeStamp, shift)
+            }
+            if timings[index].decodeTimeStamp.isNumeric {
+                timings[index].decodeTimeStamp = CMTimeAdd(timings[index].decodeTimeStamp, shift)
+            }
+        }
+        var out: CMSampleBuffer?
+        guard CMSampleBufferCreateCopyWithNewTiming(allocator: kCFAllocatorDefault, sampleBuffer: sample,
+                                                    sampleTimingEntryCount: count, sampleTimingArray: &timings,
+                                                    sampleBufferOut: &out) == noErr else { return nil }
+        return out
     }
 
     // MARK: - Progress

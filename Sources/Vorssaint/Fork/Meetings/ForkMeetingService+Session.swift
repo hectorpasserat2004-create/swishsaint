@@ -221,7 +221,7 @@ extension ForkMeetingService {
         case .announce, .notify:
             presenter.apply(effect, context: context)
         case .showOffer, .collapseOffer, .hideOffer, .showUndo, .hideUndo, .showEndingSoon, .hideEndingSoon,
-             .silence, .setPolicy, .discard:
+             .silence, .setPolicy, .discard, .nudgeOffer:
             runDetection(effect)
         }
     }
@@ -262,6 +262,7 @@ extension ForkMeetingService {
         syncSystemEvents()
         systemEvents.hold(ForkMeetingServiceSupport.awake(phase: machine.phase))
         syncDetectionClock()
+        syncListening()
     }
 
     /// The engine of the session recording or paused.
@@ -316,6 +317,8 @@ extension ForkMeetingService {
         }
         let capture = ForkMeetingSidecar.Capture(target: config.settings.target, systemAudio: config.settings.systemAudio,
                                                  microphone: microphone, quality: config.settings.quality)
+        // The kept sound, if any, moves the start earlier once it is
+        // taken (`captureAnswered`).
         store.createMeeting(id: UUID(), startedAt: Date(), origin: config.origin, title: config.title,
                             titleSource: ForkMeetingDetectionSupport.titleSource(title: config.title,
                                                                                 meeting: config.meeting),
@@ -366,7 +369,8 @@ extension ForkMeetingService {
             }
             recorder.start(config: config, folder: folder, meetingWindow: window,
                            meetingMicrophone: meetingMicrophone(for: config.meeting), excludingWindows: excluded,
-                           titles: trackTitles, meetingSound: sound) { [weak self] result in
+                           titles: trackTitles, meetingSound: sound,
+                           lookback: takeLookback(for: config)) { [weak self] result in
                 self?.captureAnswered(result, config: config, folder: folder, token: token)
             }
         }
@@ -391,6 +395,16 @@ extension ForkMeetingService {
             context.noWindowToFilm = config.settings.target == .window && start.target == .display
             filmedDisplay = context.displayID ?? CGMainDisplayID()
             context.trackSound = start.trackSound
+            // The kept sound opens the meeting: "Sound only for the first
+            // 4 min 12 s", the start that much earlier. Written before any
+            // other time, each of which counts it.
+            if start.lookbackSeconds > 0 {
+                log.notice("recording opens with \(Int(start.lookbackSeconds)) s of kept sound")
+                var patch = ForkMeetingSidecarPatch(
+                    gap: ForkMeetingSidecar.Gap(at: 0, seconds: start.lookbackSeconds, kind: .lookback))
+                patch.startedAt = start.startedAt
+                store.update(folder, with: patch)
+            }
             send(.captureStarted(token, folder: folder, target: start.target, microphone: start.microphone,
                                  systemAudio: start.heard, startedAt: start.startedAt))
             // Lost, or judged, while the capture came up: said once it records.

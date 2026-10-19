@@ -83,6 +83,12 @@ final class ForkMeetingWriter: @unchecked Sendable {
     private var converters: [AVAudioConverter?] = [nil, nil]
     /// Host seconds of each track's last real buffer, 0 for none yet.
     private var lastFed: [Double] = [0, 0]
+    /// Each track's first real sound was told (`onFirstSound`).
+    private var heardFirst = [false, false]
+    /// Each track's buffers its input was not ready for, oldest first, and
+    /// how many samples they hold (`writeSamples`).
+    private var held: [[CMSampleBuffer]] = [[], []]
+    private var heldSamples: [Int64] = [0, 0]
     private var lastVideoSample: CMSampleBuffer?
     private var lastVideoTime: CMTime = .invalid
     private var placeholder: CMSampleBuffer?
@@ -233,6 +239,10 @@ final class ForkMeetingWriter: @unchecked Sendable {
     /// The recording's zero, in host seconds: the instant the stream is
     /// asked to start. Later sources (a stream rebuilt after a sleep) keep
     /// this origin.
+    ///
+    /// Minutes kept before the click never come here: they are written
+    /// beside this file (`ForkMeetingLookbackHandOver`), and the final pass
+    /// puts them first. Nothing but live samples goes through this queue.
     func beginSession(atHostTime time: Double) {
         queue.sync {
             guard !started, writer.status == .writing, pauseClock.begin(at: time) else { return }
@@ -241,6 +251,13 @@ final class ForkMeetingWriter: @unchecked Sendable {
             startTicker()
         }
     }
+
+    // MARK: Finish D
+
+    /// Writer queue: a track's first real sound, `seconds` into the file
+    /// (silence written before it does not count). Where the kept minutes
+    /// stop for that track, so the click leaves no hole.
+    var onFirstSound: ((Track, Double) -> Void)?
 
     /// A screen frame, timed on the host clock. Nothing without picture.
     func appendVideo(_ sample: CMSampleBuffer) {
@@ -269,6 +286,10 @@ final class ForkMeetingWriter: @unchecked Sendable {
             }
             let kept = samples.dropFirst(Int(placement.skip))
             lastFed[track.rawValue] = Self.hostSeconds()
+            if !heardFirst[track.rawValue], !kept.isEmpty {
+                heardFirst[track.rawValue] = true
+                onFirstSound?(track, Double(placement.start) / Self.sampleRate)
+            }
             // A drift absorbed: the first sample held a little longer.
             let held = placement.stretch > 0 && !kept.isEmpty
                 ? [Float](repeating: kept[kept.startIndex], count: Int(placement.stretch)) : []
@@ -318,6 +339,7 @@ final class ForkMeetingWriter: @unchecked Sendable {
                 let silence = timelines[track.rawValue].pad(to: endSample)
                 if silence > 0 { writeSilence(silence, at: endSample - silence, track: track) }
             }
+            appendAllHeld()
             writer.endSession(atSourceTime: max(endTime, lastVideoTime.isNumeric ? lastVideoTime : .zero))
             lastVideoSample = nil
             placeholder = nil
@@ -394,6 +416,7 @@ final class ForkMeetingWriter: @unchecked Sendable {
 
     private func tick() {
         guard started, !finishing, !failed else { return }
+        appendHeld()
         let host = Self.hostSeconds()
         let now = pauseClock.elapsed(at: host)
         if videoFrameCount == 0 {
@@ -434,14 +457,59 @@ final class ForkMeetingWriter: @unchecked Sendable {
         }
     }
 
+    /// Sound already placed on its track's timeline. An input that is not
+    /// ready holds it, in order, for the next chance (`appendHeld`): a
+    /// buffer dropped would not leave a hole the next one fills, since the
+    /// timeline counts it written, and the file would close up over it,
+    /// everything after it heard earlier. That happens when one track runs
+    /// ahead of the other: the file interleaves them, and without a picture
+    /// to pace it, a track whose live sound starts first after minutes
+    /// kept before the click waits for the other's (Finish D × sound only).
+    /// Past `heldLimit` (the other track stopped for good), the oldest goes.
     private func writeSamples(_ samples: [Float], at start: Int64, track: Track) {
-        guard !failed, !samples.isEmpty else { return }
-        let input = audioInputs[track.rawValue]
-        // A full input drops this buffer; the next one finds the hole and
-        // fills it with silence.
-        guard input.isReadyForMoreMediaData,
+        guard !failed, !samples.isEmpty,
               let buffer = Self.sampleBuffer(samples, start: start, format: targetFormat) else { return }
-        guard input.append(buffer) else { return fail() }
+        held[track.rawValue].append(buffer)
+        heldSamples[track.rawValue] += Int64(samples.count)
+        appendHeld()
+        while heldSamples[track.rawValue] > Self.heldLimit, let oldest = held[track.rawValue].first {
+            held[track.rawValue].removeFirst()
+            heldSamples[track.rawValue] -= Int64(CMSampleBufferGetNumSamples(oldest))
+        }
+    }
+
+    /// 4 s of a track: longer than the silence that fills a source gone
+    /// quiet (`silenceDelay`), after which the other track moves on again.
+    private static let heldLimit = Int64(4 * sampleRate)
+
+    /// Writer queue. Appends what each input is ready for, until neither
+    /// takes more: one track's sound appended may let the other's through.
+    private func appendHeld() {
+        var appended = true
+        while appended, !failed {
+            appended = false
+            for track in Track.allCases {
+                let input = audioInputs[track.rawValue]
+                while let first = held[track.rawValue].first, input.isReadyForMoreMediaData {
+                    held[track.rawValue].removeFirst()
+                    heldSamples[track.rawValue] -= Int64(CMSampleBufferGetNumSamples(first))
+                    guard input.append(first) else { return fail() }
+                    appended = true
+                }
+            }
+        }
+    }
+
+    /// Writer queue, before the file closes: what is held goes in, each
+    /// input waited for a little.
+    private func appendAllHeld() {
+        var waited = 0
+        appendHeld()
+        while held.contains(where: { !$0.isEmpty }), !failed, waited < 2_000 {
+            usleep(1_000)
+            waited += 1
+            appendHeld()
+        }
     }
 
     private func fail() {
@@ -514,7 +582,8 @@ final class ForkMeetingWriter: @unchecked Sendable {
     }
 
     /// Mono Float32 samples as a buffer stamped at sample `start`.
-    private static func sampleBuffer(_ samples: [Float], start: Int64, format: AVAudioFormat) -> CMSampleBuffer? {
+    /// Mono Float32 samples of `format` as a buffer at file sample `start`.
+    static func sampleBuffer(_ samples: [Float], start: Int64, format: AVAudioFormat) -> CMSampleBuffer? {
         guard let count = AVAudioFrameCount(exactly: samples.count),
               let pcm = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: count),
               let channel = pcm.floatChannelData?[0] else { return nil }

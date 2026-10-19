@@ -170,6 +170,15 @@ struct ForkMeetingSidecar: Equatable {
         /// The meeting app's sound was lost from here on (`seconds` 0): its
         /// tap lost its reader, and nothing else hears that app alone.
         case soundLost
+        // MARK: Finish D
+        /// Not a loss: the sound kept in memory before the click ("the last
+        /// 5 minutes") opens the file (`at` 0, `seconds` how long): the
+        /// first minutes are sound only, the picture starting at the click.
+        /// Recorded without picture, the file is sound throughout. Until
+        /// the final pass, those minutes wait beside the master
+        /// (`ForkMeetingFolder.lookbackName`, `lookbackJoins`); every time
+        /// in `meeting.json` already counts them.
+        case lookback
     }
 
     /// `at` and every time below are seconds of recording, pauses excluded;
@@ -262,6 +271,10 @@ struct ForkMeetingSidecar: Equatable {
     /// Where the meeting is in a CRM of the recorder contract
     /// (`ForkCastralRecord`), kept as raw JSON like `summary`.
     var castral: ForkMeetingJSON?
+    /// The kept minutes' file is whole (Finish D): per source track, how
+    /// many seconds past the click its kept sound goes, where the master's
+    /// own sound for it takes over. Gone once the final pass joined them.
+    var lookbackJoins: [Double]?
     /// What this version could not read or does not know, written back as is.
     var preserved: [String: ForkMeetingJSON] = [:]
 
@@ -388,7 +401,7 @@ extension ForkMeetingSidecar: Codable {
     private enum Field: String, CaseIterable {
         case schema, id, state, origin, title, titleSource, provider, meetCode, app, startedAt, endedAt,
              recordedSeconds, pauses, capture, gaps, stopReason, recovered, finalPass, calendarEventID, notes,
-             exports, transcript, markers, summary, castral
+             exports, transcript, markers, summary, castral, lookbackJoins
     }
 
     private struct Key: CodingKey {
@@ -435,6 +448,7 @@ extension ForkMeetingSidecar: Codable {
         markers = field(.markers)
         summary = field(.summary)
         castral = field(.castral)
+        lookbackJoins = field(.lookbackJoins)
         let known = Set(Field.allCases.map(\.rawValue))
         for key in container.allKeys where !known.contains(key.stringValue) {
             kept[key.stringValue] = try? container.decode(ForkMeetingJSON.self, forKey: key)
@@ -475,6 +489,7 @@ extension ForkMeetingSidecar: Codable {
         try put(markers, .markers)
         try put(summary, .summary)
         try put(castral, .castral)
+        try put(lookbackJoins, .lookbackJoins)
         for (key, value) in preserved where !written.contains(key) {
             try container.encode(value, forKey: Key(key))
         }
@@ -663,6 +678,16 @@ struct ForkMeetingSidecarPatch: Equatable {
     var marker: ForkMeetingSidecar.Marker?
     /// The CRM's record, replaced whole.
     var castral: ForkMeetingJSON?
+    // MARK: Finish D
+    /// The start, once known: earlier than the folder's by the kept minutes.
+    var startedAt: Date?
+    /// The kept minutes' file is whole: where each track's own sound
+    /// begins after the click.
+    var lookbackJoins: [Double]?
+    /// The kept minutes could not open the file (theirs did not survive):
+    /// the meeting begins at the click, every time moved back by them
+    /// (`ForkMeetingSidecar.withoutLookback`).
+    var dropsLookback = false
 
     /// A list or an object this version could not read is never replaced by
     /// a partial one: the addition is dropped rather than what was there.
@@ -686,6 +711,54 @@ struct ForkMeetingSidecarPatch: Equatable {
         if let recovered { result.recovered = recovered }
         if let finalPass { result.finalPass = finalPass }
         if let castral { result.castral = castral }
+        if let startedAt { result.startedAt = startedAt }
+        if let lookbackJoins { result.lookbackJoins = lookbackJoins }
+        if dropsLookback { result = result.withoutLookback }
+        return result
+    }
+}
+
+extension ForkMeetingSidecar {
+    /// How many seconds kept before the click open the file (`GapKind.lookback`).
+    var lookbackSeconds: Double? {
+        gaps?.first { $0.kind == .lookback }?.seconds.flatMap { $0 > 0 && $0.isFinite ? $0 : nil }
+    }
+
+    /// The meeting without its kept minutes: it begins at the click. Every
+    /// time noted counted them, and is moved back by as much; the start is
+    /// that much later. A list this version could not read stays as it is.
+    var withoutLookback: ForkMeetingSidecar {
+        guard let kept = lookbackSeconds else {
+            var same = self
+            same.lookbackJoins = nil
+            return same
+        }
+        var result = self
+        func back(_ time: Double?) -> Double? { time.map { max(0, $0 - kept) } }
+        if preserved["gaps"] == nil {
+            result.gaps = gaps?.filter { $0.kind != .lookback }.map { gap in
+                var moved = gap
+                moved.at = back(gap.at)
+                return moved
+            }
+        }
+        if preserved["pauses"] == nil {
+            result.pauses = pauses?.map { pause in
+                var moved = pause
+                moved.at = back(pause.at)
+                return moved
+            }
+        }
+        if preserved["markers"] == nil {
+            result.markers = markers?.map { marker in
+                var moved = marker
+                moved.at = back(marker.at)
+                return moved
+            }
+        }
+        result.recordedSeconds = back(recordedSeconds)
+        result.startedAt = startedAt?.addingTimeInterval(kept)
+        result.lookbackJoins = nil
         return result
     }
 }

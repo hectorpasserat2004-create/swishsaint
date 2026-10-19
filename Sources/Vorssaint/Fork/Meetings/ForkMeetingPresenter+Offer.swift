@@ -27,6 +27,9 @@ final class ForkMeetingOfferUI {
     var islandCard: (id: UUID, card: Card)?
     var bubbleCard: Card?
     var undoUntil: Date?
+    // MARK: Finish D
+    /// Raised by a nudge ("It's started · Record?"), until it folds.
+    var attention = false
 
     var windowNumbers: [Int?] { [bubble.windowNumber, reminder.windowNumber] }
 }
@@ -54,6 +57,7 @@ extension ForkMeetingPresenter {
         if ui.offer?.candidate.identity != offer.candidate.identity {
             // A new meeting: the island gets its chance again.
             cancelFold()
+            ui.attention = false
             ui.islandTurnedAway = false
             ui.fold = .opened()
             ui.open = !offer.collapsed
@@ -97,6 +101,7 @@ extension ForkMeetingPresenter {
         cancelFold()
         ui.offer = nil
         ui.open = false
+        ui.attention = false
         // The offer's appointment never outlives it (B2).
         ForkCastralDirectory.shared.forget()
         removeIslandCard(.offer)
@@ -265,6 +270,7 @@ extension ForkMeetingPresenter {
         let ui = offerUI
         cancelFold()
         ui.open = false
+        ui.attention = false
         ui.fold = .opened()
         renderOffer()
     }
@@ -295,7 +301,62 @@ extension ForkMeetingPresenter {
                                    always: { service.alwaysForOffer() }, never: { service.dismissOffer(.never) },
                                    copyAnnouncement: { service.copyAnnouncement() }, fix: failureAction)
         actions.recordOtherwise = { service.acceptOffer(target: settings.target.alternative) }
-        return Self.offerCard(offer, facts: facts, actions: actions, text: text)
+        var card = Self.offerCard(offer, facts: facts, actions: actions, text: text)
+        // MARK: Finish D
+        let words = text
+        let language = L10n.shared.language
+        card.kept = service.lookbackSince(candidate.identity).map { since in
+            ForkMeetingCard.Kept(since: since,
+                                 words: { ForkMeetingLookbackText.kept(since: since, now: $0, strings: words) },
+                                 spoken: { ForkMeetingLookbackText.spokenKept(since: since, now: $0, strings: words,
+                                                                              language: language) })
+        }
+        if offerUI.attention { Self.raise(&card, text: text, inIsland: inIsland) }
+        return card
+    }
+
+    // MARK: Finish D
+
+    /// The offer shows, open, in the island or the bubble.
+    var offerIsOpen: Bool { offerUI.offer != nil && offerUI.open }
+
+    /// Others started talking: the offer opens again wherever it is, its
+    /// card drawing the eye, and folds back 20 s later if left alone.
+    func nudgeOffer(_ offer: ForkMeetingOffer) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { self.nudgeOffer(offer) }
+            return
+        }
+        let ui = offerUI
+        cancelFold()
+        ui.offer = offer
+        ui.open = true
+        ui.attention = true
+        ui.islandTurnedAway = false
+        ui.fold = .reopened(at: Date())
+        renderOffer()
+        scheduleFold()
+    }
+
+    /// Drawn again as it is (the kept sound's line appearing).
+    func refreshOffer() {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { self.refreshOffer() }
+            return
+        }
+        guard offerUI.offer != nil else { return }
+        renderOffer()
+    }
+
+    /// "It's started · Record?" above the meeting's name, the card ringed;
+    /// VoiceOver reads a sentence, not the dot: "Meeting started: Weekly
+    /// sync. Do you want to record it?".
+    static func raise(_ card: inout ForkMeetingCard, text: ForkMeetingStrings, inIsland: Bool = false) {
+        card.lines.insert(card.title, at: 0)
+        card.spokenTitle = text.voiceNudge(card.spokenTitle ?? card.title)
+        card.title = text.nudgeTitle
+        card.attention = true
+        card.attentionInIsland = inIsland
     }
 
     /// What an offer's card says that comes from the Mac and the settings.

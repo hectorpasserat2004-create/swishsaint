@@ -452,7 +452,8 @@ final class ForkMeetingStore: @unchecked Sendable {
         let audioOnly = (try? sidecar.get())?.isAudioOnly == true
         let video = contents.media(audioOnly: audioOnly).map { folder.appendingPathComponent($0) }
         var facts = ForkMeetingRecoveryPlan.Facts(sidecar: sidecar,
-                                                  hasDrafts: contents.hasVideoDraft || contents.hasAudioDraft)
+                                                  hasDrafts: contents.hasVideoDraft || contents.hasAudioDraft
+                                                      || contents.hasLookback)
         if contents.hasMaster {
             facts.master = ForkMeetingRecoveryPlan.Media(duration: await ForkMeetingFinalizer.playableSeconds(at: master))
         }
@@ -476,6 +477,10 @@ final class ForkMeetingStore: @unchecked Sendable {
             return nil
         case .markInterrupted:
             if let patch { write(patch, in: folder) }
+            // Nothing readable to join the kept minutes to (killed before the
+            // master's first fragment): they go, or they would be looked at
+            // at every launch.
+            try? manager.removeItem(at: folder.appendingPathComponent(ForkMeetingFolder.lookbackName))
             return Recovery(folder: folder, action: action, outcome: nil, seconds: nil)
         case let .complete(removeMaster, discardDrafts):
             if let patch { write(patch, in: folder) }
@@ -500,7 +505,9 @@ final class ForkMeetingStore: @unchecked Sendable {
     }
 
     private func discardDraftFiles(in folder: URL) {
-        for name in [ForkMeetingFolder.videoDraftName, ForkMeetingFolder.audioDraftName] {
+        // The kept minutes too: the final file, whole, has them already or
+        // went on without them.
+        for name in [ForkMeetingFolder.videoDraftName, ForkMeetingFolder.audioDraftName, ForkMeetingFolder.lookbackName] {
             try? FileManager.default.removeItem(at: folder.appendingPathComponent(name))
         }
     }
@@ -551,8 +558,8 @@ final class ForkMeetingStore: @unchecked Sendable {
         guard readable else { return .hidden(master) }
         // Without picture, under the `.m4a`'s name: an MP4 and an M4A are
         // the same container.
-        let audioOnly = (try? ForkMeetingSidecar.read(at: folder.appendingPathComponent(ForkMeetingFolder.sidecarName))
-            .get())?.isAudioOnly == true
+        let meeting = try? ForkMeetingSidecar.read(at: folder.appendingPathComponent(ForkMeetingFolder.sidecarName)).get()
+        let audioOnly = meeting?.isAudioOnly == true
         let final = folder.appendingPathComponent(
             "\(folder.lastPathComponent).\(ForkMeetingFolder.finalExtension(audioOnly: audioOnly))")
         if manager.fileExists(atPath: final.path) {
@@ -570,6 +577,14 @@ final class ForkMeetingStore: @unchecked Sendable {
                 return .hidden(master)
             }
             _ = apply(ForkMeetingSidecarPatch(state: .complete), in: folder)
+            // Finish D: the master is now the final file for good, and it
+            // holds nothing kept before the click: the meeting begins at the
+            // click, and the kept file goes. Shown as a second name only,
+            // the next launch's last try may still join them.
+            if let patch = ForkMeetingLookbackJoin.shownMaster(meeting) {
+                _ = apply(patch, in: folder)
+                try? manager.removeItem(at: folder.appendingPathComponent(ForkMeetingFolder.lookbackName))
+            }
         }
         if !audioOnly { addToRecentCaptures(final) }
         return .visible(final)
