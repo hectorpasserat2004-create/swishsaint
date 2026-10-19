@@ -13,6 +13,8 @@ struct ForkMeetingExportsSection: View {
 
     @ObservedObject private var exports = ForkMeetingExports.shared
     @State private var removing: ForkMeetingExporterConfig?
+    /// What the last "Import a Profile…" has to say.
+    @State private var importNote: String?
 
     var body: some View {
         Section {
@@ -46,13 +48,27 @@ struct ForkMeetingExportsSection: View {
                 case .webhook:
                     ForkMeetingWebhookRow(config: config, text: text) { removing = config }
                         .disabled(exports.listChanged)
+                case .castral:
+                    ForkCastralRow(config: config, text: text, language: L10n.shared.language) { removing = config }
+                        .disabled(exports.listChanged)
                 }
+            }
+            if let importNote {
+                Text(importNote)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             HStack {
                 Spacer()
                 Menu(text.exportsAdd) {
-                    ForEach(ForkMeetingExportKind.allCases, id: \.self) { kind in
+                    ForEach(ForkMeetingExportKind.addable, id: \.self) { kind in
                         Button(kind.name(text)) { exports.add(kind) }
+                    }
+                    Divider()
+                    // Generic: a CRM's name comes only from its profile.
+                    Button(text.exportsImportProfile) {
+                        ForkCastralProfileImport.choose(text) { note in importNote = note }
                     }
                 }
                 .fixedSize()

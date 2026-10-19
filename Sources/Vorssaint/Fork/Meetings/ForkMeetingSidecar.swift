@@ -259,6 +259,9 @@ struct ForkMeetingSidecar: Equatable {
     /// What the last summary on this Mac did (`ForkMeetingSummaryRecord`),
     /// kept as raw JSON like `transcript`.
     var summary: ForkMeetingJSON?
+    /// Where the meeting is in a CRM of the recorder contract
+    /// (`ForkCastralRecord`), kept as raw JSON like `summary`.
+    var castral: ForkMeetingJSON?
     /// What this version could not read or does not know, written back as is.
     var preserved: [String: ForkMeetingJSON] = [:]
 
@@ -385,7 +388,7 @@ extension ForkMeetingSidecar: Codable {
     private enum Field: String, CaseIterable {
         case schema, id, state, origin, title, titleSource, provider, meetCode, app, startedAt, endedAt,
              recordedSeconds, pauses, capture, gaps, stopReason, recovered, finalPass, calendarEventID, notes,
-             exports, transcript, markers, summary
+             exports, transcript, markers, summary, castral
     }
 
     private struct Key: CodingKey {
@@ -431,6 +434,7 @@ extension ForkMeetingSidecar: Codable {
         transcript = field(.transcript)
         markers = field(.markers)
         summary = field(.summary)
+        castral = field(.castral)
         let known = Set(Field.allCases.map(\.rawValue))
         for key in container.allKeys where !known.contains(key.stringValue) {
             kept[key.stringValue] = try? container.decode(ForkMeetingJSON.self, forKey: key)
@@ -470,6 +474,7 @@ extension ForkMeetingSidecar: Codable {
         try put(transcript, .transcript)
         try put(markers, .markers)
         try put(summary, .summary)
+        try put(castral, .castral)
         for (key, value) in preserved where !written.contains(key) {
             try container.encode(value, forKey: Key(key))
         }
@@ -656,6 +661,8 @@ struct ForkMeetingSidecarPatch: Equatable {
     var export: ForkMeetingSidecar.Export?
     /// A moment marked, appended to `markers`.
     var marker: ForkMeetingSidecar.Marker?
+    /// The CRM's record, replaced whole.
+    var castral: ForkMeetingJSON?
 
     /// A list or an object this version could not read is never replaced by
     /// a partial one: the addition is dropped rather than what was there.
@@ -678,6 +685,7 @@ struct ForkMeetingSidecarPatch: Equatable {
         }
         if let recovered { result.recovered = recovered }
         if let finalPass { result.finalPass = finalPass }
+        if let castral { result.castral = castral }
         return result
     }
 }

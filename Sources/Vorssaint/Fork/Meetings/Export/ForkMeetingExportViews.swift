@@ -19,7 +19,7 @@ struct ForkMeetingExportMenu: View {
         if !configured.isEmpty {
             Menu(text.actionExportTo) {
                 ForEach(configured) { config in
-                    Button(config.title(text)) { exports.export(folder, to: config.id) }
+                    Button(exports.title(config, text)) { exports.export(folder, to: config.id) }
                         .disabled(live || exports.listChanged
                                     || exports.pending.contains(ForkMeetingExports.key(folder, config.id)))
                 }
@@ -56,6 +56,9 @@ struct ForkMeetingExportStatus: View {
                         .foregroundStyle(.secondary)
                     ForEach(shown) { config in
                         row(config)
+                        if config.kind == .castral {
+                            ForkCastralDetail(folder: folder, config: config, text: text, language: language)
+                        }
                     }
                     if exports.listChanged {
                         HStack(alignment: .firstTextBaseline) {
@@ -79,6 +82,10 @@ struct ForkMeetingExportStatus: View {
             exports.refreshResults(folder)
             exports.refresh()
         }
+        .sheet(item: Binding(get: { exports.castralChoice.flatMap { $0.folder == folder ? $0 : nil } },
+                             set: { if $0 == nil { exports.castralChoice = nil } })) { choice in
+            ForkCastralChoiceSheet(choice: choice, text: text, language: language)
+        }
     }
 
     private var shown: [ForkMeetingExporterConfig] {
@@ -98,7 +105,7 @@ struct ForkMeetingExportStatus: View {
         let key = ForkMeetingExports.key(folder, config.id)
         VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(config.title(text))
+                Text(exports.title(config, text))
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer(minLength: 8)

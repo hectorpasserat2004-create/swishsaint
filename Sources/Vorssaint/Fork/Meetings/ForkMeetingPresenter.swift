@@ -376,6 +376,41 @@ final class ForkMeetingPresenter {
         }
     }
 
+    /// "Sent to <CRM>" or "Not sent to <CRM>", the meeting's name under it
+    /// (never its Google Meet code), [Show]: a result, silenced with the
+    /// others on the page.
+    func showCastral(folder: URL, name: String, sent: Bool) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { self.showCastral(folder: folder, name: name, sent: sent) }
+            return
+        }
+        let wait = savedAt.map { Self.savedHold - Date().timeIntervalSince($0) } ?? 0
+        guard wait <= 0 else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + wait) { [weak self] in
+                self?.savedAt = nil
+                self?.showCastral(folder: folder, name: name, sent: sent)
+            }
+            return
+        }
+        let text = self.text
+        let title = sent ? text.noticeCastralSent(name) : text.noticeCastralFailed(name)
+        let detail = ForkMeetingExportDocument.name(folder.lastPathComponent, meetCode: nil, includesMeetCode: false)
+        announce(ForkMeetingLiveText.sentences(title, detail))
+        guard ForkMeetingNotifyEvent.isOn(.results) else { return }
+        let shown = present({ dismiss in
+            ForkMeetingCard(symbol: sent ? "paperplane.fill" : "xmark.circle.fill", tint: sent ? .green : .red,
+                            title: title, lines: [detail],
+                            actions: [ForkMeetingCard.Action(title: text.actionShowMeeting, prominent: true) {
+                                ForkMeetingLibraryWindow.shared.show(folder: folder)
+                                dismiss()
+                            }])
+        }, height: Self.savedCardHeight, hold: sent ? Self.savedHold : Self.cardHold)
+        if ForkMeetingServiceSupport.notifies(shownInIsland: shown.island, shownInBubble: shown.bubble,
+                                              canNotify: Self.canNotify) {
+            Notifier.post(title: title, body: detail)
+        }
+    }
+
     /// Said to VoiceOver only: what the pill shows without a word VoiceOver
     /// would hear change (the picture frozen).
     func say(_ message: String) {
