@@ -939,6 +939,39 @@ struct ForkMeetingStrings {
     let nudgeOffersOff: String
 
     func voiceNudge(_ meeting: String) -> String { String(format: voiceNudgeFormat, meeting) }
+
+    // MARK: W2 F
+
+    /// The offer's "Later ▾" and its menu; %d is minutes (5, 15).
+    let offerLater: String
+    let offerStartInFormat: String
+    let offerWhenever: String
+    /// The offer's ✕: no more offers for this meeting. Its tooltip and
+    /// VoiceOver hint; VoiceOver names it `offerNotNow`.
+    let offerDismiss: String
+    /// "Starts in 4:12" on the card of a start planned; VoiceOver hears a
+    /// spoken duration in its place.
+    let offerStartsInFormat: String
+    /// That card's buttons: start now, or call the start planned off.
+    let offerStartNow: String
+    let offerCancelStart: String
+    /// The closed island's activity for VoiceOver; %@ is the provider
+    /// ("Meet").
+    let islandOfferLabelFormat: String
+    let islandOfferHint: String
+    /// After ✕: the card's title, and its one line on where the meeting can
+    /// still be recorded from.
+    let noticeNotOffered: String
+    let noticeNotOfferedDetail: String
+    /// Said to VoiceOver; %d is minutes.
+    let voiceScheduledFormat: String
+    let voiceScheduleCancelled: String
+    let voiceNotOffered: String
+
+    func offerStartIn(minutes: Int) -> String { String(format: offerStartInFormat, minutes) }
+    func offerStartsIn(_ time: String) -> String { String(format: offerStartsInFormat, time) }
+    func islandOfferLabel(_ provider: String) -> String { String(format: islandOfferLabelFormat, provider) }
+    func voiceScheduled(minutes: Int) -> String { String(format: voiceScheduledFormat, minutes) }
 }
 
 extension ForkMeetingStrings {
@@ -1475,7 +1508,22 @@ extension ForkMeetingStrings {
         lookbackSoundOnlyFormat: "The first %d minutes: sound only",
         lookbackKeptBeforeOne: "The first minute: kept from before the click",
         lookbackKeptBeforeFormat: "The first %d minutes: kept from before the click",
-        nudgeOffersOff: "Offers to record are turned off in Notifications and sounds: the offer does not come back, and no sound is kept."
+        nudgeOffersOff: "Offers to record are turned off in Notifications and sounds: the offer does not come back, and no sound is kept.",
+        // MARK: W2 F
+        offerLater: "Later",
+        offerStartInFormat: "Start in %d min",
+        offerWhenever: "When I want",
+        offerDismiss: "Don’t offer for this meeting",
+        offerStartsInFormat: "Starts in %@",
+        offerStartNow: "Now",
+        offerCancelStart: "Cancel",
+        islandOfferLabelFormat: "Meeting detected, %@",
+        islandOfferHint: "Opens the offer to record",
+        noticeNotOffered: "Not offered for this call",
+        noticeNotOfferedDetail: "Record it anytime from the island, your shortcut or the Command Bar.",
+        voiceScheduledFormat: "Recording starts in %d minutes.",
+        voiceScheduleCancelled: "Planned start cancelled.",
+        voiceNotOffered: "No more offers for this meeting. You can still record it from the island, your shortcut or the Command Bar."
     )
 }
 
@@ -2013,7 +2061,22 @@ extension ForkMeetingStrings {
         lookbackSoundOnlyFormat: "Os primeiros %d minutos: só som",
         lookbackKeptBeforeOne: "O primeiro minuto: guardado antes do clique",
         lookbackKeptBeforeFormat: "Os primeiros %d minutos: guardados antes do clique",
-        nudgeOffersOff: "As propostas de gravação estão desativadas em Notificações e sons: a proposta não volta e nenhum som é guardado."
+        nudgeOffersOff: "As propostas de gravação estão desativadas em Notificações e sons: a proposta não volta e nenhum som é guardado.",
+        // MARK: W2 F
+        offerLater: "Mais tarde",
+        offerStartInFormat: "Iniciar em %d min",
+        offerWhenever: "Quando eu quiser",
+        offerDismiss: "Não oferecer para esta reunião",
+        offerStartsInFormat: "Começa em %@",
+        offerStartNow: "Agora",
+        offerCancelStart: "Cancelar",
+        islandOfferLabelFormat: "Reunião detectada, %@",
+        islandOfferHint: "Abre a oferta de gravar",
+        noticeNotOffered: "Não oferecido nesta chamada",
+        noticeNotOfferedDetail: "Grave quando quiser pela ilha, pelo atalho ou pela Barra de comando.",
+        voiceScheduledFormat: "A gravação começa em %d minutos.",
+        voiceScheduleCancelled: "Início programado cancelado.",
+        voiceNotOffered: "Sem mais ofertas para esta reunião. Você ainda pode gravá-la pela ilha, pelo atalho ou pela Barra de comando."
     )
 }
 
@@ -2551,7 +2614,22 @@ extension ForkMeetingStrings {
         lookbackSoundOnlyFormat: "İlk %d dakika: yalnızca ses",
         lookbackKeptBeforeOne: "İlk dakika: tıklamadan önce tutuldu",
         lookbackKeptBeforeFormat: "İlk %d dakika: tıklamadan önce tutuldu",
-        nudgeOffersOff: "Kaydetme önerileri Bildirimler ve seslerde kapalı: öneri geri gelmez ve hiçbir ses tutulmaz."
+        nudgeOffersOff: "Kaydetme önerileri Bildirimler ve seslerde kapalı: öneri geri gelmez ve hiçbir ses tutulmaz.",
+        // MARK: W2 F
+        offerLater: "Sonra",
+        offerStartInFormat: "%d dk sonra başlat",
+        offerWhenever: "İstediğimde",
+        offerDismiss: "Bu toplantı için önerme",
+        offerStartsInFormat: "%@ sonra başlıyor",
+        offerStartNow: "Şimdi",
+        offerCancelStart: "Vazgeç",
+        islandOfferLabelFormat: "Toplantı algılandı, %@",
+        islandOfferHint: "Kaydetme önerisini açar",
+        noticeNotOffered: "Bu görüşme için önerilmez",
+        noticeNotOfferedDetail: "İstediğiniz zaman adadan, kısayolla veya Komut çubuğuyla kaydedin.",
+        voiceScheduledFormat: "Kayıt %d dakika sonra başlayacak.",
+        voiceScheduleCancelled: "Planlanan başlangıç iptal edildi.",
+        voiceNotOffered: "Bu toplantı için artık öneri yok. Yine de adadan, kısayolla veya Komut çubuğuyla kaydedebilirsiniz."
     )
 }
 
@@ -3089,7 +3167,22 @@ extension ForkMeetingStrings {
         lookbackSoundOnlyFormat: "Первые минуты (%d): только звук",
         lookbackKeptBeforeOne: "Первая минута: сохранена до нажатия",
         lookbackKeptBeforeFormat: "Первые минуты (%d): сохранены до нажатия",
-        nudgeOffersOff: "Предложения записать выключены в разделе «Уведомления и звуки»: предложение не вернётся, звук не сохраняется."
+        nudgeOffersOff: "Предложения записать выключены в разделе «Уведомления и звуки»: предложение не вернётся, звук не сохраняется.",
+        // MARK: W2 F
+        offerLater: "Позже",
+        offerStartInFormat: "Начать через %d мин",
+        offerWhenever: "Когда захочу",
+        offerDismiss: "Не предлагать для этой встречи",
+        offerStartsInFormat: "Начало через %@",
+        offerStartNow: "Сейчас",
+        offerCancelStart: "Отменить",
+        islandOfferLabelFormat: "Обнаружена встреча, %@",
+        islandOfferHint: "Открывает предложение записать",
+        noticeNotOffered: "Больше не предлагается",
+        noticeNotOfferedDetail: "Записать можно в любой момент из острова, сочетанием клавиш или через командную панель.",
+        voiceScheduledFormat: "Запись начнётся через %d минут.",
+        voiceScheduleCancelled: "Запланированный старт отменён.",
+        voiceNotOffered: "Для этой встречи больше не предлагается. Записать её можно из острова, сочетанием клавиш или через командную панель."
     )
 }
 
@@ -3627,7 +3720,22 @@ extension ForkMeetingStrings {
         lookbackSoundOnlyFormat: "Los primeros %d minutos: solo sonido",
         lookbackKeptBeforeOne: "El primer minuto: guardado antes del clic",
         lookbackKeptBeforeFormat: "Los primeros %d minutos: guardados antes del clic",
-        nudgeOffersOff: "Las ofertas de grabar están desactivadas en Notificaciones y sonidos: la oferta no vuelve y no se guarda ningún sonido."
+        nudgeOffersOff: "Las ofertas de grabar están desactivadas en Notificaciones y sonidos: la oferta no vuelve y no se guarda ningún sonido.",
+        // MARK: W2 F
+        offerLater: "Más tarde",
+        offerStartInFormat: "Empezar en %d min",
+        offerWhenever: "Cuando quiera",
+        offerDismiss: "No ofrecer para esta reunión",
+        offerStartsInFormat: "Empieza en %@",
+        offerStartNow: "Ahora",
+        offerCancelStart: "Cancelar",
+        islandOfferLabelFormat: "Reunión detectada, %@",
+        islandOfferHint: "Abre la oferta de grabar",
+        noticeNotOffered: "No se ofrece en esta llamada",
+        noticeNotOfferedDetail: "Grábala cuando quieras desde la isla, el atajo o la Barra de comandos.",
+        voiceScheduledFormat: "La grabación empieza en %d minutos.",
+        voiceScheduleCancelled: "Inicio programado cancelado.",
+        voiceNotOffered: "No habrá más ofertas para esta reunión. Aún puedes grabarla desde la isla, el atajo o la Barra de comandos."
     )
 }
 
@@ -4165,7 +4273,22 @@ extension ForkMeetingStrings {
         lookbackSoundOnlyFormat: "Prvé minúty (%d): len zvuk",
         lookbackKeptBeforeOne: "Prvá minúta: uchovaná pred kliknutím",
         lookbackKeptBeforeFormat: "Prvé minúty (%d): uchované pred kliknutím",
-        nudgeOffersOff: "Ponuky na nahrávanie sú vypnuté v časti Upozornenia a zvuky: ponuka sa nevráti a žiadny zvuk sa neuchová."
+        nudgeOffersOff: "Ponuky na nahrávanie sú vypnuté v časti Upozornenia a zvuky: ponuka sa nevráti a žiadny zvuk sa neuchová.",
+        // MARK: W2 F
+        offerLater: "Neskôr",
+        offerStartInFormat: "Spustiť o %d min",
+        offerWhenever: "Kedy chcem",
+        offerDismiss: "Neponúkať pre toto stretnutie",
+        offerStartsInFormat: "Začne o %@",
+        offerStartNow: "Teraz",
+        offerCancelStart: "Zrušiť",
+        islandOfferLabelFormat: "Rozpoznané stretnutie, %@",
+        islandOfferHint: "Otvorí ponuku nahrávania",
+        noticeNotOffered: "Pre tento hovor sa neponúka",
+        noticeNotOfferedDetail: "Nahrávať môžete kedykoľvek z Dynamic Island, skratkou alebo cez Príkazovú lištu.",
+        voiceScheduledFormat: "Nahrávanie sa spustí o %d minút.",
+        voiceScheduleCancelled: "Plánované spustenie je zrušené.",
+        voiceNotOffered: "Pre toto stretnutie sa už nič neponúkne. Stále ho môžete nahrať z Dynamic Island, skratkou alebo cez Príkazovú lištu."
     )
 }
 
@@ -4703,7 +4826,22 @@ extension ForkMeetingStrings {
         lookbackSoundOnlyFormat: "Die ersten %d Minuten: nur Ton",
         lookbackKeptBeforeOne: "Die erste Minute: vor dem Klick behalten",
         lookbackKeptBeforeFormat: "Die ersten %d Minuten: vor dem Klick behalten",
-        nudgeOffersOff: "Angebote zur Aufnahme sind unter „Mitteilungen und Töne“ aus: Das Angebot kommt nicht zurück, und kein Ton wird behalten."
+        nudgeOffersOff: "Angebote zur Aufnahme sind unter „Mitteilungen und Töne“ aus: Das Angebot kommt nicht zurück, und kein Ton wird behalten.",
+        // MARK: W2 F
+        offerLater: "Später",
+        offerStartInFormat: "In %d Min. starten",
+        offerWhenever: "Wann ich will",
+        offerDismiss: "Für diese Besprechung nicht anbieten",
+        offerStartsInFormat: "Start in %@",
+        offerStartNow: "Jetzt",
+        offerCancelStart: "Abbrechen",
+        islandOfferLabelFormat: "Besprechung erkannt, %@",
+        islandOfferHint: "Öffnet das Angebot zur Aufnahme",
+        noticeNotOffered: "Nicht mehr angeboten",
+        noticeNotOfferedDetail: "Jederzeit aufnehmbar über die Insel, per Kurzbefehl oder über die Befehlsleiste.",
+        voiceScheduledFormat: "Die Aufnahme startet in %d Minuten.",
+        voiceScheduleCancelled: "Geplanter Start abgebrochen.",
+        voiceNotOffered: "Für diese Besprechung kommt kein Angebot mehr. Du kannst sie weiter über die Insel, per Kurzbefehl oder über die Befehlsleiste aufnehmen."
     )
 }
 
@@ -5241,7 +5379,22 @@ extension ForkMeetingStrings {
         lookbackSoundOnlyFormat: "Les %d premières minutes\u{00A0}: son seulement",
         lookbackKeptBeforeOne: "La première minute\u{00A0}: gardée avant le clic",
         lookbackKeptBeforeFormat: "Les %d premières minutes\u{00A0}: gardées avant le clic",
-        nudgeOffersOff: "Les propositions d’enregistrement sont coupées dans Notifications et sons\u{00A0}: la proposition ne revient pas et aucun son n’est gardé."
+        nudgeOffersOff: "Les propositions d’enregistrement sont coupées dans Notifications et sons\u{00A0}: la proposition ne revient pas et aucun son n’est gardé.",
+        // MARK: W2 F
+        offerLater: "Plus tard",
+        offerStartInFormat: "Démarrer dans %d\u{00A0}min",
+        offerWhenever: "Quand je veux",
+        offerDismiss: "Ne plus proposer pour cette réunion",
+        offerStartsInFormat: "Démarre dans %@",
+        offerStartNow: "Maintenant",
+        offerCancelStart: "Annuler",
+        islandOfferLabelFormat: "Réunion détectée, %@",
+        islandOfferHint: "Ouvre la proposition d’enregistrer",
+        noticeNotOffered: "Plus proposé pour cet appel",
+        noticeNotOfferedDetail: "Toujours possible depuis l’île, votre raccourci ou la Barre de commande.",
+        voiceScheduledFormat: "L’enregistrement démarrera dans %d\u{00A0}minutes.",
+        voiceScheduleCancelled: "Démarrage prévu annulé.",
+        voiceNotOffered: "Plus de proposition pour cette réunion. Vous pouvez toujours l’enregistrer depuis l’île, votre raccourci ou la Barre de commande."
     )
 }
 
@@ -5779,7 +5932,22 @@ extension ForkMeetingStrings {
         lookbackSoundOnlyFormat: "I primi %d minuti: solo audio",
         lookbackKeptBeforeOne: "Il primo minuto: tenuto da prima del clic",
         lookbackKeptBeforeFormat: "I primi %d minuti: tenuti da prima del clic",
-        nudgeOffersOff: "Le proposte di registrare sono disattivate in Notifiche e suoni: la proposta non torna e nessun suono viene tenuto."
+        nudgeOffersOff: "Le proposte di registrare sono disattivate in Notifiche e suoni: la proposta non torna e nessun suono viene tenuto.",
+        // MARK: W2 F
+        offerLater: "Più tardi",
+        offerStartInFormat: "Avvia tra %d min",
+        offerWhenever: "Quando voglio",
+        offerDismiss: "Non proporre per questa riunione",
+        offerStartsInFormat: "Inizia tra %@",
+        offerStartNow: "Ora",
+        offerCancelStart: "Annulla",
+        islandOfferLabelFormat: "Riunione rilevata, %@",
+        islandOfferHint: "Apre la proposta di registrare",
+        noticeNotOffered: "Non più proposto",
+        noticeNotOfferedDetail: "Registrala quando vuoi dall’isola, con la scorciatoia o dalla Barra dei comandi.",
+        voiceScheduledFormat: "La registrazione inizia tra %d minuti.",
+        voiceScheduleCancelled: "Avvio programmato annullato.",
+        voiceNotOffered: "Nessun’altra proposta per questa riunione. Puoi comunque registrarla dall’isola, con la scorciatoia o dalla Barra dei comandi."
     )
 }
 
@@ -6317,7 +6485,22 @@ extension ForkMeetingStrings {
         lookbackSoundOnlyFormat: "最初の%d分：音声のみ",
         lookbackKeptBeforeOne: "最初の1分：クリック前から保持",
         lookbackKeptBeforeFormat: "最初の%d分：クリック前から保持",
-        nudgeOffersOff: "「通知とサウンド」で録画の提案がオフになっています。提案は再表示されず、音声も保持されません。"
+        nudgeOffersOff: "「通知とサウンド」で録画の提案がオフになっています。提案は再表示されず、音声も保持されません。",
+        // MARK: W2 F
+        offerLater: "あとで",
+        offerStartInFormat: "%d 分後に開始",
+        offerWhenever: "好きなときに",
+        offerDismiss: "このミーティングでは提案しない",
+        offerStartsInFormat: "%@ 後に開始",
+        offerStartNow: "今すぐ",
+        offerCancelStart: "キャンセル",
+        islandOfferLabelFormat: "ミーティングを検出、%@",
+        islandOfferHint: "録画の提案を開きます",
+        noticeNotOffered: "この通話では提案しません",
+        noticeNotOfferedDetail: "島、ショートカット、コマンドバーからいつでも録画できます。",
+        voiceScheduledFormat: "%d 分後に録画を開始します。",
+        voiceScheduleCancelled: "予定した開始を取り消しました。",
+        voiceNotOffered: "このミーティングではもう提案しません。島、ショートカット、コマンドバーから録画できます。"
     )
 }
 
@@ -6855,7 +7038,22 @@ extension ForkMeetingStrings {
         lookbackSoundOnlyFormat: "처음 %d분: 소리만",
         lookbackKeptBeforeOne: "처음 1분: 클릭 전부터 보관",
         lookbackKeptBeforeFormat: "처음 %d분: 클릭 전부터 보관",
-        nudgeOffersOff: "알림 및 사운드에서 녹화 제안이 꺼져 있습니다. 제안이 다시 나타나지 않고 소리도 보관되지 않습니다."
+        nudgeOffersOff: "알림 및 사운드에서 녹화 제안이 꺼져 있습니다. 제안이 다시 나타나지 않고 소리도 보관되지 않습니다.",
+        // MARK: W2 F
+        offerLater: "나중에",
+        offerStartInFormat: "%d분 후 시작",
+        offerWhenever: "원할 때",
+        offerDismiss: "이 회의에는 제안 안 함",
+        offerStartsInFormat: "%@ 후 시작",
+        offerStartNow: "지금",
+        offerCancelStart: "취소",
+        islandOfferLabelFormat: "회의 감지됨, %@",
+        islandOfferHint: "녹화 제안을 엽니다",
+        noticeNotOffered: "이 통화에는 제안 안 함",
+        noticeNotOfferedDetail: "섬, 단축키 또는 명령 막대에서 언제든 녹화할 수 있습니다.",
+        voiceScheduledFormat: "%d분 후에 녹화가 시작됩니다.",
+        voiceScheduleCancelled: "예정된 시작을 취소했습니다.",
+        voiceNotOffered: "이 회의에는 더 이상 제안하지 않습니다. 섬, 단축키 또는 명령 막대에서 계속 녹화할 수 있습니다."
     )
 }
 
@@ -7393,7 +7591,22 @@ extension ForkMeetingStrings {
         lookbackSoundOnlyFormat: "Перші хвилини (%d): лише звук",
         lookbackKeptBeforeOne: "Перша хвилина: збережена до натискання",
         lookbackKeptBeforeFormat: "Перші хвилини (%d): збережені до натискання",
-        nudgeOffersOff: "Пропозиції записати вимкнено в розділі «Сповіщення і звуки»: пропозиція не повернеться, звук не зберігається."
+        nudgeOffersOff: "Пропозиції записати вимкнено в розділі «Сповіщення і звуки»: пропозиція не повернеться, звук не зберігається.",
+        // MARK: W2 F
+        offerLater: "Пізніше",
+        offerStartInFormat: "Почати за %d хв",
+        offerWhenever: "Коли захочу",
+        offerDismiss: "Не пропонувати для цієї зустрічі",
+        offerStartsInFormat: "Початок за %@",
+        offerStartNow: "Зараз",
+        offerCancelStart: "Скасувати",
+        islandOfferLabelFormat: "Виявлено зустріч, %@",
+        islandOfferHint: "Відкриває пропозицію записати",
+        noticeNotOffered: "Більше не пропонується",
+        noticeNotOfferedDetail: "Записати можна будь-коли з острівця, поєднанням клавіш або через панель команд.",
+        voiceScheduledFormat: "Запис почнеться за %d хвилин.",
+        voiceScheduleCancelled: "Запланований старт скасовано.",
+        voiceNotOffered: "Для цієї зустрічі більше не пропонується. Записати її можна з острівця, поєднанням клавіш або через панель команд."
     )
 }
 
@@ -7931,7 +8144,22 @@ extension ForkMeetingStrings {
         lookbackSoundOnlyFormat: "前 %d 分钟：仅声音",
         lookbackKeptBeforeOne: "前 1 分钟：点击前已保留",
         lookbackKeptBeforeFormat: "前 %d 分钟：点击前已保留",
-        nudgeOffersOff: "“通知和声音”中已关闭录制提议：提议不会再次出现，也不会保留任何声音。"
+        nudgeOffersOff: "“通知和声音”中已关闭录制提议：提议不会再次出现，也不会保留任何声音。",
+        // MARK: W2 F
+        offerLater: "稍后",
+        offerStartInFormat: "%d 分钟后开始",
+        offerWhenever: "我想录时再说",
+        offerDismiss: "不再为此会议提议",
+        offerStartsInFormat: "%@ 后开始",
+        offerStartNow: "现在",
+        offerCancelStart: "取消",
+        islandOfferLabelFormat: "检测到会议，%@",
+        islandOfferHint: "打开录制提议",
+        noticeNotOffered: "此通话不再提议",
+        noticeNotOfferedDetail: "随时可从岛、快捷键或命令栏开始录制。",
+        voiceScheduledFormat: "录制将在 %d 分钟后开始。",
+        voiceScheduleCancelled: "已取消预定的开始。",
+        voiceNotOffered: "此会议不再提议。仍可从岛、快捷键或命令栏录制。"
     )
 }
 
@@ -8469,7 +8697,22 @@ extension ForkMeetingStrings {
         lookbackSoundOnlyFormat: "前 %d 分鐘：僅聲音",
         lookbackKeptBeforeOne: "前 1 分鐘：點按前已保留",
         lookbackKeptBeforeFormat: "前 %d 分鐘：點按前已保留",
-        nudgeOffersOff: "「通知與聲音」中已關閉錄製提議：提議不會再次出現，也不會保留任何聲音。"
+        nudgeOffersOff: "「通知與聲音」中已關閉錄製提議：提議不會再次出現，也不會保留任何聲音。",
+        // MARK: W2 F
+        offerLater: "稍後",
+        offerStartInFormat: "%d 分鐘後開始",
+        offerWhenever: "我想錄時再說",
+        offerDismiss: "不再為此會議提議",
+        offerStartsInFormat: "%@ 後開始",
+        offerStartNow: "現在",
+        offerCancelStart: "取消",
+        islandOfferLabelFormat: "偵測到會議，%@",
+        islandOfferHint: "打開錄製提議",
+        noticeNotOffered: "此通話不再提議",
+        noticeNotOfferedDetail: "隨時可從島、快速鍵或指令列開始錄製。",
+        voiceScheduledFormat: "錄製將在 %d 分鐘後開始。",
+        voiceScheduleCancelled: "已取消預定的開始。",
+        voiceNotOffered: "此會議不再提議。仍可從島、快速鍵或指令列錄製。"
     )
 }
 
@@ -9007,6 +9250,21 @@ extension ForkMeetingStrings {
         lookbackSoundOnlyFormat: "頭 %d 分鐘：只有聲音",
         lookbackKeptBeforeOne: "頭 1 分鐘：按下前已保留",
         lookbackKeptBeforeFormat: "頭 %d 分鐘：按下前已保留",
-        nudgeOffersOff: "「通知與聲音」中已關閉錄製提議：提議唔會再出現，亦唔會保留任何聲音。"
+        nudgeOffersOff: "「通知與聲音」中已關閉錄製提議：提議唔會再出現，亦唔會保留任何聲音。",
+        // MARK: W2 F
+        offerLater: "稍後",
+        offerStartInFormat: "%d 分鐘後開始",
+        offerWhenever: "我想錄先錄",
+        offerDismiss: "唔再為呢個會議提議",
+        offerStartsInFormat: "%@ 後開始",
+        offerStartNow: "而家",
+        offerCancelStart: "取消",
+        islandOfferLabelFormat: "偵測到會議，%@",
+        islandOfferHint: "打開錄製提議",
+        noticeNotOffered: "呢個通話唔再提議",
+        noticeNotOfferedDetail: "隨時可以喺島、快速鍵或指令列開始錄製。",
+        voiceScheduledFormat: "錄製會喺 %d 分鐘後開始。",
+        voiceScheduleCancelled: "已取消預定嘅開始。",
+        voiceNotOffered: "呢個會議唔再提議。仍然可以喺島、快速鍵或指令列錄製。"
     )
 }

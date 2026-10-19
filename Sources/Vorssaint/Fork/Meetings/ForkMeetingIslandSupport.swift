@@ -238,3 +238,67 @@ struct ForkMeetingIslandSnapshotFacts: Equatable {
         microphoneSilent = context.microphoneSilent
     }
 }
+
+// MARK: W2 F
+
+/// A detected call as the closed island shows it while it is offered and
+/// not refused: "Meet · ⏺", or the countdown of a start planned.
+struct ForkMeetingIslandOffer: Equatable {
+    /// The provider's short name ("Meet"), never the meeting's: the island
+    /// may be seen in a screen share.
+    var provider: String
+    var startsAt: Date?
+    var scheduledAt: Date?
+    /// One more at each nudge: the activity draws the eye once for each.
+    var nudges = 0
+
+    var phase: ForkMeetingIslandOfferPhase {
+        guard let startsAt else { return .detected }
+        return .scheduled(startsAt: startsAt, scheduledAt: scheduledAt ?? startsAt)
+    }
+}
+
+/// What the offer's activity draws: left of the camera an empty ring with a
+/// dot (nothing records yet, so nothing red), or a gauge filling toward the
+/// start planned; right of it the provider's short name, or the time left.
+enum ForkMeetingIslandOfferPhase: Equatable {
+    case detected
+    case scheduled(startsAt: Date, scheduledAt: Date)
+
+    var isScheduled: Bool {
+        if case .scheduled = self { return true }
+        return false
+    }
+}
+
+extension ForkMeetingIslandRules {
+    /// The closed island lists meetings among its live activities: a
+    /// recording, from its start until its file is finished, else a call
+    /// offered and not refused. The offers silenced on the page never get
+    /// that far: the presenter holds no offer then.
+    static func showsStrip(enabled: Bool, indicator: ForkMeetingIndicator, state: ForkMeetingPillState,
+                           offer: ForkMeetingIslandOffer?) -> Bool {
+        showsStrip(enabled: enabled, indicator: indicator, state: state)
+            || (enabled && indicator.showsStrip && state == .hidden && offer != nil)
+    }
+
+    /// Right of the camera: "Meet", or "4:12" before a start planned.
+    static func offerReading(_ offer: ForkMeetingIslandOffer, now: Date) -> String {
+        switch offer.phase {
+        case .detected: return offer.provider
+        case let .scheduled(startsAt, _): return ForkMeetingOfferTiming.countdown(until: startsAt, now: now)
+        }
+    }
+
+    /// VoiceOver: "Meeting detected, Meet", then "Starts in 4 min 12 s".
+    static func offerLabel(_ offer: ForkMeetingIslandOffer, strings s: ForkMeetingStrings) -> String {
+        s.islandOfferLabel(offer.provider)
+    }
+
+    static func offerValue(_ offer: ForkMeetingIslandOffer, now: Date, language: AppLanguage,
+                           strings s: ForkMeetingStrings) -> String {
+        guard case let .scheduled(startsAt, _) = offer.phase else { return "" }
+        let left = TimeInterval(ForkMeetingOfferTiming.secondsLeft(until: startsAt, now: now))
+        return s.offerStartsIn(spokenDuration(left, language: language))
+    }
+}

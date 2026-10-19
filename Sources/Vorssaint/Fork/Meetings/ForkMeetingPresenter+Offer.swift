@@ -3,6 +3,7 @@
 
 import AppKit
 import AVFoundation
+import Combine
 import SwiftUI
 
 /// What the presenter keeps of the detection's interface: the offer it
@@ -30,6 +31,20 @@ final class ForkMeetingOfferUI {
     // MARK: Finish D
     /// Raised by a nudge ("It's started · Record?"), until it folds.
     var attention = false
+    // MARK: W2 F
+    /// One more at each nudge: the island's activity draws the eye.
+    var nudges = 0
+    /// While the offer's card is in the island: a click anywhere else
+    /// folds it.
+    var clickWatch: Any?
+    /// While it is folded: the reminder comes and goes as the island shows
+    /// its activity or not.
+    var islandWatch: AnyCancellable?
+    /// ✕ was pressed: the card turns into its one line in place.
+    var dismissing = false
+    var noteWork: DispatchWorkItem?
+    /// That line is up (island or bubble): the machine's notice is it.
+    var noteShown = false
 
     var windowNumbers: [Int?] { [bubble.windowNumber, reminder.windowNumber] }
 }
@@ -62,7 +77,11 @@ extension ForkMeetingPresenter {
             ui.fold = .opened()
             ui.open = !offer.collapsed
         }
+        // "Start in 5 min" answers it: it folds at once into the island's
+        // countdown (W2 F).
+        let planned = offer.startsAt != nil && ui.offer?.startsAt != offer.startsAt
         ui.offer = offer
+        if planned, ui.open { return foldOffer() }
         renderOffer()
     }
 
@@ -90,6 +109,13 @@ extension ForkMeetingPresenter {
         ui.offer = nil
         ui.open = false
         ui.attention = false
+        stopOfferWatches()
+        ForkMeetingIslandModel.shared.showOffer(nil)
+        // ✕: the card says, in place, where it can still be recorded from.
+        if ui.dismissing, showNoteInPlace() {
+            ui.reminder.hide()
+            return
+        }
         removeIslandCard(.offer)
         hideOfferBubble(.offer)
         ui.reminder.hide()
@@ -151,8 +177,14 @@ extension ForkMeetingPresenter {
         ui.offer = nil
         ui.open = false
         ui.undoUntil = nil
+        stopOfferWatches()
+        ui.noteWork?.cancel()
+        ui.noteWork = nil
+        ui.noteShown = false
+        ForkMeetingIslandModel.shared.showOffer(nil)
         if let card = ui.islandCard { ForkMeetingIsland.remove(id: card.id) }
         ui.islandCard = nil
+        syncClickWatch()
         ui.bubble.hide()
         ui.bubbleCard = nil
         ui.reminder.hide()
@@ -167,13 +199,14 @@ extension ForkMeetingPresenter {
         let ui = offerUI
         guard let held = ui.islandCard else { return }
         ui.islandCard = nil
+        syncClickWatch()
         switch held.card {
         case .offer:
             ui.islandTurnedAway = true
             renderOffer()
         case .undo:
             if let until = ui.undoUntil { showOfferBubble(undoCard(until: until), as: .undo) }
-        case .endingSoon:
+        case .endingSoon, .note:
             break
         }
     }
@@ -183,21 +216,23 @@ extension ForkMeetingPresenter {
     private func renderOffer() {
         let ui = offerUI
         guard let offer = ui.offer else { return }
+        syncIslandOffer()
         guard ui.open else {
-            showReminder(offer)
+            showFolded(offer)
             return
         }
+        ui.islandWatch = nil
         ui.reminder.hide()
         let islandCard = offerCard(offer, inIsland: true)
         // Already in the island: changed in place.
         if let held = ui.islandCard, held.card == .offer, ForkMeetingIsland.isShowing(id: held.id) {
-            present(islandCard, id: held.id)
+            present(islandCard, id: held.id, minimum: Self.offerMinimum)
             return
         }
         let surface = ForkMeetingOfferSurface.choose(folded: false, islandAvailable: ForkMeetingIsland.isAvailable,
                                                      islandTurnedAway: ui.islandTurnedAway)
         if surface == .island {
-            if presentInIsland(islandCard, as: .offer, minimum: 96) {
+            if presentInIsland(islandCard, as: .offer, minimum: Self.offerMinimum) {
                 hideOfferBubble(.offer)
                 return
             }
@@ -207,17 +242,58 @@ extension ForkMeetingPresenter {
         showOfferBubble(offerCard(offer, inIsland: false), as: .offer)
     }
 
-    private func showReminder(_ offer: ForkMeetingOffer) {
+    /// Folded: the closed island's activity ("Meet · ⏺", or the countdown
+    /// of a start planned) where the island shows it, else the small grey
+    /// reminder, which comes and goes as the island does (W2 F).
+    private func showFolded(_ offer: ForkMeetingOffer) {
         let ui = offerUI
         removeIslandCard(.offer)
         hideOfferBubble(.offer)
-        ui.reminder.show(title: ForkMeetingOfferText.reminderTitle(offer.candidate),
-                         label: text.offerReminder(offer.candidate.name),
-                         on: meetingScreen(offer.candidate)) { [weak self] in self?.reopenOffer() }
+        let screen = meetingScreen(offer.candidate)
+        let indicator = ForkMeetingIndicator(stored: UserDefaults.standard.string(forKey: ForkDefaultsKey.meetingsIndicator))
+        let place = ForkMeetingOfferFolded.place(indicator: indicator,
+                                                 islandShowsActivity: ForkMeetingIsland.showsOfferActivity(on: screen))
+        if place.reminder {
+            ui.reminder.show(title: ForkMeetingOfferText.reminderTitle(offer.candidate),
+                             label: text.offerReminder(offer.candidate.name), startsAt: offer.startsAt,
+                             on: screen) { [weak self] in self?.reopenOffer() }
+        } else {
+            ui.reminder.hide()
+        }
+        if ui.islandWatch == nil, place.activity {
+            ui.islandWatch = ForkMeetingIsland.observeIsland { [weak self] in
+                guard let self, let offer = self.offerUI.offer, !self.offerUI.open else { return }
+                self.showFolded(offer)
+            }
+        }
     }
 
-    /// A click on the reminder: the offer opens again, in the island if it
-    /// is free now, and folds back 20 s later if left unanswered.
+    /// The island's activity, as the presenter's offer stands.
+    private func syncIslandOffer() {
+        let ui = offerUI
+        guard let offer = ui.offer else { return ForkMeetingIslandModel.shared.showOffer(nil) }
+        var shown = ForkMeetingIslandOffer(provider: ForkMeetingOfferText.reminderTitle(offer.candidate),
+                                           startsAt: offer.startsAt, scheduledAt: offer.scheduledAt)
+        shown.nudges = ui.nudges
+        ForkMeetingIslandModel.shared.showOffer(shown)
+    }
+
+    private func stopOfferWatches() {
+        offerUI.islandWatch = nil
+    }
+
+    /// A click on the island's activity ("Meet · ⏺", or the countdown).
+    func openOfferFromIsland() {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { self.openOfferFromIsland() }
+            return
+        }
+        reopenOffer()
+    }
+
+    /// A click on the reminder or the island's activity: the offer opens
+    /// again, in the island if it is free now, and folds back 20 s later if
+    /// left unanswered.
     private func reopenOffer() {
         let ui = offerUI
         guard ui.offer != nil else { return }
@@ -226,6 +302,89 @@ extension ForkMeetingPresenter {
         ui.fold = .reopened(at: Date())
         renderOffer()
         scheduleFold()
+    }
+
+    /// "Later ▾ · When I want": folded now, nothing planned; the island's
+    /// activity or the reminder opens it again.
+    private func foldOfferNow() {
+        guard offerUI.offer != nil, offerUI.open else { return }
+        foldOffer()
+    }
+
+    /// After ✕, the island's card (else the bubble's) becomes its one line
+    /// on where the meeting can still be recorded from, in place: no close
+    /// and open again. False when neither showed the offer.
+    private func showNoteInPlace() -> Bool {
+        let ui = offerUI
+        let card = notOfferedCard()
+        if let held = ui.islandCard, held.card == .offer, ForkMeetingIsland.isShowing(id: held.id) {
+            hideOfferBubble(.offer)
+            ui.islandCard = (held.id, .note)
+            present(card, id: held.id, minimum: 64)
+            syncClickWatch()
+            ui.noteShown = true
+            scheduleNoteRemoval()
+            return true
+        }
+        guard ui.bubbleCard == .offer else { return false }
+        removeIslandCard(.offer)
+        ui.bubbleCard = .note
+        ui.bubble.onHover = nil
+        ui.bubble.show(card, on: screen, hold: Self.noteHold) { [weak self] in
+            guard let self, self.offerUI.bubbleCard == .note else { return }
+            self.hideOfferBubble(.note)
+        }
+        ui.noteShown = true
+        return true
+    }
+
+    /// The machine's notice after ✕ (`ForkMeetingNotice.notOffered`): the
+    /// card already says it, else it opens as a card of its own.
+    func showNotOffered() {
+        let ui = offerUI
+        guard !ui.noteShown else {
+            ui.noteShown = false
+            return
+        }
+        let card = notOfferedCard()
+        if presentInIsland(card, as: .note, minimum: 64) {
+            scheduleNoteRemoval()
+            return
+        }
+        ui.bubbleCard = .note
+        ui.bubble.onHover = nil
+        ui.bubble.show(card, on: screen, hold: Self.noteHold) { [weak self] in
+            guard let self, self.offerUI.bubbleCard == .note else { return }
+            self.hideOfferBubble(.note)
+        }
+    }
+
+    /// The line stays long enough to be read.
+    private static let noteHold: TimeInterval = 6
+    /// The compact offer's least height in the island: its one row; the
+    /// card measures taller when its words need it.
+    private static let offerMinimum: CGFloat = 56
+
+    private func scheduleNoteRemoval() {
+        let ui = offerUI
+        ui.noteWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.offerUI.noteWork = nil
+            self.removeIslandCard(.note)
+        }
+        ui.noteWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.noteHold, execute: work)
+    }
+
+    /// "Not offered for this call · Record it anytime from the island, your
+    /// shortcut or the Command Bar."
+    private func notOfferedCard() -> ForkMeetingCard {
+        let notice = ForkMeetingNotice.notOffered
+        var card = ForkMeetingCard(symbol: ForkMeetingIsland.symbol(for: notice), tint: .secondary,
+                                   title: notice.title(text), lines: [notice.detail(text)].compactMap { $0 })
+        card.closable = true
+        return card
     }
 
     private func offerHover(_ inside: Bool) {
@@ -251,7 +410,8 @@ extension ForkMeetingPresenter {
         offerUI.foldWork = nil
     }
 
-    /// Into the reminder, silently: nothing was answered, nothing is lost.
+    /// Into the island's activity or the reminder, silently: nothing was
+    /// answered, nothing is lost.
     private func foldOffer() {
         let ui = offerUI
         cancelFold()
@@ -281,10 +441,24 @@ extension ForkMeetingPresenter {
             seenInShares: seenInShares, hasWindow: filmed != nil)
         facts.mainWindow = ForkMeetingAppsSupport.filmsMainWindow(candidate, found: filmed)
         facts.microphoneSignal = ForkMeetingMicWatcher.isSupported
-        var actions = OfferActions(record: { service.acceptOffer() }, notNow: { service.dismissOffer(.thisTime) },
+        var actions = OfferActions(record: { service.acceptOffer() }, notNow: { [weak self] in
+                                       // ✕: the card turns into its one line in place.
+                                       self?.offerUI.dismissing = true
+                                       service.dismissOffer(.thisTime)
+                                       self?.offerUI.dismissing = false
+                                   },
                                    always: { service.alwaysForOffer() }, never: { service.dismissOffer(.never) },
                                    copyAnnouncement: { service.copyAnnouncement() }, fix: failureAction)
         actions.recordOtherwise = { service.acceptOffer(target: settings.target.alternative) }
+        // MARK: W2 F
+        actions.later = { [weak self] later in
+            if let delay = later.delay {
+                service.scheduleOffer(after: delay)
+            } else {
+                self?.foldOfferNow()
+            }
+        }
+        actions.cancelStart = { service.scheduleOffer(after: nil) }
         var card = Self.offerCard(offer, facts: facts, actions: actions, text: text)
         // MARK: Finish D
         card.keptSince = service.lookbackSince(candidate.identity)
@@ -306,13 +480,29 @@ extension ForkMeetingPresenter {
         }
         let ui = offerUI
         cancelFold()
+        let identity = offer.candidate.identity
+        let wasFolded = !ui.open || ui.offer?.candidate.identity != identity
         ui.offer = offer
-        ui.open = true
-        ui.attention = true
-        ui.islandTurnedAway = false
-        ui.fold = .reopened(at: Date())
-        renderOffer()
-        scheduleFold()
+        // The island's activity springs first, where it shows, then the card
+        // opens over it (W2 F); at once with Reduce Motion or elsewhere.
+        ui.nudges += 1
+        syncIslandOffer()
+        let screen = meetingScreen(offer.candidate)
+        let waits = wasFolded && ForkMeetingIsland.showsOfferActivity(on: screen)
+            && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let open = { [weak self] in
+            guard let self, self.offerUI.offer?.candidate.identity == identity else { return }
+            let ui = self.offerUI
+            self.cancelFold()
+            ui.open = true
+            ui.attention = true
+            ui.islandTurnedAway = false
+            ui.fold = .reopened(at: Date())
+            self.renderOffer()
+            self.scheduleFold()
+        }
+        guard waits else { return open() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + ForkMeetingIslandOfferAttention.bounce + 0.15) { open() }
     }
 
     /// Drawn again as it is (the kept sound's line appearing).
@@ -365,19 +555,25 @@ extension ForkMeetingPresenter {
         /// Records this one meeting otherwise than the setting: sound only,
         /// or with its picture when the setting is sound only.
         var recordOtherwise: (() -> Void)?
+        // MARK: W2 F
+        /// "Later ▾": start in 5 or 15 minutes, or fold until wanted.
+        var later: ((ForkMeetingOfferLater) -> Void)?
+        /// "Cancel" on the card of a start planned.
+        var cancelStart: () -> Void = {}
     }
 
     /// The offer's card, the same in the island and the bubble, but for its
     /// name in an island seen in screen shares ("Google Meet", "Name hidden
-    /// from shares"):
+    /// from shares"). Compact (W2 F): one row in the island, its ⋯ and ✕ in
+    /// the island's top row; what it will record in the ⋯ menu and Record's
+    /// tooltip:
     /// ```
-    /// [icon] Point hebdo                              (⋯ in the island's top row)
+    /// [icon] Point hebdo                            [Plus tard ▾] [● Enregistrer]   (⋯ ✕ in the top row)
     ///        Google Meet · abc-defg-hij
-    ///        Fenêtre : Chrome · son : Chrome · micro : AirPods  (⋯: « Son seulement »)
-    ///        ⓘ Pensez à prévenir les participants.
-    ///        ⚠ Un enregistrement d'écran est en cours.     (greyed)
-    ///                             [Pas cette fois] [● Enregistrer]
     /// ```
+    /// A start planned shows its countdown instead, with [Annuler] [● Maintenant].
+    /// The consent reminder and why a greyed offer cannot record stay on the
+    /// card: the buttons then go under the words.
     static func offerCard(_ offer: ForkMeetingOffer, facts: OfferFacts, actions: OfferActions,
                           text: ForkMeetingStrings) -> ForkMeetingCard {
         let candidate = offer.candidate
@@ -387,15 +583,15 @@ extension ForkMeetingPresenter {
         if heading.title != candidate.name { card.spokenTitle = candidate.name }
         card.icon = facts.icon
         card.lines = [heading.subtitle].compactMap { $0 }
-        card.lines.append(ForkMeetingOfferText.capture(
+        let capture = ForkMeetingOfferText.capture(
             target: settings.target, windowApp: facts.windowApp, hasWindow: facts.hasWindow ?? (candidate.windowID != nil),
             mainWindow: facts.mainWindow,
             sound: ForkMeetingOfferText.sound(setting: settings.systemAudio, providerDefault: candidate.defaultSound),
-            soundApp: facts.soundApp, microphone: facts.microphone, strings: text))
+            soundApp: facts.soundApp, microphone: facts.microphone, strings: text)
         if facts.consentReminder { card.info = text.consentRemind }
-        let notNow = ForkMeetingCard.Action(title: text.offerNotNow, perform: actions.notNow)
-        var record = ForkMeetingCard.Action(title: text.offerRecord, prominent: true, recordDot: true,
-                                            perform: actions.record)
+        var record = ForkMeetingCard.Action(title: offer.startsAt == nil ? text.offerRecord : text.offerStartNow,
+                                            prominent: true, recordDot: true, perform: actions.record)
+        record.help = capture
         if let blocked = offer.blocked {
             card.dimmed = true
             card.warning = ForkMeetingOfferText.blocked(blocked, strings: text)
@@ -408,18 +604,35 @@ extension ForkMeetingPresenter {
                 record.enabled = false
             }
         }
-        card.actions = [notNow, record]
+        if let startsAt = offer.startsAt {
+            card.countdownLine = ForkMeetingCard.Countdown(until: startsAt) { now in
+                text.offerStartsIn(ForkMeetingOfferTiming.countdown(until: startsAt, now: now))
+            }
+            card.actions = [ForkMeetingCard.Action(title: text.offerCancelStart, perform: actions.cancelStart), record]
+        } else {
+            if let later = actions.later {
+                card.later = ForkMeetingOfferLater.allCases.map { choice in
+                    NotchMenuItem(title: choice.title(text), symbol: choice.delay == nil ? "hand.tap" : "timer") {
+                        later(choice)
+                    }
+                }
+                card.laterTitle = text.offerLater
+            }
+            card.actions = [record]
+        }
+        // What it will record, first in ⋯: read there, never clicked.
+        card.menu = [NotchMenuItem(title: capture, enabled: false), .separator]
         let provider = ForkMeetingOfferText.reminderTitle(candidate)
-        card.menu = ForkMeetingOfferText.showsAlways(offer, microphoneSignal: facts.microphoneSignal)
-            ? [NotchMenuItem(title: text.offerAlways(provider), enabled: ForkMeetingOfferText.allowsAlways(offer),
-                             action: actions.always)]
-            : []
+        if ForkMeetingOfferText.showsAlways(offer, microphoneSignal: facts.microphoneSignal) {
+            card.menu.append(NotchMenuItem(title: text.offerAlways(provider), enabled: ForkMeetingOfferText.allowsAlways(offer),
+                                           action: actions.always))
+        }
         if let recordOtherwise = actions.recordOtherwise {
             let other = settings.target.alternative
             card.menu.insert(NotchMenuItem(title: other.filmsPicture ? text.offerRecordWithPicture : text.offerRecordSoundOnly,
                                            symbol: other.filmsPicture ? "video" : "waveform",
                                            enabled: ForkMeetingOfferText.recordsOtherwise(offer, as: other),
-                                           action: recordOtherwise), at: 0)
+                                           action: recordOtherwise), at: 2)
         }
         card.menu += [
             NotchMenuItem(title: ForkMeetingOfferText.neverTitle(candidate, strings: text), action: actions.never),
@@ -430,8 +643,14 @@ extension ForkMeetingPresenter {
             card.menu.append(NotchMenuItem(title: text.actionOpenMeetings) { fix(.openMeetingsPage) })
         }
         card.menuTitle = text.offerMore
-        card.stacked = true
-        card.closable = false
+        // ✕: not for this meeting; recording stays possible from the island,
+        // the shortcut and the Command Bar, which the card says once pressed.
+        card.dismiss = actions.notNow
+        card.dismissLabel = text.offerNotNow
+        card.dismissHelp = text.offerDismiss
+        // One row in the island, unless a reminder or a reason needs the room.
+        card.stacked = card.info != nil || card.warning != nil
+        card.closable = true
         return card
     }
 
@@ -503,10 +722,30 @@ extension ForkMeetingPresenter {
         ui.islandCard = (id, kind)
         guard present(card, id: id, minimum: minimum) else {
             ui.islandCard = nil
+            syncClickWatch()
             return false
         }
         if ui.bubbleCard == kind { hideOfferBubble(kind) }
+        syncClickWatch()
         return true
+    }
+
+    /// The official island keeps a card of its Captures page through a
+    /// click elsewhere; the offer's, and its line after ✕, close at one,
+    /// deciding nothing (W2 F). Watched only while one of them is up.
+    private func syncClickWatch() {
+        let ui = offerUI
+        let wanted = ui.islandCard.map { $0.card == .offer || $0.card == .note } ?? false
+        if wanted, ui.clickWatch == nil {
+            ui.clickWatch = ForkMeetingIsland.watchClicks { [weak self] in
+                guard let self, let held = self.offerUI.islandCard, held.card == .offer || held.card == .note,
+                      ForkMeetingIsland.isShowing(id: held.id) else { return }
+                ForkMeetingIsland.collapse()
+            }
+        } else if !wanted, let watch = ui.clickWatch {
+            NSEvent.removeMonitor(watch)
+            ui.clickWatch = nil
+        }
     }
 
     @discardableResult
@@ -522,6 +761,7 @@ extension ForkMeetingPresenter {
             close: { [weak self] in
                 guard let self, let held = self.offerUI.islandCard, held.id == id else { return }
                 self.offerUI.islandCard = nil
+                self.syncClickWatch()
                 // Collapsed by a click, a lock, the capture controls: an
                 // offer only folds, "Cancel" goes on in the bubble while it
                 // runs. Later, so a quitting app moves nothing.
@@ -553,6 +793,7 @@ extension ForkMeetingPresenter {
         let ui = offerUI
         guard let held = ui.islandCard, held.card == kind else { return }
         ui.islandCard = nil
+        syncClickWatch()
         ForkMeetingIsland.remove(id: held.id)
     }
 

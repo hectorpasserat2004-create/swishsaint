@@ -25,6 +25,9 @@ enum ForkMeetingIslandCard: Equatable {
     case offer
     case undo
     case endingSoon
+    /// After ✕, the offer's card turned in place into its one line on where
+    /// the meeting can still be recorded from (W2 F).
+    case note
 
     /// What becomes of a card the island closed over (a click on the
     /// island, a lock, the official capture controls).
@@ -42,7 +45,7 @@ enum ForkMeetingIslandCard: Equatable {
         switch self {
         case .offer: return .fold
         case .undo: return undoUntil.map { now < $0 } == true ? .bubble : .gone
-        case .endingSoon: return .gone
+        case .endingSoon, .note: return .gone
         }
     }
 
@@ -434,5 +437,78 @@ enum ForkMeetingSharedText {
     static func detail(_ notice: ForkMeetingNotice, microphoneBuiltIn: Bool, strings s: ForkMeetingStrings) -> String? {
         guard case .microphone = notice else { return notice.detail(s) }
         return microphoneBuiltIn ? s.microphoneBuiltIn : s.microphoneExternal
+    }
+}
+
+// MARK: W2 F
+
+/// "Later ▾" in the offer: start on its own in 5 or 15 minutes, or fold
+/// and wait for the person ("Whenever I want"), the island's activity at
+/// hand to open it again.
+enum ForkMeetingOfferLater: CaseIterable, Equatable {
+    case inFive
+    case inFifteen
+    case whenever
+
+    /// How long before the start planned; `nil`: none planned.
+    var delay: TimeInterval? {
+        switch self {
+        case .inFive: return 5 * 60
+        case .inFifteen: return 15 * 60
+        case .whenever: return nil
+        }
+    }
+
+    func title(_ s: ForkMeetingStrings) -> String {
+        switch self {
+        case .inFive: return s.offerStartIn(minutes: 5)
+        case .inFifteen: return s.offerStartIn(minutes: 15)
+        case .whenever: return s.offerWhenever
+        }
+    }
+}
+
+/// Where a folded offer waits. The closed island's activity ("Meet · ⏺",
+/// or the start's countdown) while `fork.meetings.indicator` lets the
+/// island show meetings; the small grey reminder beside the camera where
+/// the island does not show it (hidden, in full screen, another activity
+/// chosen, another display), as the pill comes back for a recording, and
+/// always with "pill" or "both".
+struct ForkMeetingOfferFolded: Equatable {
+    /// The island lists the offer among its live activities.
+    var activity: Bool
+    var reminder: Bool
+
+    static func place(indicator: ForkMeetingIndicator, islandShowsActivity: Bool) -> ForkMeetingOfferFolded {
+        let activity = indicator.showsStrip
+        let reminder = indicator != .auto || !islandShowsActivity
+        return ForkMeetingOfferFolded(activity: activity, reminder: reminder)
+    }
+}
+
+extension ForkMeetingOfferTiming {
+    /// "4:12" before a start planned, as the island and the reminder count
+    /// it down: whole seconds rounded up, so it never reads 0:00 while the
+    /// start is still to come.
+    static func countdown(until: Date, now: Date) -> String {
+        ForkMeetingPillLayout.clock(TimeInterval(secondsLeft(until: until, now: now)))
+    }
+
+    /// How far a start planned has come, from the choice to the start,
+    /// between 0 and 1.
+    static func progress(from: Date, until: Date, now: Date) -> Double {
+        let total = until.timeIntervalSince(from)
+        guard total.isFinite, total > 0 else { return 1 }
+        return min(1, max(0, now.timeIntervalSince(from) / total))
+    }
+}
+
+/// The offer's island card collapses at a click anywhere outside the
+/// island, without deciding anything: the official island keeps a card of
+/// its Captures page through such a click (`keepsWorkingSurface`), which
+/// left a call's offer in the way.
+enum ForkMeetingOfferClick {
+    static func collapses(offerShownInIsland: Bool, clickInsideIsland: Bool) -> Bool {
+        offerShownInIsland && !clickInsideIsland
     }
 }

@@ -15,11 +15,12 @@ enum ForkMeetingDetectionSupport {
     }
 
     /// The one-second clock runs only while time decides something: an offer
-    /// folds, a countdown ends, or "Cancel" of a start "Always" made expires.
+    /// folds, a countdown ends, "Cancel" of a start "Always" made expires, or
+    /// a start planned from the offer comes due.
     static func clockRuns(phase: ForkMeetingMachine.Phase) -> Bool {
         switch phase {
-        // A folded offer waits for nothing but the person.
-        case let .offering(offer): return !offer.collapsed
+        // A folded offer waits for nothing but the person, or its start.
+        case let .offering(offer): return !offer.collapsed || offer.startsAt != nil
         case .endingSoon: return true
         case let .recording(session), let .paused(session, _): return session.undoUntil != nil
         case .idle, .starting, .stopping: return false

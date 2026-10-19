@@ -330,7 +330,8 @@ enum ForkMeetingDetectionBehaviorTests {
         let effects = live.take()
         suite.expect(effects.starts(with: [.silence(meetA), .showOffer(offer(meeting(codeA, bornAt: 30, silenced: false),
                                                                            collapsesAt: 50))])
-                        && Array(effects.dropFirst(3)) == [.hideOffer, .silence(meetA)],
+                        && Array(effects.dropFirst(3)) == [.hideOffer, .silence(meetA), .notice(.notOffered),
+                                                           .announce(.notOffered)],
                      "Not now closes the offer and sets the meeting aside; away to Gmail and back, then its end: nothing more")
 
         var nine = live

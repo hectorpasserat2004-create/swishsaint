@@ -221,7 +221,7 @@ extension ForkMeetingService {
         case .announce, .notify:
             presenter.apply(effect, context: context)
         case .showOffer, .collapseOffer, .hideOffer, .showUndo, .hideUndo, .showEndingSoon, .hideEndingSoon,
-             .silence, .setPolicy, .discard, .nudgeOffer:
+             .silence, .setPolicy, .discard, .nudgeOffer, .startScheduled:
             runDetection(effect)
         }
     }

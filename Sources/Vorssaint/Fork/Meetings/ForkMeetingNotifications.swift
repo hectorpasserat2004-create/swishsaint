@@ -46,7 +46,7 @@ enum ForkMeetingNotifyEvent: CaseIterable, Equatable {
         case .saved, .recovered: return .saved
         case .microphone, .microphoneSilent, .diskLow, .displayChanged, .sourceGone: return .warnings
         case .failure, .soundLost, .neverOffered, .neverOfferedWebCalls, .alwaysChosen, .discarded,
-             .announcementCopied, .askedAgain, .marked:
+             .announcementCopied, .askedAgain, .marked, .notOffered:
             return nil
         }
     }

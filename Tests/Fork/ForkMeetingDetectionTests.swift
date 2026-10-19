@@ -175,9 +175,10 @@ enum ForkMeetingDetectionTests {
                      "and records it as offered")
 
         var notNow = offered()
-        suite.expect(notNow.handle(.dismiss(.thisTime), now: at(2)) == [.hideOffer, .silence(meetA)]
+        suite.expect(notNow.handle(.dismiss(.thisTime), now: at(2))
+                        == [.hideOffer, .silence(meetA), .notice(.notOffered), .announce(.notOffered)]
                         && notNow.phase == .idle,
-                     "Not now closes the offer and sets this meeting aside")
+                     "Not now (✕) closes the offer, sets this meeting aside and says where it can still be recorded from")
         suite.expect(notNow.handle(.candidates([candidate(silenced: true)], request()), now: at(5)).isEmpty,
                      "so the same meeting, read again, is not offered again")
 

@@ -26,8 +26,9 @@ final class ForkMeetingReminder {
     var isVisible: Bool { panel?.isVisible == true && model.title != nil }
 
     /// `title` is the service's short name ("Meet"), `label` what VoiceOver
-    /// and the tooltip say ("Offer to record Weekly sync").
-    func show(title: String, label: String, on screen: NSScreen?, open: @escaping () -> Void) {
+    /// and the tooltip say ("Offer to record Weekly sync"); `startsAt`, a
+    /// start planned, counted down after the name ("Meet · 4:12").
+    func show(title: String, label: String, startsAt: Date? = nil, on screen: NSScreen?, open: @escaping () -> Void) {
         guard let screen = screen ?? ForkDictationHUD.activeScreen() ?? NSScreen.main else { return }
         generation += 1
         self.open = open
@@ -36,6 +37,7 @@ final class ForkMeetingReminder {
         let appearing = !panel.isVisible || panel.alphaValue < 1
         model.title = title
         model.label = label
+        model.startsAt = startsAt
         place(panel, on: screen)
         guard appearing else { return }
         panel.alphaValue = 0
@@ -112,6 +114,8 @@ final class ForkMeetingReminder {
 final class ForkMeetingReminderModel: ObservableObject {
     @Published var title: String?
     @Published var label = ""
+    // MARK: W2 F
+    @Published var startsAt: Date?
 }
 
 /// Grey through and through, its dot an empty ring: anything red near the
@@ -131,6 +135,18 @@ struct ForkMeetingReminderView: View {
                     .foregroundStyle(Color.white.opacity(0.88))
                     .lineLimit(1)
                     .fixedSize()
+                if let startsAt = model.startsAt {
+                    // Measured as it is shown, at its widest: counting down,
+                    // it only gets shorter.
+                    TimelineView(.periodic(from: ForkMeetingOfferTiming.tickStart(until: startsAt, now: Date()), by: 1)) {
+                        context in
+                        Text("· " + ForkMeetingOfferTiming.countdown(until: startsAt, now: context.date))
+                            .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                            .foregroundStyle(Color.white.opacity(0.88))
+                            .lineLimit(1)
+                            .fixedSize()
+                    }
+                }
             }
             .padding(.horizontal, 12)
             .frame(minWidth: ForkMeetingReminder.height, minHeight: ForkMeetingReminder.height)

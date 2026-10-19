@@ -130,6 +130,10 @@ enum ForkMeetingNotice: Equatable {
     case askedAgain(String)
     /// "Mark This Moment": the time marked comes as its detail.
     case marked
+    // MARK: W2 F
+    /// ✕ on the offer: no more offers for this meeting; the detail says
+    /// where it can still be recorded from.
+    case notOffered
 
     /// 28 characters at most.
     func title(_ s: ForkMeetingStrings) -> String {
@@ -154,6 +158,7 @@ enum ForkMeetingNotice: Equatable {
         case .announcementCopied: return s.noticeAnnouncementCopied
         case let .askedAgain(provider): return s.noticeAskAgain(provider)
         case .marked: return s.noticeMarked
+        case .notOffered: return s.noticeNotOffered
         }
     }
 
@@ -166,6 +171,7 @@ enum ForkMeetingNotice: Equatable {
         case .neverOffered, .neverOfferedWebCalls, .alwaysChosen, .askedAgain: return s.noticeNeverDetail
         case .discarded(.kept): return s.noticeDiscardKeptDetail
         case .announcementCopied: return s.noticeAnnouncementCopiedDetail
+        case .notOffered: return s.noticeNotOfferedDetail
         case .started, .resumed, .saved, .recovered, .microphoneSilent, .displayChanged, .sourceGone, .failure,
              .soundLost, .discarded, .marked:
             return nil
@@ -212,6 +218,14 @@ enum ForkMeetingAnnouncement: Equatable {
     /// Others started talking in the offered meeting: the offer is back;
     /// the meeting's name.
     case nudged(String)
+    // MARK: W2 F
+    /// "Start in 5 min": the recording starts on its own in that many
+    /// minutes.
+    case scheduled(minutes: Int)
+    /// The start planned is called off; the offer stays.
+    case scheduleCancelled
+    /// ✕: no more offers for this meeting.
+    case notOffered
 
     func text(_ s: ForkMeetingStrings) -> String {
         switch self {
@@ -242,6 +256,9 @@ enum ForkMeetingAnnouncement: Equatable {
         case .meetingBack: return s.voiceMeetingBack
         case let .askedAgain(provider): return s.voiceAskAgain(provider)
         case let .nudged(name): return s.voiceNudge(name)
+        case let .scheduled(minutes): return s.voiceScheduled(minutes: minutes)
+        case .scheduleCancelled: return s.voiceScheduleCancelled
+        case .notOffered: return s.voiceNotOffered
         }
     }
 }
@@ -259,6 +276,13 @@ struct ForkMeetingOffer: Equatable {
     /// a proof that comes while it is unanswered (Zoom's meeting window
     /// after its microphone) starts it, as "Always" would have.
     var awaitedProof = false
+    // MARK: W2 F
+    /// "Start in 5 min": when the recording starts on its own, unless the
+    /// call ends first; `nil` while nothing is planned.
+    var startsAt: Date?
+    /// When that was chosen: the island's gauge fills from then to
+    /// `startsAt`.
+    var scheduledAt: Date?
 }
 
 /// "Not now" sets this meeting aside; "Never" the provider.
@@ -323,6 +347,10 @@ enum ForkMeetingDismissal: Equatable {
 ///   and once an offer was shown, it waits for a click. An app's call that
 ///   may still prove itself is waited for, not offered; offered after the
 ///   15 s, it still starts on its own if its proof comes before an answer.
+/// - "Later ▾ · Start in 5 min" plans a start: the offer folds, the start
+///   comes on the tick it is due (after an unlock, never on a locked
+///   screen), as a click on Record; the call ending first takes it away
+///   with the offer, and "Cancel" calls it off, the offer staying.
 struct ForkMeetingMachine {
     /// An unanswered offer folds after this long.
     static let offerCollapse: TimeInterval = 20
@@ -517,6 +545,10 @@ struct ForkMeetingMachine {
         /// (`ForkMeetingNudgePlan`): the offer, folded or left alone, comes
         /// back to ask again.
         case nudge(ForkMeetingIdentity)
+        // MARK: W2 F
+        /// "Later ▾" in the offer: start on its own after that long, or,
+        /// `nil`, call off the start planned.
+        case schedule(TimeInterval?)
     }
 
     enum Effect: Equatable {
@@ -566,6 +598,10 @@ struct ForkMeetingMachine {
         // MARK: Finish D
         /// Opens the offer again, drawing the eye: "It's started · Record?".
         case nudgeOffer(ForkMeetingOffer)
+        // MARK: W2 F
+        /// The start planned is due: the service answers the offer as a
+        /// click on Record would (`ForkMeetingService.acceptOffer`).
+        case startScheduled
     }
 
     private(set) var phase: Phase = .idle
@@ -965,7 +1001,7 @@ struct ForkMeetingMachine {
             guard case .recording = phase else { return [] }
             return beginCountdown(session, countdown: countdown, now: now)
 
-        case .accept, .dismiss, .always, .continueRecording, .nudge:
+        case .accept, .dismiss, .always, .continueRecording, .nudge, .schedule:
             return []
         }
     }
@@ -1041,11 +1077,37 @@ struct ForkMeetingMachine {
             return [.showOffer(updated)]
 
         case .tick:
+            // The start planned comes first; on a locked screen it waits for
+            // the unlock, as a start nobody can see would film the lock.
+            if let startsAt = offer.startsAt, now >= startsAt, !locked, !terminating {
+                var due = offer
+                due.startsAt = nil
+                due.scheduledAt = nil
+                phase = .offering(due)
+                return [.showOffer(due), .startScheduled]
+            }
             guard !offer.collapsed, now >= offer.collapsesAt else { return [] }
             var folded = offer
             folded.collapsed = true
             phase = .offering(folded)
             return [.collapseOffer]
+
+        case let .schedule(delay):
+            guard !terminating else { return [] }
+            var planned = offer
+            if let delay, delay.isFinite, delay > 0 {
+                planned.startsAt = now.addingTimeInterval(delay)
+                planned.scheduledAt = now
+                // Answered: it folds now, into the island's countdown.
+                planned.collapsed = true
+                phase = .offering(planned)
+                return [.showOffer(planned), .announce(.scheduled(minutes: Int((delay / 60).rounded())))]
+            }
+            guard offer.startsAt != nil else { return [] }
+            planned.startsAt = nil
+            planned.scheduledAt = nil
+            phase = .offering(planned)
+            return [.showOffer(planned), .announce(.scheduleCancelled)]
 
         case let .accept(request):
             return startOffered(.offered, request: request, offer: offer)
@@ -1073,7 +1135,9 @@ struct ForkMeetingMachine {
             phase = .idle
             switch scope {
             case .thisTime:
-                return [.hideOffer, .silence(candidate.identity)]
+                // ✕ (W2 F): the card says, once, where it can still be
+                // recorded from.
+                return [.hideOffer, .silence(candidate.identity), .notice(.notOffered), .announce(.notOffered)]
             case .never:
                 // The other web calls share one choice: said for them all,
                 // never as if it were Jitsi Meet's alone.
