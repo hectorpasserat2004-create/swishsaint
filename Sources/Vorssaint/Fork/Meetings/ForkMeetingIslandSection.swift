@@ -150,10 +150,10 @@ struct ForkMeetingIslandSection: View {
                 let name = ForkMeetingIslandPage.detectedName(candidate)
                 ForkMeetingIslandStatusCard(symbol: "video.fill", tint: .green, title: name.title,
                                             caption: [name.service, page.detectedCaption].compactMap { $0 }
-                                                .joined(separator: " · ")) {
+                                                .joined(separator: " · "),
+                                            spoken: page.detectedTitle) {
                     recordButton(title: text.offerRecord)
                 }
-                .accessibilityHint(page.detectedTitle)
                 .transition(.opacity)
             }
         case .idle:
@@ -320,6 +320,9 @@ struct ForkMeetingIslandStatusCard<Actions: View>: View {
     var tint: Color = .white
     let title: String
     let caption: String?
+    /// Said first by VoiceOver, before the title: what the card is about
+    /// when the title names something else ("Call detected").
+    var spoken: String? = nil
     @ViewBuilder var actions: () -> Actions
 
     var body: some View {
@@ -348,7 +351,9 @@ struct ForkMeetingIslandStatusCard<Actions: View>: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .accessibilityElement(children: .combine)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel([spoken, title, caption].compactMap { $0 }.filter { !$0.isEmpty }
+                .reduce("") { ForkMeetingLiveText.sentences($0, $1) })
             Spacer(minLength: 8)
             actions()
         }
@@ -680,7 +685,7 @@ private struct ForkMeetingIslandBadges: View {
         case .flagged:
             Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
         case let .transcribing(share):
-            Text(page.statusTranscribing(ForkMeetingIslandRules.percent(share, language: l10n.language)))
+            Text(text.transcriptProgress(ForkMeetingIslandRules.percent(share, language: l10n.language)))
                 .monospacedDigit()
         case .transcriptQueued:
             Image(systemName: "text.badge.plus").foregroundStyle(.white.opacity(0.55))
@@ -706,14 +711,14 @@ private struct ForkMeetingIslandBadges: View {
         case .recording: return text.stateRecording
         case .finishing: return text.pillFinalizing
         case .flagged: return ForkMeetingLibrary.statusText(entry.status, strings: text)
-        case let .transcribing(share): return page.statusTranscribing(ForkMeetingIslandRules.percent(share, language: language))
+        case let .transcribing(share): return text.transcriptProgress(ForkMeetingIslandRules.percent(share, language: language))
         case .transcriptQueued: return page.statusTranscriptQueued
         case .transcript: return page.statusTranscript
         case .summarizing: return page.statusSummarizing
         case .summary: return page.statusSummary
         case .sending: return text.exportSending
         case .exported: return text.exportDone
-        case .exportFailed: return page.statusExportFailed
+        case .exportFailed: return text.exportFailedNotice
         }
     }
 }

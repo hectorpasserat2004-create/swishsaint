@@ -226,9 +226,8 @@ enum ForkMeetingIslandPageTests {
             ("detectedCaption", \.detectedCaption), ("recentTitle", \.recentTitle),
             ("statusTranscript", \.statusTranscript), ("statusTranscriptQueued", \.statusTranscriptQueued),
             ("statusSummary", \.statusSummary), ("statusSummarizing", \.statusSummarizing),
-            ("statusExportFailed", \.statusExportFailed), ("actionOpen", \.actionOpen), ("fileVideo", \.fileVideo),
+            ("actionOpen", \.actionOpen), ("fileVideo", \.fileVideo),
             ("fileAudio", \.fileAudio), ("fileSubtitles", \.fileSubtitles),
-            ("statusTranscribing", { $0.statusTranscribing("100 %") }),
         ]
         var tooLong: [String] = []
         for (language, strings) in zip(languages, all) {
@@ -236,8 +235,18 @@ enum ForkMeetingIslandPageTests {
                 tooLong.append("\(language.rawValue).\(label): \(read(strings))")
             }
         }
+        // The words the rows borrow from the rest of the feature fit too.
+        for (language, strings) in zip(languages, languages.map(ForkMeetingStrings.strings)) {
+            for said in [strings.transcriptProgress("100 %"), strings.exportFailedNotice, strings.exportDone,
+                         strings.exportSending, strings.stateRecording, strings.pillFinalizing] where said.count > 28 {
+                tooLong.append("\(language.rawValue): \(said)")
+            }
+        }
         suite.expect(tooLong.isEmpty, "the section's statuses and buttons fit the island, 28 characters at most: \(tooLong)")
-        let formats = all.flatMap { [$0.idleShortcutFormat, $0.statusTranscribingFormat, $0.noticesCaptionFormat] }
+        suite.expect(ForkMeetingIslandStrings.strings(.fr).idleTitle == "Aucun enregistrement"
+                        && ForkMeetingIslandStrings.strings(.enUS).idleTitle == "No meeting being recorded",
+                     "with nothing recording, the page says so in a few words")
+        let formats = all.flatMap { [$0.idleShortcutFormat, $0.noticesCaptionFormat] }
         suite.expect(formats.allSatisfy { $0.components(separatedBy: "%@").count == 2 && !$0.contains("%d") },
                      "each format takes exactly the one value it is given")
         let french = fields(.fr).map(\.1)
