@@ -21,14 +21,15 @@ enum ForkCastralProfileImport {
         let data: Data
         do {
             let size = (try url.resourceValues(forKeys: [.fileSizeKey])).fileSize ?? 0
-            guard size <= ForkCastralProfile.maximumFileBytes else { return done(text.castralProfileRefused("JSON")) }
+            guard size <= ForkCastralProfile.maximumFileBytes else { return done(text.castralProfileUnreadable) }
             data = try Data(contentsOf: url)
         } catch {
-            return done(text.castralProfileRefused("JSON"))
+            return done(text.castralProfileUnreadable)
         }
         ForkMeetingExports.shared.importCastralProfile(data) { outcome in
             switch outcome {
             case let .imported(_, serverChanged): done(serverChanged ? text.castralServerChanged : nil)
+            case .refused(.unreadable): done(text.castralProfileUnreadable)
             case let .refused(refusal): done(text.castralProfileRefused(refusal.field))
             case .keychainRefused: done(text.exportFailKeychain)
             case .listUnconfirmed: done(text.exportFailListUnconfirmed)
@@ -64,6 +65,14 @@ struct ForkCastralRow: View {
             .font(.caption)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
+        if let profile {
+            // Where the token and the sound may go, and nowhere else.
+            Text(text.castralHosts(profile.origin.name, sound: profile.uploadHost))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+        }
         if profile == nil, exports.savedSecrets.contains(ForkMeetingExporterConfig.profileAccount(config.id)) == false {
             Text(text.castralFailProfile)
                 .font(.caption)
@@ -95,21 +104,37 @@ struct ForkCastralRow: View {
         }
         LabeledContent(text.castralLinkTitle) {
             HStack(spacing: 8) {
-                if exports.castralChecking.contains(config.id) { ProgressView().controlSize(.small) }
+                if exports.castralChecking.contains(config.id) {
+                    ProgressView().controlSize(.small).accessibilityLabel(text.castralLinkTitle)
+                }
                 link
                 Button(text.castralTest) { exports.testCastral(config.id) }
-                    .disabled(!hasToken || exports.castralChecking.contains(config.id))
+                    .disabled(!hasToken || profile == nil || exports.castralChecking.contains(config.id))
             }
         }
+        if let at = exports.castralLinks[config.id]?.at {
+            Text(text.castralLinkChecked(ForkMeetingLibraryText.time(at, language: language)))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
         if let profile {
-            Picker(selection: Binding(get: { config.author ?? "" }, set: { author in
+            // Never chosen for the person: asked here before the first send.
+            Picker(selection: Binding(get: { config.author.flatMap { profile.authors.contains($0) ? $0 : nil } ?? "" },
+                                      set: { author in
                 var next = config
-                next.author = author
+                next.author = author.isEmpty ? nil : author
                 exports.update(next)
             })) {
+                if config.author.map(profile.authors.contains) != true { Text(verbatim: "—").tag("") }
                 ForEach(profile.authors, id: \.self) { Text(verbatim: $0).tag($0) }
             } label: {
                 Text(text.castralAuthor)
+            }
+            if config.author.map(profile.authors.contains) != true {
+                Text(text.castralFailAuthor)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         Stepper(value: Binding(get: { config.speakers ?? ForkCastralContract.defaultSpeakers }, set: { count in
@@ -135,10 +160,12 @@ struct ForkCastralRow: View {
         } label: {
             Text(text.exportMode)
         }
-        Text(text.castralAutomaticCaption)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+        if config.mode == .automatic {
+            Text(text.castralAutomaticCaption)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
         Text(audioCaption)
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -163,22 +190,20 @@ struct ForkCastralRow: View {
 
     @ViewBuilder private var link: some View {
         switch exports.castralLinks[config.id] {
-        case let .connected(upcoming, at)?:
+        case let .connected(upcoming, _)?:
             Label(text.castralLinkConnected(upcoming), systemImage: "checkmark.circle.fill")
                 .foregroundStyle(.green)
-                .help(text.castralLinkChecked(ForkMeetingLibraryText.time(at, language: language)))
-        case let .tokenRefused(at)?:
+        case .tokenRefused?:
             Label(text.castralLinkRefused, systemImage: "xmark.circle.fill")
                 .foregroundStyle(.red)
-                .help(text.castralLinkChecked(ForkMeetingLibraryText.time(at, language: language)))
-        case let .offline(at)?:
+        case .offline?:
             Label(text.castralLinkOffline, systemImage: "wifi.slash")
                 .foregroundStyle(.orange)
-                .help(text.castralLinkChecked(ForkMeetingLibraryText.time(at, language: language)))
-        case let .failed(status, at)?:
-            Label(text.castralLinkFailed(status), systemImage: "exclamationmark.triangle.fill")
+        case let .failed(status, _)?:
+            // No status: the look itself failed (a redirection, a profile gone).
+            Label(status == 0 ? text.castralLinkCheckFailed : text.castralLinkFailed(status),
+                  systemImage: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)
-                .help(text.castralLinkChecked(ForkMeetingLibraryText.time(at, language: language)))
         case nil:
             Text(text.castralLinkUnchecked).foregroundStyle(.secondary)
         }
@@ -217,16 +242,14 @@ struct ForkCastralDetail: View {
         let key = ForkMeetingExports.key(folder, config.id)
         let record = exports.castralRecords[folder.standardizedFileURL.path].flatMap { $0.target == config.id ? $0 : nil }
         VStack(alignment: .leading, spacing: 3) {
-            if let status = exports.castralStatus(folder), status.failure == nil || exports.pending.contains(key) {
-                HStack(spacing: 6) {
-                    Text(phase(status.phase))
-                        .foregroundStyle(status.phase == .failed ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
-                    if let share = status.progress, status.phase.isWorking {
-                        ProgressView(value: share)
-                            .frame(maxWidth: 120)
-                            .accessibilityLabel(phase(status.phase))
-                    }
-                }
+            // The phase itself is the exporter's line, above: here its bar.
+            if let status = exports.castralStatus(folder), status.failure == nil || exports.pending.contains(key),
+               let share = status.progress, status.phase.isWorking {
+                ProgressView(value: share)
+                    .frame(maxWidth: 160)
+                    .accessibilityLabel(phase(status.phase))
+                    .accessibilityValue(Text(verbatim: share.formatted(.percent.precision(.fractionLength(0))
+                        .locale(language.formattingLocale()))))
             }
             if let record {
                 if let line = booking(record) { Text(line).foregroundStyle(.secondary) }
@@ -304,12 +327,22 @@ extension ForkCastralStatus {
         }
     }
 
+    var tint: Color {
+        switch phase {
+        case .ready: return .green
+        case .readyWithoutReport: return .orange
+        case .failed: return .red
+        default: return .secondary
+        }
+    }
+
     var symbol: String {
         switch phase {
         case .ready: return "checkmark.circle.fill"
         case .readyWithoutReport: return "exclamationmark.circle.fill"
         case .failed: return "xmark.circle.fill"
-        default: return "arrow.up.circle"
+        case .sending, .waitingForSound: return "arrow.up.circle"
+        default: return "hourglass"
         }
     }
 }
@@ -406,6 +439,8 @@ struct ForkCastralChoiceSheet: View {
             .font(.caption)
         }
         .padding(.vertical, 2)
+        // One element for VoiceOver: the name, the time and the badges.
+        .accessibilityElement(children: .combine)
     }
 
     /// "10:00", and the prospect's own time when they booked in another

@@ -75,7 +75,8 @@ struct ForkCastralProfile: Equatable {
         }
     }
 
-    /// The headers the system sets or a proxy reads: never a token's.
+    /// The headers the system sets or a proxy reads: never a token's (none
+    /// of them starts with `x-`; kept as a second lock).
     static let reservedHeaders: Set<String> = [
         "authorization", "proxy-authorization", "cookie", "set-cookie", "host", "content-type", "content-length",
         "content-encoding", "transfer-encoding", "connection", "keep-alive", "upgrade", "te", "trailer", "expect",
@@ -93,15 +94,18 @@ struct ForkCastralProfile: Equatable {
 
         guard let base = object["baseURL"] as? String,
               case let .approved(approved, _) = ForkMeetingOriginPolicy.destination(base),
-              approved.query == nil, let baseURL = trimmedBase(approved) else { return .failure(.field("baseURL")) }
+              approved.query == nil, let baseURL = trimmedBase(approved),
+              let baseOrigin = ForkMeetingOriginPolicy.origin(of: baseURL), isNamedHost(baseOrigin.host) else {
+            return .failure(.field("baseURL"))
+        }
 
         guard let upload = (object["uploadHost"] as? String)?.trimmingCharacters(in: .whitespaces),
-              let uploadOrigin = ForkMeetingOriginPolicy.Origin(name: upload.lowercased()) else {
+              let uploadOrigin = ForkMeetingOriginPolicy.Origin(name: upload.lowercased()), isNamedHost(uploadOrigin.host) else {
             return .failure(.field("uploadHost"))
         }
 
-        guard let header = object["tokenHeader"] as? String, isHeaderName(header),
-              !reservedHeaders.contains(header.lowercased()) else { return .failure(.field("tokenHeader")) }
+        guard let header = object["tokenHeader"] as? String, isTokenHeader(header),
+              !reservedHeaders.contains(header) else { return .failure(.field("tokenHeader")) }
 
         guard let list = object["authors"] as? [Any], (1...12).contains(list.count) else {
             return .failure(.field("authors"))
@@ -211,11 +215,23 @@ struct ForkCastralProfile: Equatable {
         return URL(string: text)
     }
 
-    /// An HTTP token (RFC 9110): letters, digits and `-`, as a header's name.
-    private static func isHeaderName(_ name: String) -> Bool {
-        (1...64).contains(name.count) && name.unicodeScalars.allSatisfy { scalar in
-            scalar.isASCII && (CharacterSet.alphanumerics.contains(scalar) || scalar == "-")
-        } && !name.hasPrefix("-")
+    /// A custom header, by a list of what is allowed rather than of what is
+    /// not: `x-` then lower-case letters, digits and `-`.
+    private static func isTokenHeader(_ name: String) -> Bool {
+        (3...64).contains(name.count) && name.range(of: "^x-[a-z0-9-]+$", options: .regularExpression) != nil
+    }
+
+    /// A host by its name: at least one dot, no address (IPv4 or IPv6), not
+    /// this Mac (`localhost`), no wildcard. A profile names its servers;
+    /// the recipe's local server is reached through the client's test
+    /// route, never through a looser profile.
+    private static func isNamedHost(_ host: String) -> Bool {
+        guard host.contains("."), !host.contains(":"), !host.contains("*"),
+              host != "localhost", !host.hasSuffix(".localhost") else { return false }
+        let labels = host.split(separator: ".", omittingEmptySubsequences: false)
+        guard labels.allSatisfy({ !$0.isEmpty }) else { return false }
+        // 10.0.0.1, or a last label of digits only: an address, not a name.
+        return !(labels.last?.allSatisfy(\.isNumber) ?? true)
     }
 
     private static func isPlainText(_ text: String, maximum: Int) -> Bool {

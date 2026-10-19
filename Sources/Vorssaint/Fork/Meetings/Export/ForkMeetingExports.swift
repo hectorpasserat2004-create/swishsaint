@@ -82,6 +82,10 @@ final class ForkMeetingExports: ObservableObject {
     /// The webhook's view of certificates: the system's, always, in the
     /// app (the recipe harness alone gives its own).
     var trust: ForkWebhookExporter.Trust = .system
+    /// A CRM's addresses as dialled: `nil` (the profile's own), always, in
+    /// the app; the recipe harness alone maps its made-up hosts to its local
+    /// server, after every check of the profile's origins.
+    var castralRoute: ((URL) -> URL)?
     /// The folders this app records or finishes now.
     private let writing: () -> Set<String>
     /// The Meetings feature, read at the moment of each automatic send.

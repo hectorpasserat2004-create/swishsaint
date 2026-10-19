@@ -86,7 +86,7 @@ struct ForkMeetingExportsSection: View {
             }
             Button(text.cancel, role: .cancel) { removing = nil }
         } message: {
-            Text(text.exportRemoveMessage)
+            Text(removing?.kind == .castral ? text.castralRemoveMessage : text.exportRemoveMessage)
         }
     }
 

@@ -20,6 +20,10 @@ struct ForkCastralClient {
     let profile: ForkCastralProfile
     let token: String
     var trust: ForkWebhookExporter.Trust = .system
+    /// Where an address checked against the profile is dialled: itself, in
+    /// the app; the recipe harness's local server in its tests. Applied
+    /// after every origin check, never instead of one.
+    var route: ((URL) -> URL)?
 
     private static let log = Logger(subsystem: "fork.meetings", category: "castral")
     static let userAgent = "Swishsaint-Recorder/1"
@@ -127,12 +131,13 @@ struct ForkCastralClient {
     func upload(_ file: URL, to address: URL, bytes: Int64,
                 progress: @escaping (Double) -> Void) async -> Result<ForkCastralSteps.Upload, CallFailure> {
         guard profile.allowsUpload(to: address) else { return .failure(.uploadHost) }
-        var request = URLRequest(url: address)
+        let dialled = route?(address) ?? address
+        var request = URLRequest(url: dialled)
         request.httpMethod = "PUT"
         request.setValue(ForkCastralAudioPlan.Format.mimeType, forHTTPHeaderField: "Content-Type")
         let configuration = Self.configuration(idle: ForkWebhookLimits.idleTimeout,
                                                resource: ForkWebhookLimits.resourceTimeout(bodyBytes: bytes))
-        let transfer = ForkCastralTransfer(origin: address, trust: trust, cap: ForkWebhookLimits.maximumResponseBytes,
+        let transfer = ForkCastralTransfer(origin: dialled, trust: trust, cap: ForkWebhookLimits.maximumResponseBytes,
                                            bodyBytes: bytes, progress: progress)
         let session = URLSession(configuration: configuration, delegate: transfer, delegateQueue: nil)
         defer { session.finishTasksAndInvalidate() }
@@ -163,7 +168,8 @@ struct ForkCastralClient {
 
     private func command(_ method: String, _ path: String, query: [URLQueryItem] = [],
                          body: Data? = nil) async -> Result<(Int, Data), CallFailure> {
-        guard let url = profile.endpoint(path, query: query) else { return .failure(.network) }
+        guard let checked = profile.endpoint(path, query: query) else { return .failure(.network) }
+        let url = route?(checked) ?? checked
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")

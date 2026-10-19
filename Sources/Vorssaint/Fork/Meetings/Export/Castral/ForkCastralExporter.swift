@@ -34,9 +34,14 @@ struct ForkCastralExporter: ForkMeetingExporter {
     /// meeting is now; `false` when it could not.
     let record: (ForkCastralRecord, ForkMeetingExportPackage) -> Bool
     var trust: ForkWebhookExporter.Trust = .system
+    /// The recipe harness's own mapping of hosts; `nil` in the app.
+    var route: ((URL) -> URL)?
     /// A send by hand: the appointment chosen.
     var request: ForkCastralRequest?
     var now: () -> Date = Date.init
+    /// The server's own sentence of a call it refused, to show beside the
+    /// failure (`castralSaid`); `nil` clears it.
+    var said: (String?) -> Void = { _ in }
     var temporaryDirectory = FileManager.default.temporaryDirectory
 
     var id: String { config.id }
@@ -71,7 +76,9 @@ struct ForkCastralExporter: ForkMeetingExporter {
         case let .found(data):
             let token = String(decoding: data, as: UTF8.self)
             guard ForkCastralClient.isToken(token) else { throw ForkMeetingExportFailure.noSecret }
-            return ForkCastralClient(profile: profile, token: token, trust: trust)
+            var client = ForkCastralClient(profile: profile, token: token, trust: trust)
+            client.route = route
+            return client
         case .missing: throw ForkMeetingExportFailure.noSecret
         case .failed: throw ForkMeetingExportFailure.keychain
         }
@@ -89,7 +96,7 @@ struct ForkCastralExporter: ForkMeetingExporter {
             break
         case .retry:
             guard var record = previous, ForkCastralSteps.allowsRetry(record) else { break }
-            if case let .failure(failure) = await client.retry(record.deposit) { throw failure.exportFailure }
+            if case let .failure(failure) = await client.retry(record.deposit) { throw refused(failure) }
             record.stage = .queued
             record.progress = ForkCastralContract.Stage.queued.progress
             record.error = nil
@@ -112,6 +119,12 @@ struct ForkCastralExporter: ForkMeetingExporter {
     }
 
     // MARK: - Steps
+
+    /// A call refused: its sentence said, its failure thrown.
+    private func refused(_ failure: ForkCastralClient.CallFailure) -> ForkMeetingExportFailure {
+        said(failure.said)
+        return failure.exportFailure
+    }
 
     private func save(_ record: ForkCastralRecord, _ package: ForkMeetingExportPackage) throws {
         guard self.record(record, package) else { throw ForkMeetingExportFailure.unreadable }
@@ -141,7 +154,7 @@ struct ForkCastralExporter: ForkMeetingExporter {
         case let .success(value): opened = value
         case let .failure(failure):
             Self.log.error("deposit refused: \(failure.exportFailure.code, privacy: .public)")
-            throw failure.exportFailure
+            throw refused(failure)
         }
         // An answer naming another host is not followed: that deposit goes.
         guard client.profile.allowsUpload(to: opened.uploadURL) else {
@@ -180,7 +193,7 @@ struct ForkCastralExporter: ForkMeetingExporter {
         let bookings: [ForkCastralContract.Booking]
         switch await client.targets(from: window.from, to: window.to) {
         case let .success(list): bookings = list
-        case let .failure(failure): throw failure.exportFailure
+        case let .failure(failure): throw refused(failure)
         }
         let wanted = request?.bookingID ?? (previous?.target == id ? previous?.booking : nil)
         if let wanted {
@@ -275,7 +288,7 @@ struct ForkCastralExporter: ForkMeetingExporter {
         case .success(.failed):
             throw ForkMeetingExportFailure.castral(.storage)
         case let .failure(failure):
-            throw failure.exportFailure
+            throw refused(failure)
         }
         try save(next, package)
         keychain.delete(Self.uploadAccount(record.deposit))
@@ -299,7 +312,7 @@ struct ForkCastralExporter: ForkMeetingExporter {
             try save(next, package)
             throw ForkMeetingExportFailure.castral(.notArrived)
         case let .failure(failure):
-            throw failure.exportFailure
+            throw refused(failure)
         }
     }
 }

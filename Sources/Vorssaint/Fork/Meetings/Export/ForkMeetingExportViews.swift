@@ -19,7 +19,10 @@ struct ForkMeetingExportMenu: View {
         if !configured.isEmpty {
             Menu(text.actionExportTo) {
                 ForEach(configured) { config in
-                    Button(exports.title(config, text)) { exports.export(folder, to: config.id) }
+                    // A CRM asks its appointment first: "Example CRM…".
+                    Button(exports.title(config, text) + (config.kind == .castral ? "…" : "")) {
+                        exports.export(folder, to: config.id)
+                    }
                         .disabled(live || exports.listChanged
                                     || exports.pending.contains(ForkMeetingExports.key(folder, config.id)))
                 }
@@ -114,6 +117,11 @@ struct ForkMeetingExportStatus: View {
                     Text(text.exportSending).foregroundStyle(.secondary)
                 } else if let failure = failure(config) {
                     failed(failure, config: config)
+                } else if config.kind == .castral, let status = exports.castralStatus(folder) {
+                    // Where it is in the CRM, never a ✓ over a failure there.
+                    Label(status.short(text), systemImage: status.symbol)
+                        .foregroundStyle(status.tint)
+                        .accessibilityLabel(status.short(text))
                 } else if let result = exports.result(folder, config.id), result.status == .done {
                     Label(result.at.map { ForkMeetingLibraryText.time($0, language: language) } ?? text.exportDone,
                           systemImage: "checkmark.circle.fill")

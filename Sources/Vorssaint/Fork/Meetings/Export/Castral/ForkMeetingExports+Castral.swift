@@ -103,7 +103,11 @@ extension ForkMeetingExports {
             return true
         })
         exporter.trust = trust
+        exporter.route = castralRoute
         exporter.request = request
+        if let key {
+            exporter.said = { [weak self] text in DispatchQueue.main.async { self?.castralSaid[key] = text } }
+        }
         return exporter
     }
 
@@ -140,10 +144,13 @@ extension ForkMeetingExports {
         case listUnconfirmed
     }
 
-    /// "Import a Profile…": the profile goes to the Keychain, then the
-    /// exporter to the list (manual, the profile's first author). One CRM
-    /// at a time: a second profile replaces the first, and a new server
-    /// erases the old token, which was its own.
+    /// "Import a Profile…": the profile goes to the Keychain, then a new
+    /// exporter to the list. One CRM at a time: a profile imported again
+    /// replaces the exporter with a new id (the meetings sent keep theirs).
+    /// Whether the server changed is decided in the Keychain's work, from
+    /// the profile stored there, never from what the page last read: the
+    /// token goes along only to the same server, else it is erased. Nobody
+    /// is chosen to sign: the page asks before the first send.
     func importCastralProfile(_ data: Data, done: @escaping (ProfileImport) -> Void) {
         guard !listChanged else { return done(.listUnconfirmed) }
         let profile: ForkCastralProfile
@@ -152,25 +159,41 @@ extension ForkMeetingExports {
         case let .failure(refusal): return done(.refused(refusal))
         }
         let existing = castralConfig
-        let id = existing?.id ?? UUID().uuidString
-        let previous = existing.flatMap { castralProfiles[$0.id] }
-        let serverChanged = previous.map { $0.origin != profile.origin || $0.uploadHost != profile.uploadHost } ?? false
+        let id = UUID().uuidString
         let keychain = self.keychain
-        askKeychain({ () -> Bool in
-            if serverChanged { keychain.delete(ForkMeetingExporterConfig.tokenAccount(id)) }
-            return keychain.save(profile.encoded(), account: ForkMeetingExporterConfig.profileAccount(id))
-        }) { [self] saved in
-            guard saved else { return done(.keychainRefused) }
-            var config = existing ?? ForkMeetingExporterConfig(id: id, kind: .castral)
-            if config.author.map(profile.authors.contains) != true { config.author = profile.authors.first }
-            config.speakers = config.speakers ?? ForkCastralContract.defaultSpeakers
-            if existing == nil {
-                guard store(configs + [config]) else { return done(.listUnconfirmed) }
-            } else {
-                update(config)
+        askKeychain({ () -> (saved: Bool, serverChanged: Bool) in
+            var sameServer = false
+            if let old = existing {
+                if case let .found(stored) = keychain.read(ForkMeetingExporterConfig.profileAccount(old.id)),
+                   case let .success(previous) = ForkCastralProfile.parse(stored) {
+                    sameServer = previous.origin == profile.origin && previous.uploadHost == profile.uploadHost
+                }
             }
-            castralLinks[id] = nil
-            refresh { done(.imported(id: id, serverChanged: serverChanged)) }
+            guard keychain.save(profile.encoded(), account: ForkMeetingExporterConfig.profileAccount(id)) else {
+                return (false, false)
+            }
+            if let old = existing {
+                if sameServer, case let .found(token) = keychain.read(ForkMeetingExporterConfig.tokenAccount(old.id)) {
+                    keychain.save(token, account: ForkMeetingExporterConfig.tokenAccount(id))
+                }
+                old.secretAccounts.forEach { keychain.delete($0) }
+            }
+            return (true, existing != nil && !sameServer)
+        }) { [self] outcome in
+            guard outcome.saved else { return done(.keychainRefused) }
+            var config = ForkMeetingExporterConfig(id: id, kind: .castral)
+            config.speakers = ForkCastralContract.defaultSpeakers
+            if let old = existing, !outcome.serverChanged {
+                config.mode = old.mode
+                config.speakers = old.speakers ?? ForkCastralContract.defaultSpeakers
+                config.author = old.author.flatMap { profile.authors.contains($0) ? $0 : nil }
+            }
+            guard store(configs.filter { $0.id != existing?.id } + [config]) else { return done(.listUnconfirmed) }
+            if let old = existing {
+                castralProfiles[old.id] = nil
+                castralLinks[old.id] = nil
+            }
+            refresh { done(.imported(id: id, serverChanged: outcome.serverChanged)) }
         }
     }
 
