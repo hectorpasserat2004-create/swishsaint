@@ -50,6 +50,8 @@ FORK_SOURCES=(
     Sources/Vorssaint/Fork/Meetings/Export/Castral/ForkCastralProfile.swift
     Sources/Vorssaint/Fork/Meetings/Export/Castral/ForkCastralRecord.swift
     Sources/Vorssaint/Fork/Meetings/Export/ForkDropFolderExporter.swift
+    Sources/Vorssaint/Fork/Meetings/Export/ForkImmichStrings.swift
+    Sources/Vorssaint/Fork/Meetings/Export/ForkImmichSupport.swift
     Sources/Vorssaint/Fork/Meetings/Export/ForkMeetingExporter.swift
     Sources/Vorssaint/Fork/Meetings/Export/ForkMeetingOriginPolicy.swift
     Sources/Vorssaint/Fork/Meetings/Export/ForkWebhookSupport.swift

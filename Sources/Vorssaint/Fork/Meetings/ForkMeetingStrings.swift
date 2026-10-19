@@ -725,6 +725,8 @@ struct ForkMeetingStrings {
     let renameAfterExport: String
     /// The drop folder's own disk is full (not this Mac's temporary one).
     let exportFailDropFolderFull: String
+    /// Immich was asked for a meeting without video.
+    let exportFailNoVideo: String
 
     func retentionHeld(count: Int, days: Int) -> String {
         count == 1 ? String(format: retentionHeldOneFormat, days) : String(format: retentionHeldFormat, count, days)
@@ -1442,6 +1444,7 @@ extension ForkMeetingStrings {
         exportFailListUnconfirmed: "The list of exports waits for your confirmation on the Meetings page: nothing was sent.",
         renameAfterExport: "This meeting is being exported: its folder takes the new name once the export is done.",
         exportFailDropFolderFull: "The drop folder’s disk is full: the meeting could not be copied there.",
+        exportFailNoVideo: "This meeting has no video: Immich only keeps photos and videos.",
         // MARK: Transcript
         transcriptTitle: "Transcript",
         transcribeAutomatically: "Transcribe on this Mac after each meeting",
@@ -2034,6 +2037,7 @@ extension ForkMeetingStrings {
         exportFailListUnconfirmed: "A lista de exportações aguarda sua confirmação na página Reuniões: nada foi enviado.",
         renameAfterExport: "Esta reunião está sendo exportada: a pasta recebe o novo nome quando a exportação terminar.",
         exportFailDropFolderFull: "O disco da pasta de entrega está cheio: não foi possível copiar a reunião para lá.",
+        exportFailNoVideo: "Esta reunião não tem vídeo: o Immich só guarda fotos e vídeos.",
         // MARK: Transcript
         transcriptTitle: "Transcrição",
         transcribeAutomatically: "Transcrever neste Mac após cada reunião",
@@ -2626,6 +2630,7 @@ extension ForkMeetingStrings {
         exportFailListUnconfirmed: "Dışa aktarma listesi Toplantılar sayfasında onayınızı bekliyor: hiçbir şey gönderilmedi.",
         renameAfterExport: "Bu toplantı dışa aktarılıyor: klasörü, dışa aktarma bitince yeni adı alır.",
         exportFailDropFolderFull: "Bırakma klasörünün diski dolu: toplantı oraya kopyalanamadı.",
+        exportFailNoVideo: "Bu toplantının videosu yok: Immich yalnızca fotoğraf ve video saklar.",
         // MARK: Transcript
         transcriptTitle: "Metin dökümü",
         transcribeAutomatically: "Her toplantıdan sonra bu Mac’te metne dök",
@@ -3218,6 +3223,7 @@ extension ForkMeetingStrings {
         exportFailListUnconfirmed: "Список экспорта ждёт вашего подтверждения на странице «Встречи»: ничего не отправлено.",
         renameAfterExport: "Эта встреча экспортируется: её папка получит новое название, когда экспорт закончится.",
         exportFailDropFolderFull: "Диск папки выгрузки заполнен: встречу не удалось туда скопировать.",
+        exportFailNoVideo: "У этой встречи нет видео: Immich хранит только фото и видео.",
         // MARK: Transcript
         transcriptTitle: "Расшифровка",
         transcribeAutomatically: "Расшифровывать на этом Mac после каждой встречи",
@@ -3810,6 +3816,7 @@ extension ForkMeetingStrings {
         exportFailListUnconfirmed: "La lista de exportaciones espera tu confirmación en la página Reuniones: no se envió nada.",
         renameAfterExport: "Esta reunión se está exportando: su carpeta tomará el nuevo nombre cuando termine la exportación.",
         exportFailDropFolderFull: "El disco de la carpeta de entrega está lleno: no se pudo copiar allí la reunión.",
+        exportFailNoVideo: "Esta reunión no tiene vídeo: Immich solo guarda fotos y vídeos.",
         // MARK: Transcript
         transcriptTitle: "Transcripción",
         transcribeAutomatically: "Transcribir en este Mac después de cada reunión",
@@ -4402,6 +4409,7 @@ extension ForkMeetingStrings {
         exportFailListUnconfirmed: "Zoznam exportov čaká na vaše potvrdenie na stránke Stretnutia: nič sa neodoslalo.",
         renameAfterExport: "Toto stretnutie sa exportuje: jeho priečinok dostane nový názov, keď sa export skončí.",
         exportFailDropFolderFull: "Disk priečinka na odovzdanie je plný: stretnutie sa tam nepodarilo skopírovať.",
+        exportFailNoVideo: "Toto stretnutie nemá video: Immich uchováva iba fotky a videá.",
         // MARK: Transcript
         transcriptTitle: "Prepis",
         transcribeAutomatically: "Prepísať na tomto Macu po každom stretnutí",
@@ -4994,6 +5002,7 @@ extension ForkMeetingStrings {
         exportFailListUnconfirmed: "Die Liste der Exporte wartet auf deine Bestätigung auf der Seite „Besprechungen“: Es wurde nichts gesendet.",
         renameAfterExport: "Diese Besprechung wird gerade exportiert: Ihr Ordner erhält den neuen Namen, sobald der Export fertig ist.",
         exportFailDropFolderFull: "Das Volume des Ablageordners ist voll: Die Besprechung konnte nicht dorthin kopiert werden.",
+        exportFailNoVideo: "Diese Besprechung hat kein Video: Immich speichert nur Fotos und Videos.",
         // MARK: Transcript
         transcriptTitle: "Transkript",
         transcribeAutomatically: "Nach jeder Besprechung auf diesem Mac transkribieren",
@@ -5586,6 +5595,7 @@ extension ForkMeetingStrings {
         exportFailListUnconfirmed: "La liste des exports attend votre confirmation sur la page Réunions\u{00A0}: rien n’a été envoyé.",
         renameAfterExport: "Cette réunion est en cours d’export\u{00A0}: son dossier prendra le nouveau nom une fois l’export terminé.",
         exportFailDropFolderFull: "Le disque du dossier de dépôt est plein\u{00A0}: la réunion n’a pas pu y être copiée.",
+        exportFailNoVideo: "Cette réunion n’a pas de vidéo\u{00A0}: Immich ne garde que les photos et les vidéos.",
         // MARK: Transcript
         transcriptTitle: "Transcription",
         transcribeAutomatically: "Transcrire sur ce Mac après chaque réunion",
@@ -6178,6 +6188,7 @@ extension ForkMeetingStrings {
         exportFailListUnconfirmed: "L’elenco delle esportazioni attende la tua conferma nella pagina Riunioni: non è stato inviato nulla.",
         renameAfterExport: "Questa riunione è in esportazione: la sua cartella prenderà il nuovo nome a esportazione finita.",
         exportFailDropFolderFull: "Il disco della cartella di consegna è pieno: non è stato possibile copiarvi la riunione.",
+        exportFailNoVideo: "Questa riunione non ha video: Immich conserva solo foto e video.",
         // MARK: Transcript
         transcriptTitle: "Trascrizione",
         transcribeAutomatically: "Trascrivi su questo Mac dopo ogni riunione",
@@ -6770,6 +6781,7 @@ extension ForkMeetingStrings {
         exportFailListUnconfirmed: "書き出し先のリストが「ミーティング」ページでの確認を待っています。何も送信されていません。",
         renameAfterExport: "このミーティングは書き出し中です。書き出しが終わるとフォルダに新しい名前が付きます。",
         exportFailDropFolderFull: "ドロップフォルダのディスクがいっぱいです。ミーティングをコピーできませんでした。",
+        exportFailNoVideo: "この会議にはビデオがありません。Immichは写真とビデオだけを保存します。",
         // MARK: Transcript
         transcriptTitle: "文字起こし",
         transcribeAutomatically: "ミーティングのたびにこの Mac で文字起こし",
@@ -7362,6 +7374,7 @@ extension ForkMeetingStrings {
         exportFailListUnconfirmed: "내보내기 목록이 회의 페이지에서 확인을 기다리고 있습니다. 아무것도 보내지 않았습니다.",
         renameAfterExport: "이 회의를 내보내는 중입니다. 내보내기가 끝나면 폴더가 새 이름을 받습니다.",
         exportFailDropFolderFull: "드롭 폴더의 디스크가 가득 찼습니다. 회의를 그곳에 복사하지 못했습니다.",
+        exportFailNoVideo: "이 회의에는 비디오가 없습니다. Immich는 사진과 비디오만 보관합니다.",
         // MARK: Transcript
         transcriptTitle: "전사",
         transcribeAutomatically: "회의가 끝날 때마다 이 Mac에서 전사",
@@ -7954,6 +7967,7 @@ extension ForkMeetingStrings {
         exportFailListUnconfirmed: "Список експорту чекає вашого підтвердження на сторінці «Зустрічі»: нічого не надіслано.",
         renameAfterExport: "Ця зустріч експортується: її папка отримає нову назву, коли експорт завершиться.",
         exportFailDropFolderFull: "Диск папки вивантаження заповнено: зустріч не вдалося туди скопіювати.",
+        exportFailNoVideo: "У цієї зустрічі немає відео: Immich зберігає лише фото й відео.",
         // MARK: Transcript
         transcriptTitle: "Розшифрування",
         transcribeAutomatically: "Розшифровувати на цьому Mac після кожної зустрічі",
@@ -8546,6 +8560,7 @@ extension ForkMeetingStrings {
         exportFailListUnconfirmed: "导出列表正在等待你在“会议”页面中确认：未发送任何内容。",
         renameAfterExport: "此会议正在导出：导出完成后，其文件夹会采用新名称。",
         exportFailDropFolderFull: "投放文件夹所在磁盘已满：无法将会议拷贝到那里。",
+        exportFailNoVideo: "此会议没有视频：Immich 只保存照片和视频。",
         // MARK: Transcript
         transcriptTitle: "转写",
         transcribeAutomatically: "每次会议后在此 Mac 上转写",
@@ -9138,6 +9153,7 @@ extension ForkMeetingStrings {
         exportFailListUnconfirmed: "輸出列表正在等待你在「會議」頁面中確認：未傳送任何內容。",
         renameAfterExport: "此會議正在輸出：輸出完成後，其資料夾會採用新名稱。",
         exportFailDropFolderFull: "投放資料夾所在磁碟已滿：無法將會議拷貝到那裡。",
+        exportFailNoVideo: "此會議沒有影片：Immich 只保存照片和影片。",
         // MARK: Transcript
         transcriptTitle: "轉寫",
         transcribeAutomatically: "每次會議後在此 Mac 上轉寫",
@@ -9730,6 +9746,7 @@ extension ForkMeetingStrings {
         exportFailListUnconfirmed: "匯出列表正在等待你在「會議」頁面中確認：未傳送任何內容。",
         renameAfterExport: "此會議正在匯出：匯出完成後，其資料夾會採用新名稱。",
         exportFailDropFolderFull: "投放資料夾所在磁碟已滿：無法將會議複製到那裡。",
+        exportFailNoVideo: "此會議沒有影片：Immich 只保存相片和影片。",
         // MARK: Transcript
         transcriptTitle: "轉寫",
         transcribeAutomatically: "每次會議後在此 Mac 上轉寫",

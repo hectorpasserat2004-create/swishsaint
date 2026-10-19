@@ -506,7 +506,7 @@ enum ForkMeetingCastralTests {
                         && ForkMeetingExporterConfig(id: "crm", kind: .castral).readiness { _ in true } == .castral(.author)
                         && config.readiness { _ in true } == nil,
                      "set up once its profile, its author and its token are there")
-        suite.expect(ForkMeetingExportKind.addable == [.dropFolder, .webhook],
+        suite.expect(ForkMeetingExportKind.addable == [.dropFolder, .webhook, .immich],
                      "the page's Add never offers a CRM: it comes from its profile")
     }
 
