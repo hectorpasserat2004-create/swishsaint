@@ -43,6 +43,12 @@ enum ForkMeetingExportKind: String, Codable, CaseIterable {
     case dropFolder
     case webhook
     case immich
+    /// A CRM of the recorder contract, from an imported profile
+    /// (`ForkCastralProfile`): never offered in the page's list of kinds.
+    case castral
+
+    /// The kinds the page's "Add" offers; a CRM comes from its profile.
+    static let addable: [ForkMeetingExportKind] = [.dropFolder, .webhook, .immich]
 }
 
 /// Sent when asked from the library, or after each meeting on its own.
@@ -74,6 +80,10 @@ struct ForkMeetingExporterConfig: Equatable, Identifiable {
     /// was saved. A different one means the address changed behind the
     /// page's back: nothing is sent and the secret is never read.
     var origin: String?
+    /// CRM: who signs the report, one of its profile's authors.
+    var author: String?
+    /// CRM: how many people speak, 2 to 6.
+    var speakers: Int?
     /// Immich: the album the meeting's video joins, made when missing;
     /// none, the video only lands in the timeline.
     var album: String?
@@ -84,7 +94,8 @@ struct ForkMeetingExporterConfig: Equatable, Identifiable {
 
     init(id: String = UUID().uuidString, kind: ForkMeetingExportKind, mode: ForkMeetingExportMode = .manual,
          includesMeetCode: Bool = false, includesNotes: Bool = false, includesSummary: Bool = false,
-         folder: String? = nil, address: String? = nil, origin: String? = nil, album: String? = nil) {
+         folder: String? = nil, address: String? = nil, origin: String? = nil, album: String? = nil,
+         author: String? = nil, speakers: Int? = nil) {
         self.album = album
         self.id = id
         self.kind = kind
@@ -95,6 +106,8 @@ struct ForkMeetingExporterConfig: Equatable, Identifiable {
         self.folder = folder
         self.address = address
         self.origin = origin
+        self.author = author
+        self.speakers = speakers
     }
 
     /// The Keychain account of a webhook's secret: one per exporter and per
@@ -112,6 +125,21 @@ struct ForkMeetingExporterConfig: Equatable, Identifiable {
         "\(kind == .immich ? "immich" : "webhook")@\(origin)#\(id)"
     }
 
+    /// A CRM's profile and its token, each under the exporter's id: both
+    /// read from the Keychain alone, so a preference rewritten sends
+    /// nothing anywhere else.
+    static func profileAccount(_ id: String) -> String { "castral-profile#\(id)" }
+    static func tokenAccount(_ id: String) -> String { "castral-token#\(id)" }
+
+    /// Every Keychain account this exporter has.
+    var secretAccounts: [String] {
+        switch kind {
+        case .dropFolder: return []
+        case .webhook, .immich: return secretAccount.map { [$0] } ?? []
+        case .castral: return [Self.profileAccount(id), Self.tokenAccount(id)]
+        }
+    }
+
     /// What the page and the menus call it after its kind: the folder's
     /// name, or the host.
     var detail: String? {
@@ -121,6 +149,8 @@ struct ForkMeetingExporterConfig: Equatable, Identifiable {
             return (folder as NSString).lastPathComponent
         case .webhook, .immich:
             return origin
+        case .castral:
+            return nil
         }
     }
 }
@@ -156,6 +186,10 @@ extension ForkMeetingExporterConfig {
             } catch {
                 return error as? ForkMeetingExportFailure ?? .notConfigured
             }
+        case .castral:
+            guard hasSecret(Self.profileAccount(id)) else { return .castral(.profile) }
+            guard (author ?? "").isEmpty == false else { return .castral(.author) }
+            return hasSecret(Self.tokenAccount(id)) ? nil : .noSecret
         }
     }
 }
@@ -205,7 +239,7 @@ extension ForkMeetingExporterList {
 
 extension ForkMeetingExporterConfig: Codable {
     private enum CodingKeys: String, CodingKey {
-        case id, kind, mode, includesMeetCode, includesNotes, includesSummary, folder, address, origin, album
+        case id, kind, mode, includesMeetCode, includesNotes, includesSummary, folder, address, origin, album, author, speakers
     }
 
     /// Lenient: a missing or unknown mode is manual, a missing option off.
@@ -223,6 +257,8 @@ extension ForkMeetingExporterConfig: Codable {
         folder = (try? container.decodeIfPresent(String.self, forKey: .folder)) ?? nil
         address = (try? container.decodeIfPresent(String.self, forKey: .address)) ?? nil
         origin = (try? container.decodeIfPresent(String.self, forKey: .origin)) ?? nil
+        author = (try? container.decodeIfPresent(String.self, forKey: .author)) ?? nil
+        speakers = ((try? container.decodeIfPresent(Int.self, forKey: .speakers)) ?? nil).map(ForkCastralContract.speakers)
         album = (try? container.decodeIfPresent(String.self, forKey: .album)) ?? nil
     }
 }
@@ -285,6 +321,10 @@ struct ForkMeetingExportPackage {
     /// The summary written on this Mac; sent only when the exporter asks
     /// (`includesSummary`).
     var summary: String? = nil
+    /// The meeting's folder, where a CRM writes its steps as they happen.
+    var folder: URL? = nil
+    /// Sent on its own after the meeting, not with a click.
+    var automatic = false
     /// The meeting's video, read in place, when it has one (Immich).
     var video: URL?
 
@@ -348,6 +388,8 @@ enum ForkMeetingExportFailure: Error, Equatable {
     case listChanged
     /// The drop folder's own disk is full.
     case dropFolderFull
+    /// What only a CRM of the recorder contract refuses.
+    case castral(ForkCastralFailure)
     /// The meeting has no video: Immich keeps photos and videos only.
     case noVideo
 
@@ -372,6 +414,7 @@ enum ForkMeetingExportFailure: Error, Equatable {
         case .earlyAnswer: return "earlyAnswer"
         case .listChanged: return "listChanged"
         case .dropFolderFull: return "dropFolderFull"
+        case let .castral(failure): return "castral." + failure.code
         case .noVideo: return "noVideo"
         }
     }
@@ -402,6 +445,8 @@ enum ForkMeetingExportFailure: Error, Equatable {
         case "earlyAnswer": self = .earlyAnswer
         case "listChanged": self = .listChanged
         case "dropFolderFull": self = .dropFolderFull
+        case let code? where code.hasPrefix("castral."):
+            self = ForkCastralFailure(code: String(code.dropFirst("castral.".count))).map(Self.castral) ?? .network
         case "noVideo": self = .noVideo
         case let code? where code.hasPrefix("refusedAddress"):
             self = .refusedAddress(Self.refusal(String(code.dropFirst("refusedAddress.".count))))
@@ -755,6 +800,7 @@ extension ForkMeetingExportKind {
         switch self {
         case .dropFolder: return strings.exportKindDropFolder
         case .webhook: return strings.exportKindWebhook
+        case .castral: return strings.castralKindName
         case .immich: return "Immich"
         }
     }
@@ -766,6 +812,7 @@ extension ForkMeetingExportKind {
         case .dropFolder: return "folder"
         case .webhook: return "network"
         case .immich: return "photo.on.rectangle.angled"
+        case .castral: return "person.crop.rectangle.stack"
         }
     }
 }
@@ -815,6 +862,28 @@ extension ForkMeetingExportFailure {
         case .listChanged: return strings.exportFailListUnconfirmed
         case .dropFolderFull: return strings.exportFailDropFolderFull
         case .noVideo: return strings.exportFailNoVideo
+        case let .castral(failure): return failure.message(strings)
+        }
+    }
+}
+
+extension ForkCastralFailure {
+    func message(_ strings: ForkMeetingStrings) -> String {
+        switch self {
+        case .noBooking: return strings.castralFailNoBooking
+        case .uncertain: return strings.castralFailUncertain
+        case .orphan: return strings.castralFailOrphan
+        case .alreadyReported: return strings.castralFailAlreadyReported
+        case .alreadyDeposited: return strings.castralFailAlreadyDeposited
+        case .profile: return strings.castralFailProfile
+        case .author: return strings.castralFailAuthor
+        case .tokenRefused: return strings.castralFailToken
+        case .rejected: return strings.castralFailRejected
+        case let .tooLong(minutes): return strings.castralFailTooLong(minutes: minutes)
+        case .uploadHost: return strings.castralFailUploadHost
+        case .storage: return strings.castralFailStorage
+        case .notArrived: return strings.castralFailNotArrived
+        case .encoding: return strings.castralFailEncoding
         }
     }
 }
