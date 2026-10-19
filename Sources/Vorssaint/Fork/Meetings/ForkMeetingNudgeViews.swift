@@ -26,10 +26,15 @@ struct ForkMeetingAttention: ViewModifier {
             .scaleEffect(on && style.springs && !settled ? 0.94 : 1)
             .overlay {
                 if on {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    // In the island it follows the card's own panel; in the
+                    // bubble, whose card has no panel, it goes out into the
+                    // bubble's margin (14, 10 and 12 pt), off the icon and
+                    // the buttons, inside its 16 pt corners.
+                    RoundedRectangle(cornerRadius: inIsland ? 14 : 12, style: .continuous)
                         .strokeBorder(Color(nsColor: .systemRed).opacity(lit ? 0.9 : 0.4), lineWidth: 2)
                         .shadow(color: Color(nsColor: .systemRed).opacity(lit && style.pulses ? 0.55 : 0),
                                 radius: lit ? 8 : 0)
+                        .padding(inIsland ? 0 : -7)
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
                 }
