@@ -283,7 +283,7 @@ extension ForkMeetingExports {
         let failure = refusals[key] ?? result(folder, config.id).flatMap { $0.status == .failed ? $0.failure : nil }
         if pending.contains(key) {
             return ForkCastralStatus(name: name, phase: .sending(castralProgress[key]),
-                                     progress: castralProgress[key].map { $0 * 0.1 }, failure: nil)
+                                     progress: castralProgress[key], failure: nil)
         }
         if let record = castralRecords[path], record.target == config.id {
             let phase = ForkCastralPhase(record: record, followed: !castralResting.contains(path))

@@ -139,8 +139,7 @@ struct ForkCastralRow: View {
             .font(.caption)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
-        Text(text.castralAudioCaption(minutes: ForkCastralAudioPlan.maximumMinutes(
-            limit: profile?.maximumUploadBytes ?? ForkCastralProfile.defaultMaximumUploadBytes)))
+        Text(audioCaption)
             .font(.caption)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
@@ -149,6 +148,17 @@ struct ForkCastralRow: View {
             Button(text.exportRemove, role: .destructive, action: remove)
         }
         .onAppear { exports.testCastral(config.id, unlessCheckedWithin: 60) }
+    }
+
+    /// The 16 kHz → 8 kHz threshold and the longest meeting, from the
+    /// profile's cap.
+    private var audioCaption: String {
+        let limit = profile?.maximumUploadBytes ?? ForkCastralProfile.defaultMaximumUploadBytes
+        func length(_ minutes: Int) -> String {
+            ForkMeetingLibraryText.duration(Double(minutes * 60), language: language) ?? "\(minutes) min"
+        }
+        return text.castralAudioCaption(lower: length(ForkCastralAudioPlan.maximumMinutes(limit: limit, format: .flac16k)),
+                                        longest: length(ForkCastralAudioPlan.maximumMinutes(limit: limit)))
     }
 
     @ViewBuilder private var link: some View {
@@ -250,8 +260,8 @@ struct ForkCastralDetail: View {
 
     private func phase(_ phase: ForkCastralPhase) -> String {
         switch phase {
-        case let .sending(share):
-            return share.map { text.castralPhaseSendingShare(Int(($0 * 100).rounded())) } ?? text.castralPhaseSending
+        case .sending:
+            return text.castralPhaseSending
         case .waitingForSound: return text.castralPhaseWaiting
         case .queued: return text.castralPhaseQueued
         case .transcribing: return text.castralPhaseTranscribing
@@ -281,8 +291,8 @@ struct ForkCastralDetail: View {
 extension ForkCastralStatus {
     func short(_ text: ForkMeetingStrings) -> String {
         switch phase {
-        case let .sending(share):
-            return share.map { text.castralPhaseSendingShare(Int(($0 * 100).rounded())) } ?? text.castralPhaseSending
+        case .sending:
+            return text.castralPhaseSending
         case .waitingForSound: return text.castralPhaseWaiting
         case .queued: return text.castralPhaseQueued
         case .transcribing: return text.castralPhaseTranscribing

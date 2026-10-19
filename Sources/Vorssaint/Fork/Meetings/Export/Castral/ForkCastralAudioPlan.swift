@@ -64,10 +64,11 @@ enum ForkCastralAudioPlan {
         return .tooLong(maximumMinutes: maximumMinutes(limit: limit))
     }
 
-    /// The longest typical meeting under `limit` at 8 kHz, rounded down to
-    /// five minutes: "about 1 h 25" for 50 MB.
-    static func maximumMinutes(limit: Int64) -> Int {
-        let minutes = Double(limit) / typicalBytesPerHour(.flac8k) * 60
+    /// The longest typical meeting under `limit` in `format`, rounded down
+    /// to five minutes: at 8 kHz "about 1 h 25" for 50 MB; at 16 kHz, the
+    /// length past which 8 kHz goes ("about 45 min").
+    static func maximumMinutes(limit: Int64, format: Format = .flac8k) -> Int {
+        let minutes = Double(limit) / typicalBytesPerHour(format) * 60
         return max(5, Int(minutes / 5) * 5)
     }
 

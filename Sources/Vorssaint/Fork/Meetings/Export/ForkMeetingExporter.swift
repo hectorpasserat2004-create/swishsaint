@@ -841,6 +841,7 @@ extension ForkCastralFailure {
         case .uncertain: return strings.castralFailUncertain
         case .orphan: return strings.castralFailOrphan
         case .alreadyReported: return strings.castralFailAlreadyReported
+        case .alreadyDeposited: return strings.castralFailAlreadyDeposited
         case .profile: return strings.castralFailProfile
         case .author: return strings.castralFailAuthor
         case .tokenRefused: return strings.castralFailToken

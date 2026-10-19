@@ -93,11 +93,17 @@ enum ForkCastralContract {
             return ["cancelled", "no_show"].contains(status?.lowercased() ?? "")
         }
 
-        /// Already has a report, or one on its way to it: only a deposit
-        /// `ready`, or with its summary, counts (B4); a failed or abandoned
-        /// one does not.
+        /// Already has a report: only a deposit `ready`, or with its summary,
+        /// counts (B4); the choice's badge. A failed one does not.
         var hasReport: Bool {
             deposits.contains { $0.stage == Stage.ready.rawValue || $0.hasSummary }
+        }
+
+        /// Has a deposit that did not fail, at any stage: a sound on its way
+        /// (uploading, queued, transcribing, summarizing) or done. Nothing
+        /// goes there on its own: it would be transcribed, and billed, twice.
+        var hasDeposit: Bool {
+            deposits.contains { $0.stage != Stage.failed.rawValue }
         }
 
         /// The Google Meet code of its link.

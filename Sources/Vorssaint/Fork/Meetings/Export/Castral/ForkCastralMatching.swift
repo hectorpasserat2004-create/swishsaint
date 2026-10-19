@@ -9,7 +9,9 @@ import Foundation
 ///
 /// 1. **The meeting's own Google Meet code** (B2): the code `meeting.json`
 ///    keeps for this recording, never one an earlier offer left behind. A
-///    meeting started by hand without a code never matches by code.
+///    meeting started by hand without a code never matches by code. Sure
+///    only when the one appointment of that code overlaps the call; and a
+///    call with a code never takes another code's appointment by its time.
 /// 2. **Its time**: the recording overlaps the appointment, give or take
 ///    15 minutes on each side (B6).
 /// 3. **The closest start**, within two hours: a guess, offered first in
@@ -52,19 +54,24 @@ enum ForkCastralMatch {
                        endedAt: Date?) -> Choice? {
         let usable = bookings.filter { !$0.isBlocked && $0.startAt != nil }
         let end = max(endedAt ?? startedAt, startedAt)
-        if let code = meetCode?.lowercased(), !code.isEmpty {
+        let code = meetCode.flatMap { $0.isEmpty ? nil : $0.lowercased() }
+        if let code {
             let coded = usable.filter { $0.meetCode == code }
-            // A personal Meet link serves many appointments: the time
-            // tells them apart.
-            if let best = best(coded, startedAt: startedAt, endedAt: end) {
-                return Choice(booking: best, rule: .meetCode, unique: coded.count == 1 || overlapping(coded, startedAt, end).count == 1)
+            // A personal Meet link serves many appointments: the time tells
+            // them apart. Sure only when one of them overlaps the call.
+            let codedOverlaps = overlapping(coded, startedAt, end)
+            if let best = closest(codedOverlaps, to: startedAt) ?? closest(coded, to: startedAt) {
+                return Choice(booking: best, rule: .meetCode, unique: codedOverlaps.count == 1 && codedOverlaps[0] == best)
             }
         }
-        let overlaps = overlapping(usable, startedAt, end)
+        // A call with a code never takes the appointment of another code by
+        // its time: only those without one (the choice still lists them all).
+        let usableByTime = code == nil ? usable : usable.filter { $0.meetCode == nil }
+        let overlaps = overlapping(usableByTime, startedAt, end)
         if let best = closest(overlaps, to: startedAt) {
             return Choice(booking: best, rule: .overlap, unique: overlaps.count == 1)
         }
-        let near = usable.filter { abs($0.startAt!.timeIntervalSince(startedAt)) <= closestWindow }
+        let near = usableByTime.filter { abs($0.startAt!.timeIntervalSince(startedAt)) <= closestWindow }
         if let best = closest(near, to: startedAt) {
             return Choice(booking: best, rule: .closest, unique: false)
         }
@@ -102,11 +109,6 @@ enum ForkCastralMatch {
         bookings.min { abs($0.startAt!.timeIntervalSince(date)) < abs($1.startAt!.timeIntervalSince(date)) }
     }
 
-    private static func best(_ bookings: [ForkCastralContract.Booking], startedAt: Date,
-                             endedAt: Date) -> ForkCastralContract.Booking? {
-        closest(overlapping(bookings, startedAt, endedAt), to: startedAt) ?? closest(bookings, to: startedAt)
-    }
-
     // MARK: - On its own
 
     enum Verdict: Equatable {
@@ -117,8 +119,9 @@ enum ForkCastralMatch {
     }
 
     /// May the meeting go on its own to the appointment found? Only to a
-    /// sure one, with a company, and without a report yet: a second report
-    /// replaces the first in the CRM.
+    /// sure one, with a company, with no report yet and no other sound on
+    /// its way: a second report replaces the first in the CRM, and each
+    /// deposit is transcribed, and billed.
     static func automatic(_ choice: Choice?) -> Verdict {
         guard let choice else { return .needsChoice(.noBooking) }
         guard choice.unique, choice.rule == .meetCode || choice.rule == .overlap else {
@@ -126,6 +129,7 @@ enum ForkCastralMatch {
         }
         guard choice.booking.company?.id != nil else { return .needsChoice(.orphan) }
         guard !choice.booking.hasReport else { return .needsChoice(.alreadyReported) }
+        guard !choice.booking.hasDeposit else { return .needsChoice(.alreadyDeposited) }
         return .send(choice)
     }
 

@@ -238,17 +238,29 @@ enum ForkMeetingCastralTests {
         let start = at("2026-10-19T10:02:00Z"), end = at("2026-10-19T10:40:00Z")
         let rows = bookings([
             booking(1, start: "2026-10-19T10:00:00Z", end: "2026-10-19T10:30:00Z"),
-            booking(2, start: "2026-10-19T14:00:00Z", end: "2026-10-19T14:30:00Z", url: "https://meet.google.com/abc-defg-hij"),
+            booking(2, start: "2026-10-19T10:05:00Z", end: "2026-10-19T10:35:00Z", url: "https://meet.google.com/abc-defg-hij"),
         ])
         let byCode = ForkCastralMatch.choose(rows, meetCode: "abc-defg-hij", startedAt: start, endedAt: end)
         suite.expect(byCode?.booking.id == rows[1].id && byCode?.rule == .meetCode && byCode?.unique == true,
-                     "the meeting's own Google Meet code wins over a closer time")
+                     "the meeting's own Google Meet code wins over a closer start")
         let byTime = ForkCastralMatch.choose(rows, meetCode: nil, startedAt: start, endedAt: end)
         suite.expect(byTime?.booking.id == rows[0].id && byTime?.rule == .overlap,
                      "a meeting without a code never matches by code: its time finds the appointment (B2)")
         let otherCode = ForkCastralMatch.choose(rows, meetCode: "zzz-zzzz-zzz", startedAt: start, endedAt: end)
         suite.expect(otherCode?.rule == .overlap && otherCode?.booking.id == rows[0].id,
-                     "another code matches nothing by code")
+                     "another code matches nothing by code, and never the appointment of another code by its time")
+        let conflict = bookings([booking(20, start: "2026-10-19T10:00:00Z", end: "2026-10-19T10:30:00Z",
+                                         url: "https://meet.google.com/abc-defg-hij")])
+        let conflicting = ForkCastralMatch.choose(conflict, meetCode: "zzz-zzzz-zzz", startedAt: start, endedAt: end)
+        suite.expect(conflicting == nil && ForkCastralMatch.automatic(conflicting) == .needsChoice(.noBooking)
+                        && ForkCastralMatch.candidates(conflict, startedAt: start).map(\.id) == [conflict[0].id],
+                     "a call zzz-zzzz-zzz and the only appointment on abc-defg-hij at that time: nothing on its own (another prospect), still in the choice")
+        let late = bookings([booking(21, start: "2026-10-19T14:00:00Z", end: "2026-10-19T14:30:00Z",
+                                     url: "https://meet.google.com/abc-defg-hij")])
+        let lateChoice = ForkCastralMatch.choose(late, meetCode: "abc-defg-hij", startedAt: start, endedAt: end)
+        suite.expect(lateChoice?.rule == .meetCode && lateChoice?.unique == false
+                        && ForkCastralMatch.automatic(lateChoice) == .needsChoice(.uncertain),
+                     "the only appointment of the call's code, but at another time: proposed, never sent on its own")
         let personal = bookings([
             booking(3, start: "2026-10-19T08:00:00Z", end: "2026-10-19T08:30:00Z", url: "https://meet.google.com/abc-defg-hij"),
             booking(4, start: "2026-10-19T10:00:00Z", end: "2026-10-19T10:30:00Z", url: "https://meet.google.com/abc-defg-hij"),
@@ -304,6 +316,16 @@ enum ForkMeetingCastralTests {
                      "a guess, two at that time, or none: the person chooses")
         suite.expect(verdict(.meetCode, 1) == .needsChoice(.orphan) && verdict(.meetCode, 2) == .needsChoice(.alreadyReported),
                      "never on its own to an appointment without a company, or one that has a report already")
+        for stage in ["upload", "queued", "transcribing", "summarizing"] {
+            let row = bookings([booking(30, start: "2026-10-19T10:00:00Z", deposits: [["id": "y", "stage": stage]])])[0]
+            suite.expect(ForkCastralMatch.automatic(.init(booking: row, rule: .meetCode, unique: true)) == .needsChoice(.alreadyDeposited)
+                            && !row.hasReport,
+                         "a deposit \(stage) on the appointment: never a second one on its own, which would be billed twice")
+        }
+        let failedOnly = bookings([booking(31, start: "2026-10-19T10:00:00Z", deposits: [["id": "z", "stage": "failed"]])])[0]
+        suite.expect(ForkCastralMatch.automatic(.init(booking: failedOnly, rule: .meetCode, unique: true))
+                        == .send(.init(booking: failedOnly, rule: .meetCode, unique: true)),
+                     "only a failed deposit leaves the appointment free for one on its own")
         let start = at("2026-10-19T10:02:00Z")
         let two = bookings([booking(4, start: "2026-10-19T10:00:00Z", end: "2026-10-19T10:30:00Z"),
                             booking(5, start: "2026-10-19T10:15:00Z", end: "2026-10-19T10:45:00Z")])
@@ -328,6 +350,9 @@ enum ForkMeetingCastralTests {
                      "the file written is measured: over the cap at 16 kHz, 8 kHz; over it at 8 kHz, refused")
         suite.expect(ForkCastralAudioPlan.next(after: .flac16k, bytes: 0, seconds: 10, limit: limit) != .send,
                      "an empty file is never sent")
+        suite.expect(ForkCastralAudioPlan.maximumMinutes(limit: 50_000_000, format: .flac16k) == 45
+                        && ForkCastralAudioPlan.maximumMinutes(limit: 200_000_000, format: .flac16k) == 180,
+                     "the length past which 8 kHz goes follows the cap: about 45 min at 50 MB, 3 h at 200 MB")
         suite.expect(ForkCastralAudioPlan.maximumMinutes(limit: 50_000_000) == 85
                         && ForkCastralAudioPlan.maximumMinutes(limit: 200_000_000) == 340,
                      "the longest meeting said: about 1 h 25 at 50 MB, 5 h 40 at 200 MB")
@@ -436,7 +461,7 @@ enum ForkMeetingCastralTests {
     // MARK: - Failures and settings
 
     private static func failures(_ suite: TestSuite) {
-        let all: [ForkCastralFailure] = [.noBooking, .uncertain, .orphan, .alreadyReported, .profile, .author, .tokenRefused,
+        let all: [ForkCastralFailure] = [.noBooking, .uncertain, .orphan, .alreadyReported, .alreadyDeposited, .profile, .author, .tokenRefused,
                                          .rejected, .tooLong(maximumMinutes: 85), .uploadHost, .storage, .notArrived, .encoding]
         suite.expect(all.allSatisfy { ForkMeetingExportFailure(code: ForkMeetingExportFailure.castral($0).code, httpStatus: nil)
                          == .castral($0) },
@@ -444,7 +469,7 @@ enum ForkMeetingCastralTests {
         suite.expect(ForkMeetingExportFailure.castral(.tooLong(maximumMinutes: 85)).code == "castral.tooLong.85"
                         && ForkMeetingExportFailure(code: "castral.later", httpStatus: nil) == .network,
                      "the longest meeting is kept with its failure; a code of a later version reads as the vaguest")
-        suite.expect(all.filter(\.needsChoice) == [.noBooking, .uncertain, .orphan, .alreadyReported],
+        suite.expect(all.filter(\.needsChoice) == [.noBooking, .uncertain, .orphan, .alreadyReported, .alreadyDeposited],
                      "what the person settles by choosing the appointment")
         for language in AppLanguage.allCases {
             let strings = ForkMeetingStrings.strings(language)
@@ -484,7 +509,7 @@ enum ForkMeetingCastralTests {
             let strings = ForkMeetingStrings.strings(language)
             let short = [strings.noticeCastralSent(name), strings.noticeCastralFailed(name), strings.castralLinkConnected(999),
                          strings.castralLinkRefused, strings.castralLinkOffline, strings.castralLinkFailed(503),
-                         strings.castralPhaseSending, strings.castralPhaseSendingShare(100), strings.castralPhaseWaiting,
+                         strings.castralPhaseSending, strings.castralLinkCheckFailed, strings.castralPhaseWaiting,
                          strings.castralPhaseQueued, strings.castralPhaseTranscribing, strings.castralPhaseSummarizing,
                          strings.castralPhaseReady, strings.castralPhaseReadyWithoutReport, strings.castralPhaseFailed,
                          strings.castralPhaseStillWorking, strings.castralNoCompany, strings.castralBadgeReported]
@@ -494,10 +519,10 @@ enum ForkMeetingCastralTests {
                           strings.castralPhaseReadyWithoutReport, strings.castralPhaseFailed, strings.castralPhaseStillWorking]
             suite.expect(Set(phases).count == phases.count, "\(language.rawValue): each phase has its own words")
             suite.expect(strings.noticeCastralSent("Example CRM").contains("Example CRM")
-                            && strings.castralPhaseSendingShare(42).contains("42")
                             && strings.castralLinkConnected(12).contains("12")
-                            && strings.castralAudioCaption(minutes: 85).contains("25"),
-                         "\(language.rawValue): the notices name the CRM, the share and the counts are said")
+                            && strings.castralAudioCaption(lower: "45 min", longest: "1 h 25").contains("1 h 25")
+                            && strings.castralHosts("crm.example.test", sound: "storage.example.test").contains("storage.example.test"),
+                         "\(language.rawValue): the notices name the CRM, the counts, the lengths and the hosts are said")
         }
         suite.expect(tooLong.isEmpty, "the notices and the phases fit the island: 28 characters at most, with a 16-letter name: \(tooLong)")
     }

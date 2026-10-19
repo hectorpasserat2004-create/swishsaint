@@ -15,6 +15,8 @@ enum ForkCastralFailure: Equatable {
     case orphan
     /// On its own: the appointment already has a report.
     case alreadyReported
+    /// On its own: a deposit of the appointment is already on its way.
+    case alreadyDeposited
     /// The profile is not in the Keychain, or no longer reads.
     case profile
     /// The author set is not one the profile names.
@@ -40,6 +42,7 @@ enum ForkCastralFailure: Equatable {
         case .uncertain: return "uncertain"
         case .orphan: return "orphan"
         case .alreadyReported: return "alreadyReported"
+        case .alreadyDeposited: return "alreadyDeposited"
         case .profile: return "profile"
         case .author: return "author"
         case .tokenRefused: return "tokenRefused"
@@ -59,6 +62,7 @@ enum ForkCastralFailure: Equatable {
         case "uncertain": self = .uncertain
         case "orphan": self = .orphan
         case "alreadyReported": self = .alreadyReported
+        case "alreadyDeposited": self = .alreadyDeposited
         case "profile": self = .profile
         case "author": self = .author
         case "tokenRefused": self = .tokenRefused
@@ -75,7 +79,7 @@ enum ForkCastralFailure: Equatable {
     }
 
     /// Fixed by choosing the appointment by hand (Export To, Retry).
-    var needsChoice: Bool { [.noBooking, .uncertain, .orphan, .alreadyReported].contains(self) }
+    var needsChoice: Bool { [.noBooking, .uncertain, .orphan, .alreadyReported, .alreadyDeposited].contains(self) }
 }
 
 /// Where a meeting is in the CRM, kept in its `meeting.json` (`castral`),
@@ -347,7 +351,8 @@ enum ForkCastralPhase: Equatable {
     /// The server's share for the bar, `nil` when there is none.
     func progress(_ record: ForkCastralRecord?) -> Double? {
         switch self {
-        case let .sending(share): return share.map { 0.1 * $0 }
+        // The share of the sound sent, not the server's scale.
+        case let .sending(share): return share
         case .ready, .readyWithoutReport, .failed: return nil
         default: return record?.progress.map { Double($0) / 100 }
         }
