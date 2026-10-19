@@ -39,7 +39,24 @@ enum ForkMeetingIsland {
     @discardableResult
     static func show(_ notice: ForkMeetingNotice, detail: String?, text: ForkMeetingStrings) -> Bool {
         guard isAvailable else { return false }
-        return NotchService.shared.show(notchNotice(for: notice, detail: detail, text: text))
+        let shown = notchNotice(for: notice, detail: detail, text: text)
+        guard NotchService.shared.show(shown) else { return false }
+        lastShown = shown
+        return true
+    }
+
+    /// The last notice the island took from a meeting: a click on it opens
+    /// the island's Meetings section (seam `notch-meetings9`).
+    private static var lastShown: NotchNotice?
+
+    /// A click on a meeting's notice in the closed island opens the
+    /// Meetings section, as a timer's opens Timer; with that section hidden,
+    /// the island's own choice stands.
+    static func activate(_ notice: NotchNotice) -> Bool {
+        let island = NotchService.shared
+        guard notice.event == .capture, notice == lastShown, island.modules.contains(.meetings) else { return false }
+        island.open(.meetings)
+        return true
     }
 
     static func notchNotice(for notice: ForkMeetingNotice, detail: String?, text: ForkMeetingStrings) -> NotchNotice {
