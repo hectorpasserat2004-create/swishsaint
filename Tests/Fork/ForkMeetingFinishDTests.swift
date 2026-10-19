@@ -25,6 +25,7 @@ enum ForkMeetingFinishDTests {
         fileTime(suite)
         offersSilenced(suite)
         island(suite)
+        keptFile(suite)
     }
 
     private static let t0 = Date(timeIntervalSinceReferenceDate: 800_000_000)
@@ -229,27 +230,46 @@ enum ForkMeetingFinishDTests {
         suite.expect(abs(overlap.storedSeconds - 1.5) < 1e-6 && overlap.read(from: 1.2, count: 1)[0] > 0.4,
                      "a buffer overlapping the last one is not counted twice")
 
+        let lost = ForkMeetingLookbackRing(seconds: 10)
+        samples(160).withUnsafeBufferPointer { lost.append($0, startHost: 0) }
+        samples(160, 0.5).withUnsafeBufferPointer { lost.append($0, startHost: 0.02) }
+        suite.expect(lost.read(from: 0.015, count: 1)[0] == 0 && lost.read(from: 0.025, count: 1)[0] > 0.4,
+                     "a 10 ms buffer lost leaves its silence: what was kept before it stays in time")
+
         ring.clear()
         suite.expect(ring.bytesHeld == 0 && ring.span == nil && ring.storedSeconds == 0
                         && ring.read(from: 1_100, count: 10).allSatisfy { $0 == 0 },
                      "emptied: zeros first, then its memory let go")
-        ring.freeze()
-        second.withUnsafeBufferPointer { ring.append($0, startHost: 5_000) }
-        suite.expect(ring.storedSeconds == 0, "frozen, it takes nothing more")
+        suite.expect(ForkMeetingLookbackRing().capacity == 305 * 16_000,
+                     "5 minutes, and 5 s more for the seconds after the click")
     }
 
+    /// After the click the rings go on until the recording's own sound
+    /// comes: cut there, the part of a buffer before the cut kept.
     private static func handOver(_ suite: TestSuite) {
         let ring = ForkMeetingLookbackRing(seconds: 10)
-        samples(32_000).withUnsafeBufferPointer { ring.append($0, startHost: 100) }
-        let taken = ring.handOver()
-        suite.expect(taken.storedSeconds == 2 && taken.span?.end == 102 && ring.bytesHeld == 0 && ring.span == nil,
-                     "a recording takes the kept sound whole; the offer's ring is left empty")
+        samples(16_000).withUnsafeBufferPointer { ring.append($0, startHost: 100) }
+        ring.cut(atHost: 101.5)
+        samples(16_000).withUnsafeBufferPointer { ring.append($0, startHost: 101) }
         samples(16_000).withUnsafeBufferPointer { ring.append($0, startHost: 102) }
-        ring.clear()
-        suite.expect(ring.storedSeconds == 0 && taken.storedSeconds == 2,
-                     "and emptying the offer's ring never touches what the recording took")
-        taken.clear()
-        suite.expect(taken.bytesHeld == 0, "which the file empties once written")
+        suite.expect(abs(ring.storedSeconds - 1.5) < 1e-6 && ring.span.map { abs($0.end - 101.5) < 1e-6 } == true,
+                     "cut at the recording's first sound: half of the buffer across it, nothing after")
+        ring.cut(atHost: 103)
+        suite.expect(ring.span.map { abs($0.end - 101.5) < 1e-6 } == true, "a later cut never moves the first")
+
+        let plan = ForkMeetingLookbackPlan.plan(spans: [(start: 880, end: 1_000.6), (start: 900, end: 1_000.9)],
+                                                zero: 1_000, cuts: [1_000.6, 1_001.2])
+        let close = { (a: Double, b: Double) in abs(a - b) < 1e-6 }
+        suite.expect(plan.map { plan in
+                         plan.seconds == 120 && close(plan.joins[0], 0.6) && close(plan.joins[1], 1.2)
+                             && close(plan.tracks[0].seconds, 120.6) && close(plan.tracks[1].silence, 20)
+                             && close(plan.tracks[1].seconds, 100.9)
+                             && close(plan.lengths[0], 120.6) && close(plan.lengths[1], 121.2)
+                     } == true,
+                     "each track goes past the click to its own first sound; one whose ring stopped earlier ends on silence")
+        let late = ForkMeetingLookbackPlan.plan(spans: [(start: 880, end: 1_010), nil], zero: 1_000, cuts: [1_009, 1_000])
+        suite.expect(late.map { close($0.joins[0], ForkMeetingLookbackPlan.cutLimit) && close($0.joins[1], 0) } == true,
+                     "never more than 3 s past the click; a track with no ring joins at the click")
     }
 
     /// The two tracks start together at the file's zero, each sample at
@@ -372,6 +392,66 @@ enum ForkMeetingFinishDTests {
         let entry = ForkMeetingLibraryEntry(folderName: "2026-10-19 10h00 — Point hebdo", sidecar: .success(back),
                                             contents: contents)
         suite.expect(entry?.soundOnlySeconds == 252, "and the library's detail reads it")
+    }
+
+    // MARK: - The kept file (review N2)
+
+    /// The kept minutes never go into the master: they wait beside it, the
+    /// final pass (or the recovery's) puts them first, and when their file
+    /// did not survive the meeting begins at the click, every time moved.
+    private static func keptFile(_ suite: TestSuite) {
+        var meeting = ForkMeetingSidecar.started(id: UUID(), startedAt: t0, origin: .offered, title: "Point hebdo",
+                                                 titleSource: .window,
+                                                 capture: .init(target: .window, systemAudio: .app, microphone: "AirPods",
+                                                                quality: .standard))
+        var start = ForkMeetingSidecarPatch(gap: .init(at: 0, seconds: 120, kind: .lookback))
+        start.startedAt = t0.addingTimeInterval(-120)
+        meeting = start.applied(to: meeting)
+        meeting = ForkMeetingSidecarPatch(gap: .init(at: 130, seconds: 4, kind: .microphoneSwitch)).applied(to: meeting)
+        meeting = ForkMeetingSidecarPatch(pause: .init(at: 140, seconds: 30, reason: .user)).applied(to: meeting)
+        meeting = ForkMeetingSidecarPatch(marker: .init(at: 125)).applied(to: meeting)
+        meeting.recordedSeconds = 160
+        suite.expect(ForkMeetingLookbackJoin.decide(meeting, fileTracks: 2) == .drop,
+                     "kept, but its file never said whole (no joins): the meeting goes on without it")
+        let whole = ForkMeetingSidecarPatch(lookbackJoins: [0.6, 1.2]).applied(to: meeting)
+        let data = (try? whole.encoded()) ?? Data()
+        let back = ForkMeetingSidecar.decode(data)
+        suite.expect((try? back.get())?.lookbackJoins == [0.6, 1.2]
+                        && String(decoding: data, as: UTF8.self).contains("\"lookbackJoins\""),
+                     "meeting.json says the kept file is whole, and where each track's own sound takes over")
+        suite.expect(ForkMeetingLookbackJoin.decide(whole, fileTracks: 2) == .join(seconds: 120, joins: [0.6, 1.2])
+                        && ForkMeetingLookbackJoin.decide(whole, fileTracks: nil) == .drop
+                        && ForkMeetingLookbackJoin.decide(whole, fileTracks: 1) == .drop
+                        && ForkMeetingLookbackJoin.decide(nil, fileTracks: 2) == .none,
+                     "joined only when the file opens with its two tracks; dropped when it is missing or cut short")
+
+        let dropped = ForkMeetingSidecarPatch(dropsLookback: true).applied(to: whole)
+        suite.expect(dropped.lookbackSeconds == nil && dropped.lookbackJoins == nil
+                        && dropped.gaps == [.init(at: 10, seconds: 4, kind: .microphoneSwitch)]
+                        && dropped.pauses == [.init(at: 20, seconds: 30, reason: .user)]
+                        && dropped.markers == [.init(at: 5)] && dropped.recordedSeconds == 40
+                        && dropped.startedAt == t0,
+                     "dropped: it begins at the click, every gap, pause and marker 2 minutes earlier, the start back at the click")
+        suite.expect(ForkMeetingSidecarPatch(dropsLookback: true).applied(to: dropped) == dropped,
+                     "and dropping twice changes nothing")
+
+        let pieces = ForkMeetingLookbackJoin.pieces(seconds: 120, join: 0.6, keptLength: 121.2, masterLength: 60)
+        suite.expect(pieces == [.init(source: .kept, from: 0, to: 120.6, at: 0),
+                                .init(source: .master, from: 0.6, to: 60, at: 120.6)],
+                     "a track: its kept sound up to its join, then the master's own from there, no hole, no overlap")
+        suite.expect(ForkMeetingLookbackJoin.pieces(seconds: 120, join: 0, keptLength: 121.2, masterLength: 60)
+                        == [.init(source: .kept, from: 0, to: 120, at: 0), .init(source: .master, from: 0, to: 60, at: 120)],
+                     "a track joined at the click: the kept minutes, then the whole master")
+
+        var folder = ForkMeetingFolder.contents(of: [".recording.mp4", ForkMeetingFolder.lookbackName, "meeting.json"],
+                                                folderName: "2026-10-19 10h00 — Point hebdo")
+        suite.expect(folder.hasLookback && folder.video == nil && folder.audio == nil,
+                     "the kept file is the folder's own, never taken for its sound")
+        folder.hasMaster = false
+        var complete = whole
+        complete.state = .complete
+        suite.expect(ForkMeetingRecoveryPlan.needsInspection(.success(complete), contents: folder),
+                     "left behind by a final pass that ended right after its file, it is looked at, and goes")
     }
 
     // MARK: - The island (Finish A)
@@ -534,17 +614,17 @@ enum ForkMeetingFinishDTests {
         }
         suite.expect(wrong.isEmpty, "in every language, its own words with the minutes: \(wrong)")
 
-        // Killed while recording: the kept minutes are the file's own, the
-        // recovery measures them in its length and leaves the gap alone.
+        // Killed while recording: the master holds only what came after the
+        // click; the meeting's length counts the kept minutes before it.
         var crashed = meeting
         crashed.state = .recording
-        crashed.recordedSeconds = 252
+        crashed.recordedSeconds = 0
         let facts = ForkMeetingRecoveryPlan.Facts(sidecar: .success(crashed), master: .init(duration: 300))
         let action = ForkMeetingRecoveryPlan.plan(facts)
         let patch = ForkMeetingRecoveryPlan.patch(for: action, facts: facts)
         let recovered = patch.map { $0.applied(to: crashed) }
         suite.expect(action == .finalize(stopReason: .crash, recovered: true, discardDrafts: false)
-                        && recovered?.recordedSeconds == 300 && recovered?.gaps == crashed.gaps
+                        && recovered?.recordedSeconds == 552 && recovered?.gaps == crashed.gaps
                         && recovered?.isAudioOnly == true,
                      "recovered, its .m4a is finalized again with the kept minutes counted and still said")
         suite.expect(ForkMeetingTranscript.source(video: contents.media(audioOnly: true), hasMaster: false) == "\(name).m4a",

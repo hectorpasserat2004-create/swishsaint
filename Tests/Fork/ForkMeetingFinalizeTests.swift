@@ -112,7 +112,7 @@ enum ForkMeetingFinalizeTests {
         let run = finalizer.components(separatedBy: "private func run(_ job: Job) async -> Outcome {").dropFirst().first?
             .components(separatedBy: "\n    }\n").first ?? ""
         let removal = run.range(of: "manager.removeItem(at: paths.master)")
-        let copied = run.range(of: "try await copy(job, paths: paths, masterSeconds: masterSeconds)")
+        let copied = run.range(of: "try await copy(job, paths: paths, masterSeconds: masterSeconds")
         suite.expect(removal != nil && copied != nil && copied!.upperBound < removal!.lowerBound,
                      "the master is removed only after the copy is written, verified and in place")
         let copy = finalizer.components(separatedBy: "private func copy(").dropFirst().first?

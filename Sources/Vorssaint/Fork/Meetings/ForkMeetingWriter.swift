@@ -83,6 +83,8 @@ final class ForkMeetingWriter: @unchecked Sendable {
     private var converters: [AVAudioConverter?] = [nil, nil]
     /// Host seconds of each track's last real buffer, 0 for none yet.
     private var lastFed: [Double] = [0, 0]
+    /// Each track's first real sound was told (`onFirstSound`).
+    private var heardFirst = [false, false]
     /// Each track's buffers its input was not ready for, oldest first, and
     /// how many samples they hold (`writeSamples`).
     private var held: [[CMSampleBuffer]] = [[], []]
@@ -238,107 +240,24 @@ final class ForkMeetingWriter: @unchecked Sendable {
     /// asked to start. Later sources (a stream rebuilt after a sleep) keep
     /// this origin.
     ///
-    /// `lookback`, asked with that instant, gives the sound kept before it
-    /// ("the last 5 minutes"): the file then begins that much earlier, both
-    /// tracks open with it and the picture is black until the instant
-    /// itself (no picture at all without a video track: the `.m4a` of a
-    /// meeting recorded as sound only). Answers how many seconds come
-    /// before the click (0 without).
-    @discardableResult
-    func beginSession(atHostTime time: Double, lookback: ((Double) -> Lookback?)? = nil) -> TimeInterval {
+    /// Minutes kept before the click never come here: they are written
+    /// beside this file (`ForkMeetingLookbackHandOver`), and the final pass
+    /// puts them first. Nothing but live samples goes through this queue.
+    func beginSession(atHostTime time: Double) {
         queue.sync {
-            let kept = lookback?(time)
-            let seconds = kept?.plan.seconds ?? 0
-            guard !started, writer.status == .writing, pauseClock.begin(at: time - seconds) else {
-                kept?.release()
-                return 0
-            }
+            guard !started, writer.status == .writing, pauseClock.begin(at: time) else { return }
             writer.startSession(atSourceTime: .zero)
             started = true
             startTicker()
-            // On this queue before any live sample: those come after, and
-            // what they overlap of it is skipped by the tracks' timelines.
-            if let kept { queue.async { [self] in writeLookback(kept) } }
-            return seconds
         }
     }
 
     // MARK: Finish D
 
-    /// The sound kept in memory before the click, handed over to the file
-    /// once: the rings are this file's own (`ForkMeetingLookbackRing.handOver`),
-    /// emptied as soon as they are written.
-    struct Lookback {
-        let plan: ForkMeetingLookbackPlan
-        /// The meeting's sound, then the microphone, as `Track` orders them.
-        let rings: [ForkMeetingLookbackRing]
-
-        func release() { rings.forEach { $0.clear() } }
-    }
-
-    /// Writer queue. Second by second, the black picture (when the file has
-    /// one), then each track's silence or kept sound, 16 kHz brought to
-    /// 48 kHz by linear steps, so every sample lands where its host time
-    /// says. An input that is not ready is waited for a little (nothing
-    /// here is real time yet).
-    private func writeLookback(_ kept: Lookback) {
-        defer { kept.release() }
-        let plan = kept.plan
-        let total = Int64((plan.seconds * Self.sampleRate).rounded())
-        if placeholder == nil, let outputSize { placeholder = Self.blackFrame(outputSize) }
-        var second: Int64 = 0
-        while second * Int64(Self.sampleRate) < total, !failed {
-            if let placeholder, let videoInput {
-                waitUntilReady(videoInput)
-                writeVideo(placeholder, at: CMTime(value: second, timescale: 1))
-            }
-            let from = second * Int64(Self.sampleRate)
-            let count = min(Int64(Self.sampleRate), total - from)
-            for track in Track.allCases where track.rawValue < plan.tracks.count && track.rawValue < kept.rings.count {
-                let samples = Self.lookbackSamples(plan.tracks[track.rawValue], ring: kept.rings[track.rawValue],
-                                                   from: from, count: Int(count))
-                guard let placement = timelines[track.rawValue].place(start: from, count: count) else { continue }
-                waitUntilReady(audioInputs[track.rawValue])
-                writeSamples(Array(samples.dropFirst(Int(placement.skip))), at: placement.start, track: track)
-            }
-            second += 1
-        }
-        let now = Self.hostSeconds()
-        for track in Track.allCases { lastFed[track.rawValue] = now }
-    }
-
-    /// `count` samples at 48 kHz from file sample `from`: silence before the
-    /// track's kept sound and after it.
-    static func lookbackSamples(_ track: ForkMeetingLookbackPlan.Track, ring: ForkMeetingLookbackRing,
-                                from: Int64, count: Int) -> [Float] {
-        var out = [Float](repeating: 0, count: count)
-        let rate = sampleRate, kept = ForkMeetingLookbackRing.sampleRate
-        let start = Int64((track.silence * rate).rounded())
-        let end = start + Int64((track.seconds * rate).rounded())
-        let first = max(from, start), last = min(from + Int64(count), end)
-        guard first < last else { return out }
-        // The ring's samples covering [first, last), one more for the steps.
-        let offset = Double(first - start) / rate
-        let needed = Int((Double(last - first) / rate * kept).rounded(.up)) + 2
-        let source = ring.read(from: track.from + offset, count: needed)
-        let step = kept / rate
-        for index in first..<last {
-            let position = Double(index - first) * step
-            let below = Int(position)
-            guard below + 1 < source.count else { break }
-            let fraction = Float(position - Double(below))
-            out[Int(index - from)] = source[below] + (source[below + 1] - source[below]) * fraction
-        }
-        return out
-    }
-
-    private func waitUntilReady(_ input: AVAssetWriterInput) {
-        var waited = 0
-        while !input.isReadyForMoreMediaData, waited < 500 {
-            usleep(1_000)
-            waited += 1
-        }
-    }
+    /// Writer queue: a track's first real sound, `seconds` into the file
+    /// (silence written before it does not count). Where the kept minutes
+    /// stop for that track, so the click leaves no hole.
+    var onFirstSound: ((Track, Double) -> Void)?
 
     /// A screen frame, timed on the host clock. Nothing without picture.
     func appendVideo(_ sample: CMSampleBuffer) {
@@ -367,6 +286,10 @@ final class ForkMeetingWriter: @unchecked Sendable {
             }
             let kept = samples.dropFirst(Int(placement.skip))
             lastFed[track.rawValue] = Self.hostSeconds()
+            if !heardFirst[track.rawValue], !kept.isEmpty {
+                heardFirst[track.rawValue] = true
+                onFirstSound?(track, Double(placement.start) / Self.sampleRate)
+            }
             // A drift absorbed: the first sample held a little longer.
             let held = placement.stretch > 0 && !kept.isEmpty
                 ? [Float](repeating: kept[kept.startIndex], count: Int(placement.stretch)) : []
@@ -659,7 +582,8 @@ final class ForkMeetingWriter: @unchecked Sendable {
     }
 
     /// Mono Float32 samples as a buffer stamped at sample `start`.
-    private static func sampleBuffer(_ samples: [Float], start: Int64, format: AVAudioFormat) -> CMSampleBuffer? {
+    /// Mono Float32 samples of `format` as a buffer at file sample `start`.
+    static func sampleBuffer(_ samples: [Float], start: Int64, format: AVAudioFormat) -> CMSampleBuffer? {
         guard let count = AVAudioFrameCount(exactly: samples.count),
               let pcm = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: count),
               let channel = pcm.floatChannelData?[0] else { return nil }

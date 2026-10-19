@@ -110,3 +110,73 @@ enum ForkMeetingFinalPass {
         return value >= 1 ? last < 1 : value - last >= 0.01
     }
 }
+
+// MARK: Finish D
+
+/// The minutes kept before the click, in the final pass. They never go into
+/// the master: a fragmented file written in real time, whose fragments a
+/// crash must find in order, cannot take minutes of sound in one burst. The
+/// recording writes them beside it (`ForkMeetingFolder.lookbackName`), and
+/// the final pass, or the recovery's, puts them first:
+///
+/// ```
+/// kept     ┃ meeting ─────────────┃┄ e0
+///          ┃ microphone ──────────┃┄┄┄ e1
+/// master                          ┃ (silence until e0) meeting ──────…
+///                                 ┃ (silence until e1) microphone ───…
+/// final    ┃ kept sound ───────────── then the master's, from e0 / e1 ─…
+///          ┃ (no picture)         ┃ picture ─────────────────────────…
+///          0                      seconds (the click)
+/// ```
+///
+/// Each track goes on past the click in the kept file until the
+/// master's own sound for it begins (`joins`), so the click leaves no hole.
+/// The picture starts at the click: before it, no frame at all, which
+/// QuickTime and AVPlayer show black. Times in `meeting.json` already count
+/// the kept minutes; when their file did not survive, the meeting begins at
+/// the click instead (`ForkMeetingSidecar.withoutLookback`).
+enum ForkMeetingLookbackJoin {
+    enum Decision: Equatable {
+        /// Nothing was kept.
+        case none
+        /// The kept file opens the final one.
+        case join(seconds: Double, joins: [Double])
+        /// Kept, but its file is not whole (the app ended before it was
+        /// written, or it does not open): the meeting goes on without it.
+        case drop
+    }
+
+    /// `fileTracks`: the sound tracks the kept file opens with, `nil` when
+    /// it is missing or does not open.
+    static func decide(_ sidecar: ForkMeetingSidecar?, fileTracks: Int?) -> Decision {
+        guard let sidecar, let seconds = sidecar.lookbackSeconds else { return .none }
+        guard let joins = sidecar.lookbackJoins, !joins.isEmpty,
+              joins.allSatisfy({ $0.isFinite && $0 >= 0 && $0 <= ForkMeetingLookbackPlan.cutLimit + 1 }),
+              let fileTracks, fileTracks >= joins.count else { return .drop }
+        return .join(seconds: seconds, joins: joins)
+    }
+
+    /// Where a piece of a track goes in the final file, in seconds.
+    struct Piece: Equatable {
+        enum Source: Equatable { case kept, master }
+        var source: Source
+        /// The range of the source taken.
+        var from: Double
+        var to: Double
+        /// Where it starts in the final file.
+        var at: Double
+    }
+
+    /// Source track `index`: the kept sound up to the click and past it by
+    /// its join, then the master's from there. `keptLength` and
+    /// `masterLength`: the tracks' own lengths, nothing taken beyond them.
+    static func pieces(seconds: Double, join: Double, keptLength: Double, masterLength: Double) -> [Piece] {
+        var pieces: [Piece] = []
+        let keptEnd = min(seconds + join, keptLength)
+        if keptEnd > 0 { pieces.append(Piece(source: .kept, from: 0, to: keptEnd, at: 0)) }
+        if masterLength > join {
+            pieces.append(Piece(source: .master, from: join, to: masterLength, at: seconds + join))
+        }
+        return pieces
+    }
+}

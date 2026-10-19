@@ -261,7 +261,7 @@ struct ForkMeetingRenameTable: Equatable {
 enum ForkMeetingLibraryLock {
     static func mayBeHeldElsewhere(_ sidecar: Result<ForkMeetingSidecar, ForkMeetingSidecarFault>,
                                    contents: ForkMeetingFolder.Contents) -> Bool {
-        if contents.hasMaster || contents.hasVideoDraft || contents.hasAudioDraft { return true }
+        if contents.hasMaster || contents.hasVideoDraft || contents.hasAudioDraft || contents.hasLookback { return true }
         guard case let .success(meeting) = sidecar else { return true }
         switch meeting.state {
         case .recording?, .finalizing?, .interrupted?: return true

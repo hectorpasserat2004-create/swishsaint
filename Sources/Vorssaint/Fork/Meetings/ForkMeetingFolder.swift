@@ -38,6 +38,10 @@ enum ForkMeetingFolder {
     /// never a removal followed by a write.
     static let videoDraftName = ".finalizing.mp4"
     static let audioDraftName = ".finalizing.m4a"
+    /// The minutes kept before the click (Finish D), written beside the
+    /// master once the recording started, never into it: the final pass
+    /// puts them first, then this goes.
+    static let lookbackName = ".lookback.m4a"
 
     // MARK: - Root
 
@@ -275,6 +279,8 @@ enum ForkMeetingFolder {
         var hasMaster = false
         var hasVideoDraft = false
         var hasAudioDraft = false
+        /// The kept minutes, waiting for the final pass (`lookbackName`).
+        var hasLookback = false
         /// The transcript (`.txt`) and its subtitles (`.srt`): only the ones
         /// this app wrote (`meeting.json`'s `transcript.files`), never a text
         /// file the person put beside the meeting, whatever its name.
@@ -300,6 +306,7 @@ enum ForkMeetingFolder {
             case masterName: contents.hasMaster = true
             case videoDraftName: contents.hasVideoDraft = true
             case audioDraftName: contents.hasAudioDraft = true
+            case lookbackName: contents.hasLookback = true
             default:
                 guard !name.hasPrefix(".") else { continue }
                 let ext = (name as NSString).pathExtension.lowercased()

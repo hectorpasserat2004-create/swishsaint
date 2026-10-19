@@ -269,6 +269,7 @@ struct ForkMeetingListenPlan: Equatable {
         let before = plan(old), after = plan(new)
         return before.keeps && (!after.keeps || old.meeting != new.meeting)
     }
+
 }
 
 /// A few minutes of one sound, in memory only: 16 kHz mono, 16-bit, a
@@ -276,26 +277,36 @@ struct ForkMeetingListenPlan: Equatable {
 /// the host clock: a buffer late or early leaves silence, or overlaps
 /// what came before, so the end of the circle is always "now".
 ///
-/// It is never written anywhere by itself: a recording that starts reads it
-/// once (`freeze`, then `read`), and `clear` fills it with zeros and lets
-/// its memory go. Thread safe.
+/// It is never written anywhere by itself. A recording that starts lets it
+/// go on past the click until its own sound for that track comes (`cut`),
+/// then writes it once into the meeting's folder
+/// (`ForkMeetingLookbackFile`). `clear` fills it with zeros and lets its
+/// memory go. Thread safe.
 final class ForkMeetingLookbackRing: @unchecked Sendable {
     static let sampleRate: Double = 16_000
+    /// What the offer keeps, and says it keeps.
     static let seconds: TimeInterval = 300
-    /// 10 ms: closer than this, a buffer follows the previous one as is.
-    static let tolerance = 160
+    /// Room past those 5 minutes for the seconds after the click, before the
+    /// recording's own sound takes over (`ForkMeetingLookbackPlan.cutLimit`).
+    static let margin: TimeInterval = 5
+    /// 2 ms: closer than this, a buffer follows the previous one as is (a
+    /// device's timestamps wander a few tenths of a millisecond). A buffer
+    /// lost leaves its silence: closing up over it would move everything
+    /// kept before it earlier.
+    static let tolerance = 32
 
     let capacity: Int
     private let lock = NSLock()
     // Under `lock`.
     private var storage: [Int16] = []
-    /// Samples written since the start (or the last `clear`).
+    /// Samples written since the start.
     private var written = 0
     /// The host time just after the last sample.
     private var endHost: Double?
-    private var frozen = false
+    /// Nothing from this host time on (`cut`).
+    private var limit: Double?
 
-    init(seconds: TimeInterval = ForkMeetingLookbackRing.seconds) {
+    init(seconds: TimeInterval = ForkMeetingLookbackRing.seconds + ForkMeetingLookbackRing.margin) {
         capacity = max(1, Int(seconds * Self.sampleRate))
     }
 
@@ -303,7 +314,11 @@ final class ForkMeetingLookbackRing: @unchecked Sendable {
     func append(_ samples: UnsafeBufferPointer<Float>, startHost: Double) {
         guard !samples.isEmpty, startHost.isFinite else { return }
         lock.withLock {
-            guard !frozen else { return }
+            var count = samples.count
+            if let limit {
+                count = min(count, Int(((limit - startHost) * Self.sampleRate).rounded()))
+                guard count > 0 else { return }
+            }
             // Allocated only once something is kept.
             if storage.isEmpty { storage = [Int16](repeating: 0, count: capacity) }
             var skip = 0
@@ -312,14 +327,14 @@ final class ForkMeetingLookbackRing: @unchecked Sendable {
                 if offset > Self.tolerance {
                     writeSilence(offset)
                 } else if offset < -Self.tolerance {
-                    skip = min(samples.count, -offset)
+                    skip = min(count, -offset)
                 }
             }
-            for sample in samples.dropFirst(skip) {
+            for sample in samples.prefix(count).dropFirst(skip) {
                 storage[written % capacity] = Int16(max(-1, min(1, sample)) * Float(Int16.max))
                 written += 1
             }
-            endHost = startHost + Double(samples.count) / Self.sampleRate
+            endHost = startHost + Double(count) / Self.sampleRate
         }
     }
 
@@ -349,12 +364,11 @@ final class ForkMeetingLookbackRing: @unchecked Sendable {
         lock.withLock { storage.count * MemoryLayout<Int16>.stride }
     }
 
-    /// Nothing more is taken: a recording reads what it holds now.
-    func freeze() {
-        lock.withLock { frozen = true }
+    /// Takes nothing from `host` on: the recording's own sound starts
+    /// there. A buffer across it keeps its part before.
+    func cut(atHost host: Double) {
+        lock.withLock { limit = min(limit ?? host, host) }
     }
-
-    var isFrozen: Bool { lock.withLock { frozen } }
 
     /// The samples from host time `from`, `count` of them, as floats;
     /// zeros where it holds nothing (before its start, after its end).
@@ -375,35 +389,6 @@ final class ForkMeetingLookbackRing: @unchecked Sendable {
         }
     }
 
-    /// Moves what it holds into a new ring, at once and without a copy, for
-    /// a recording to read; this one is left empty and takes nothing more.
-    /// Whatever empties this one afterwards never touches what the
-    /// recording took.
-    func handOver() -> ForkMeetingLookbackRing {
-        let taken = ForkMeetingLookbackRing(capacity: capacity)
-        lock.withLock {
-            taken.adopt(storage: storage, written: written, endHost: endHost)
-            storage = []
-            written = 0
-            endHost = nil
-            frozen = true
-        }
-        return taken
-    }
-
-    private init(capacity: Int) {
-        self.capacity = capacity
-    }
-
-    private func adopt(storage: [Int16], written: Int, endHost: Double?) {
-        lock.withLock {
-            self.storage = storage
-            self.written = written
-            self.endHost = endHost
-            frozen = true
-        }
-    }
-
     /// Fills it with zeros and lets its memory go: what was kept is gone.
     func clear() {
         lock.withLock {
@@ -411,14 +396,14 @@ final class ForkMeetingLookbackRing: @unchecked Sendable {
             storage = []
             written = 0
             endHost = nil
-            frozen = false
         }
     }
 }
 
-/// How the kept sound goes before a recording: both tracks start together
-/// at the file's zero, `seconds` before the first frame of the picture; a
-/// track that kept less begins with silence.
+/// How the kept sound goes before a recording: both tracks start together,
+/// `seconds` before the click; a track that kept less begins with
+/// silence. Each goes on past the click up to where the recording's own
+/// sound for it begins (`joins`, seconds after the click): no hole there.
 struct ForkMeetingLookbackPlan: Equatable {
     struct Track: Equatable {
         /// Silence first, in seconds.
@@ -428,29 +413,43 @@ struct ForkMeetingLookbackPlan: Equatable {
         var seconds: TimeInterval
     }
 
-    /// How much sound comes before the picture.
+    /// How much sound comes before the click.
     var seconds: TimeInterval
     var tracks: [Track]
+    /// Per track, how far past the click it goes: 0 up to `cutLimit`.
+    var joins: [TimeInterval] = []
 
     /// Less than this is not worth a "sound only" beginning.
     static let minimum: TimeInterval = 1
+    /// A track's own sound that has not come by then (a tap that never
+    /// starts, no microphone) leaves its kept sound stopped there.
+    static let cutLimit: TimeInterval = 3
+
+    /// Each track's length in the kept file.
+    var lengths: [TimeInterval] { joins.map { seconds + $0 } }
 
     /// `spans`: what each ring holds (host seconds), `nil` for an empty one;
-    /// `zero`: the host time the picture starts at. `nil`: nothing to add.
-    static func plan(spans: [(start: Double, end: Double)?], zero: Double,
+    /// `zero`: the host time of the click; `cuts`: where each track's own
+    /// sound began in the recording (host seconds), the click when `nil`.
+    /// `nil`: nothing to add.
+    static func plan(spans: [(start: Double, end: Double)?], zero: Double, cuts: [Double]? = nil,
                      limit: TimeInterval = ForkMeetingLookbackRing.seconds) -> ForkMeetingLookbackPlan? {
         let starts = spans.compactMap { $0?.start }.filter { $0 < zero }
         guard let earliest = starts.min() else { return nil }
         let seconds = min(limit, zero - earliest)
         guard seconds >= minimum else { return nil }
         let begin = zero - seconds
-        let tracks = spans.map { span -> Track in
+        let joins = spans.indices.map { index -> TimeInterval in
+            let cut = cuts.flatMap { index < $0.count ? $0[index] : nil } ?? zero
+            return cut.isFinite ? min(cutLimit, max(0, cut - zero)) : 0
+        }
+        let tracks = spans.enumerated().map { index, span -> Track in
             guard let span, span.start < zero else { return Track(silence: seconds, from: zero, seconds: 0) }
             let from = max(begin, span.start)
-            let to = min(zero, span.end)
+            let to = min(zero + joins[index], span.end)
             return Track(silence: from - begin, from: from, seconds: max(0, to - from))
         }
-        return ForkMeetingLookbackPlan(seconds: seconds, tracks: tracks)
+        return ForkMeetingLookbackPlan(seconds: seconds, tracks: tracks, joins: joins)
     }
 }
 

@@ -452,7 +452,8 @@ final class ForkMeetingStore: @unchecked Sendable {
         let audioOnly = (try? sidecar.get())?.isAudioOnly == true
         let video = contents.media(audioOnly: audioOnly).map { folder.appendingPathComponent($0) }
         var facts = ForkMeetingRecoveryPlan.Facts(sidecar: sidecar,
-                                                  hasDrafts: contents.hasVideoDraft || contents.hasAudioDraft)
+                                                  hasDrafts: contents.hasVideoDraft || contents.hasAudioDraft
+                                                      || contents.hasLookback)
         if contents.hasMaster {
             facts.master = ForkMeetingRecoveryPlan.Media(duration: await ForkMeetingFinalizer.playableSeconds(at: master))
         }
@@ -500,7 +501,9 @@ final class ForkMeetingStore: @unchecked Sendable {
     }
 
     private func discardDraftFiles(in folder: URL) {
-        for name in [ForkMeetingFolder.videoDraftName, ForkMeetingFolder.audioDraftName] {
+        // The kept minutes too: the final file, whole, has them already or
+        // went on without them.
+        for name in [ForkMeetingFolder.videoDraftName, ForkMeetingFolder.audioDraftName, ForkMeetingFolder.lookbackName] {
             try? FileManager.default.removeItem(at: folder.appendingPathComponent(name))
         }
     }
