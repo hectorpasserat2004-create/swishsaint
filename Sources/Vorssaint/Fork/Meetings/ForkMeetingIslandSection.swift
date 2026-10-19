@@ -27,6 +27,8 @@ struct ForkMeetingIslandSection: View {
     @ObservedObject private var meetings = ForkMeetingService.shared
     @ObservedObject private var l10n = L10n.shared
     @AppStorage(ForkDefaultsKey.meetingsShortcut) private var shortcutStorage = ""
+    @AppStorage(ForkDefaultsKey.meetingsNotifyOffers) private var notifiesOffers = true
+    @AppStorage(ForkDefaultsKey.meetingsApps) private var apps = ForkMeetingPolicies.defaultJSON
     @Environment(\.notchSettingsPreview) private var preview
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var opened: String?
@@ -170,11 +172,12 @@ struct ForkMeetingIslandSection: View {
         }
     }
 
-    /// The shortcut that records, when there is one; else how a meeting
-    /// is offered.
-    private var idleCaption: String {
-        guard let shortcut = ForkMeetingShortcut.decode(shortcutStorage) else { return page.idleCaption }
-        return page.idleShortcut(shortcut.displayString)
+    /// How a meeting is offered, when calls are, and the shortcut that
+    /// records, when there is one.
+    private var idleCaption: String? {
+        ForkMeetingIslandPage.idleCaption(
+            offersCalls: ForkMeetingIslandPage.offersCalls(notifies: notifiesOffers, policies: ForkMeetingPolicies(json: apps)),
+            shortcut: ForkMeetingShortcut.decode(shortcutStorage)?.displayString, strings: page)
     }
 
     private func recordButton(title: String) -> some View {
@@ -441,12 +444,21 @@ struct ForkMeetingIslandRow: View {
     var body: some View {
         let badges = badges
         VStack(alignment: .leading, spacing: 8) {
-            Button(action: toggle) { summary(badges) }
-                .buttonStyle(NotchButtonStyle(lifts: false))
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(accessibilityLabel(badges))
-                .accessibilityHint(open ? page.hideDetails : page.showDetails)
-                .accessibilityAddTraits(.isButton)
+            HStack(alignment: .center, spacing: 6) {
+                Button(action: toggle) { summary(badges) }
+                    .buttonStyle(NotchButtonStyle(lifts: false))
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(accessibilityLabel(badges))
+                    .accessibilityHint(open ? page.hideDetails : page.showDetails)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAction(named: Text(page.openInWindow), window)
+                // Beside the row, as the clipboard's actions are: its own
+                // target, never a part of the row's button.
+                if hovering || open {
+                    NotchIconButton(symbol: "arrow.up.forward.app", title: page.openInWindow, action: window)
+                        .transition(.opacity)
+                }
+            }
             if open { details }
         }
         .padding(.horizontal, 10)
@@ -500,10 +512,6 @@ struct ForkMeetingIslandRow: View {
                 }
                 .font(.system(size: 10))
                 .foregroundStyle(.white.opacity(0.45))
-            }
-            if hovering || open {
-                NotchIconButton(symbol: "arrow.up.forward.app", title: page.openInWindow, action: window)
-                    .transition(.opacity)
             }
         }
         .contentShape(Rectangle())
@@ -568,14 +576,11 @@ struct ForkMeetingIslandRow: View {
             .font(.system(size: 9.5))
             .foregroundStyle(.white.opacity(0.4))
             Spacer(minLength: 6)
-            NotchIconButton(symbol: "play.fill", title: page.actionOpen) {
-                guard let url = library.playableURL(entry) else { return }
-                NSWorkspace.shared.open(url)
-            }
-            .disabled(library.playableURL(entry) == nil)
-            NotchIconButton(symbol: "folder", title: text.actionShow) { library.showInFinder(entry) }
+            NotchIconButton(symbol: "play.fill", title: page.actionOpen, action: openMedia)
+                .disabled(library.playableURL(entry) == nil)
+            NotchIconButton(symbol: "folder", title: text.actionShow, action: showInFinder)
             if entry.transcript != nil {
-                NotchIconButton(symbol: "doc.text", title: text.actionOpenTranscript) { library.openTranscript(entry) }
+                NotchIconButton(symbol: "doc.text", title: text.actionOpenTranscript, action: openTranscript)
             }
             if transcriber.phase(id: entry.id, folder: folder) == .idle, entry.transcript == nil, transcribable {
                 NotchIconButton(symbol: "waveform.and.mic", title: text.actionTranscribe) { library.transcribe(entry) }
@@ -613,14 +618,30 @@ struct ForkMeetingIslandRow: View {
         return items
     }
 
+    /// What opens another app: the island closes first, as ↗ does.
+    private func openMedia() {
+        guard let url = library.playableURL(entry) else { return }
+        NotchService.shared.perform { NSWorkspace.shared.open(url) }
+    }
+
+    private func showInFinder() {
+        let entry = entry, library = library
+        NotchService.shared.perform { library.showInFinder(entry) }
+    }
+
+    private func openTranscript() {
+        let entry = entry, library = library
+        NotchService.shared.perform { library.openTranscript(entry) }
+    }
+
     @ViewBuilder private var menuItems: some View {
         Button(page.openInWindow, action: window)
-        if let url = library.playableURL(entry) {
-            Button(page.actionOpen) { NSWorkspace.shared.open(url) }
+        if library.playableURL(entry) != nil {
+            Button(page.actionOpen, action: openMedia)
         }
-        Button(text.actionShow) { library.showInFinder(entry) }
+        Button(text.actionShow, action: showInFinder)
         if entry.transcript != nil {
-            Button(text.actionOpenTranscript) { library.openTranscript(entry) }
+            Button(text.actionOpenTranscript, action: openTranscript)
         }
         Divider()
         Button(text.actionCopyPath) { library.copyPath(entry) }
@@ -745,7 +766,8 @@ private struct ForkMeetingIslandFiles: View {
         HStack(spacing: 5) {
             ForEach(files, id: \.name) { file in
                 Button {
-                    NSWorkspace.shared.open(folder.appendingPathComponent(file.name))
+                    let url = folder.appendingPathComponent(file.name)
+                    NotchService.shared.perform { NSWorkspace.shared.open(url) }
                 } label: {
                     Group {
                         if titled {

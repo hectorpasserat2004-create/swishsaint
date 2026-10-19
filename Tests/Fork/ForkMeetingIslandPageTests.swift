@@ -96,6 +96,20 @@ enum ForkMeetingIslandPageTests {
                      "a call detected is offered only when a meeting can start now")
         suite.expect(P.top(recording: false, starting: false, detected: false, canStart: true) == .idle,
                      "nothing going on: the button that records a meeting")
+
+        let providers = ForkMeetingProviderTable.current.providers
+        let allNever = ForkMeetingPolicies(json: "{" + providers.map { "\"\($0.id)\":\"never\"" }.joined(separator: ",") + "}")
+        let defaults = ForkMeetingPolicies(json: ForkMeetingPolicies.defaultJSON)
+        suite.expect(P.offersCalls(notifies: true, policies: defaults) && !P.offersCalls(notifies: false, policies: defaults)
+                        && !P.offersCalls(notifies: true, policies: allNever),
+                     "calls are offered only with their offers wanted and one service not set to Never")
+        let english = ForkMeetingIslandStrings.strings(.enUS)
+        suite.expect(P.idleCaption(offersCalls: true, shortcut: "⌃⌥⌘R", strings: english)
+                        == "A call is offered for recording as soon as it starts. Or press ⌃⌥⌘R."
+                        && P.idleCaption(offersCalls: true, shortcut: nil, strings: english) == english.idleCaption
+                        && P.idleCaption(offersCalls: false, shortcut: "⌃⌥⌘R", strings: english) == "⌃⌥⌘R"
+                        && P.idleCaption(offersCalls: false, shortcut: nil, strings: english) == nil,
+                     "the idle card never promises an offer that will not come; the shortcut shows alone then")
     }
 
     // MARK: - The list

@@ -37,6 +37,26 @@ enum ForkMeetingIslandPage {
         ordered.filter { !(showsLive && $0.status.isInProgress) }
     }
 
+    /// Whether a call is offered when it starts: its offers are wanted
+    /// (`fork.meetings.notify.offers`) and one service at least is not set
+    /// to "Never".
+    static func offersCalls(notifies: Bool, policies: ForkMeetingPolicies,
+                            providers: [ForkMeetingProvider] = ForkMeetingProviderTable.current.providers) -> Bool {
+        notifies && providers.contains { policies.policy(for: $0) != .never }
+    }
+
+    /// The idle card's line: how a meeting is offered, only when calls are,
+    /// then the shortcut, alone when nothing is offered; nothing without
+    /// either.
+    static func idleCaption(offersCalls: Bool, shortcut: String?, strings: ForkMeetingIslandStrings) -> String? {
+        switch (offersCalls, shortcut) {
+        case let (true, shortcut?): return strings.idleCaption + " " + strings.idleShortcut(shortcut)
+        case (true, nil): return strings.idleCaption
+        case let (false, shortcut?): return shortcut
+        case (false, nil): return nil
+        }
+    }
+
     /// A change the folder watch saw, for the island's page: the folders
     /// this app is still writing are left out (a recording writes every
     /// 2 s), and nothing is scanned when only they changed. A change of the
