@@ -23,6 +23,7 @@ enum ForkMeetingFinishDTests {
         sidecar(suite)
         soundOnlyMeeting(suite)
         fileTime(suite)
+        offersSilenced(suite)
     }
 
     private static let t0 = Date(timeIntervalSinceReferenceDate: 800_000_000)
@@ -370,6 +371,36 @@ enum ForkMeetingFinishDTests {
         let entry = ForkMeetingLibraryEntry(folderName: "2026-10-19 10h00 — Point hebdo", sidecar: .success(back),
                                             contents: contents)
         suite.expect(entry?.soundOnlySeconds == 252, "and the library's detail reads it")
+    }
+
+    // MARK: - The notification switches (Finish B)
+
+    /// The nudge is an offer again, and the kept sound is said only on the
+    /// offer's card: with the offers silenced, nothing listens, nothing is
+    /// kept, and what was kept goes.
+    private static func offersSilenced(_ suite: TestSuite) {
+        let silenced = ForkMeetingListenPlan.plan(facts { $0.offersShown = false })
+        let keepingSilenced = ForkMeetingListenPlan.plan(facts { $0.offersShown = false; $0.lookbackOn = true })
+        suite.expect(!silenced.listens && !keepingSilenced.listens && !keepingSilenced.keeps,
+                     "offers silenced: no nudge, nothing listens, nothing kept, the last 5 minutes on or not")
+        suite.expect(ForkMeetingListenPlan.clears(from: facts { $0.lookbackOn = true },
+                                                  to: facts { $0.lookbackOn = true; $0.offersShown = false }),
+                     "silencing the offers while sound is kept empties it")
+        suite.expect(ForkMeetingListenPlan.Facts().offersShown && ForkMeetingNotifyEvent.isOn(.offers, defaults: freshDefaults()),
+                     "the offers' word is on by default, and so the nudge")
+        var wrong: [String] = []
+        for language in AppLanguage.allCases {
+            let s = ForkMeetingStrings.strings(language)
+            if s.nudgeOffersOff.isEmpty || !s.nudgeOffersOff.contains(s.notifyTitle) { wrong.append(language.rawValue) }
+        }
+        suite.expect(wrong.isEmpty, "under the nudge, the page names the section where the offers were silenced: \(wrong)")
+    }
+
+    private static func freshDefaults() -> UserDefaults {
+        let name = "fork.tests.finish-d.offers"
+        let defaults = UserDefaults(suiteName: name) ?? .standard
+        defaults.removePersistentDomain(forName: name)
+        return defaults
     }
 
     // MARK: - Markers and the transcript (Finish E)

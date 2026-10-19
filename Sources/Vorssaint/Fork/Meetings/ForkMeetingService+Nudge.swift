@@ -46,6 +46,7 @@ extension ForkMeetingService {
         var facts = ForkMeetingListenPlan.Facts()
         facts.nudgeOn = defaults.bool(forKey: ForkDefaultsKey.meetingsNudge)
         facts.lookbackOn = defaults.bool(forKey: ForkDefaultsKey.meetingsLookback)
+        facts.offersShown = ForkMeetingNotifyEvent.isOn(.offers, defaults: defaults)
         let candidate = listenedMeeting()
         facts.meeting = isWanted && consentAcknowledged ? candidate?.identity : nil
         facts.nudgesLeft = facts.meeting.map { listening.nudges.wantsMore(for: $0) } ?? false

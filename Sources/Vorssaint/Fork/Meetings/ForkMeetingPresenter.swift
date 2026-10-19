@@ -140,8 +140,11 @@ final class ForkMeetingPresenter {
             showEndingSoon(until: until)
         case .hideEndingSoon:
             hideEndingSoon()
-        case let .nudgeOffer(offer):
+        // An offer again: silenced with the offers (nothing listens then).
+        case let .nudgeOffer(offer) where ForkMeetingNotifyEvent.isOn(.offers):
             nudgeOffer(offer)
+        case .nudgeOffer:
+            break
         }
         // What was said of a card gone is said again for the next one.
         if ForkMeetingSpoken.forgets(after: effect) { spoken.forget() }

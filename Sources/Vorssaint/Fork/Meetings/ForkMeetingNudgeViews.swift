@@ -83,6 +83,7 @@ struct ForkMeetingForgetRows: View {
     let text: ForkMeetingStrings
     @AppStorage(ForkDefaultsKey.meetingsNudge) private var nudge = true
     @AppStorage(ForkDefaultsKey.meetingsLookback) private var lookback = false
+    @AppStorage(ForkDefaultsKey.meetingsNotifyOffers) private var offers = true
 
     var body: some View {
         Toggle(isOn: $nudge) {
@@ -92,6 +93,13 @@ struct ForkMeetingForgetRows: View {
             }
         }
         .onChange(of: nudge) { _, _ in ForkMeetingService.shared.syncListening() }
+        // Both rows act through the offer: silenced, neither does anything.
+        if !offers {
+            Label(text.nudgeOffersOff, systemImage: "info.circle")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
         Toggle(isOn: $lookback) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(text.lookbackSetting)

@@ -935,6 +935,8 @@ struct ForkMeetingStrings {
     /// Sound only from the start: what the kept minutes are, not the picture.
     let lookbackKeptBeforeOne: String
     let lookbackKeptBeforeFormat: String
+    /// Under the nudge's switch while the offers are silenced.
+    let nudgeOffersOff: String
 
     func voiceNudge(_ meeting: String) -> String { String(format: voiceNudgeFormat, meeting) }
 }
@@ -1472,7 +1474,8 @@ extension ForkMeetingStrings {
         lookbackSoundOnlyOne: "The first minute: sound only",
         lookbackSoundOnlyFormat: "The first %d minutes: sound only",
         lookbackKeptBeforeOne: "The first minute: kept from before the click",
-        lookbackKeptBeforeFormat: "The first %d minutes: kept from before the click"
+        lookbackKeptBeforeFormat: "The first %d minutes: kept from before the click",
+        nudgeOffersOff: "Offers to record are turned off in Notifications and sounds: the offer does not come back, and no sound is kept."
     )
 }
 
@@ -2009,7 +2012,8 @@ extension ForkMeetingStrings {
         lookbackSoundOnlyOne: "O primeiro minuto: só som",
         lookbackSoundOnlyFormat: "Os primeiros %d minutos: só som",
         lookbackKeptBeforeOne: "O primeiro minuto: guardado antes do clique",
-        lookbackKeptBeforeFormat: "Os primeiros %d minutos: guardados antes do clique"
+        lookbackKeptBeforeFormat: "Os primeiros %d minutos: guardados antes do clique",
+        nudgeOffersOff: "As propostas de gravação estão desativadas em Notificações e sons: a proposta não volta e nenhum som é guardado."
     )
 }
 
@@ -2546,7 +2550,8 @@ extension ForkMeetingStrings {
         lookbackSoundOnlyOne: "İlk dakika: yalnızca ses",
         lookbackSoundOnlyFormat: "İlk %d dakika: yalnızca ses",
         lookbackKeptBeforeOne: "İlk dakika: tıklamadan önce tutuldu",
-        lookbackKeptBeforeFormat: "İlk %d dakika: tıklamadan önce tutuldu"
+        lookbackKeptBeforeFormat: "İlk %d dakika: tıklamadan önce tutuldu",
+        nudgeOffersOff: "Kaydetme önerileri Bildirimler ve seslerde kapalı: öneri geri gelmez ve hiçbir ses tutulmaz."
     )
 }
 
@@ -3083,7 +3088,8 @@ extension ForkMeetingStrings {
         lookbackSoundOnlyOne: "Первая минута: только звук",
         lookbackSoundOnlyFormat: "Первые минуты (%d): только звук",
         lookbackKeptBeforeOne: "Первая минута: сохранена до нажатия",
-        lookbackKeptBeforeFormat: "Первые минуты (%d): сохранены до нажатия"
+        lookbackKeptBeforeFormat: "Первые минуты (%d): сохранены до нажатия",
+        nudgeOffersOff: "Предложения записать выключены в разделе «Уведомления и звуки»: предложение не вернётся, звук не сохраняется."
     )
 }
 
@@ -3620,7 +3626,8 @@ extension ForkMeetingStrings {
         lookbackSoundOnlyOne: "El primer minuto: solo sonido",
         lookbackSoundOnlyFormat: "Los primeros %d minutos: solo sonido",
         lookbackKeptBeforeOne: "El primer minuto: guardado antes del clic",
-        lookbackKeptBeforeFormat: "Los primeros %d minutos: guardados antes del clic"
+        lookbackKeptBeforeFormat: "Los primeros %d minutos: guardados antes del clic",
+        nudgeOffersOff: "Las ofertas de grabar están desactivadas en Notificaciones y sonidos: la oferta no vuelve y no se guarda ningún sonido."
     )
 }
 
@@ -4157,7 +4164,8 @@ extension ForkMeetingStrings {
         lookbackSoundOnlyOne: "Prvá minúta: len zvuk",
         lookbackSoundOnlyFormat: "Prvé minúty (%d): len zvuk",
         lookbackKeptBeforeOne: "Prvá minúta: uchovaná pred kliknutím",
-        lookbackKeptBeforeFormat: "Prvé minúty (%d): uchované pred kliknutím"
+        lookbackKeptBeforeFormat: "Prvé minúty (%d): uchované pred kliknutím",
+        nudgeOffersOff: "Ponuky na nahrávanie sú vypnuté v časti Upozornenia a zvuky: ponuka sa nevráti a žiadny zvuk sa neuchová."
     )
 }
 
@@ -4694,7 +4702,8 @@ extension ForkMeetingStrings {
         lookbackSoundOnlyOne: "Die erste Minute: nur Ton",
         lookbackSoundOnlyFormat: "Die ersten %d Minuten: nur Ton",
         lookbackKeptBeforeOne: "Die erste Minute: vor dem Klick behalten",
-        lookbackKeptBeforeFormat: "Die ersten %d Minuten: vor dem Klick behalten"
+        lookbackKeptBeforeFormat: "Die ersten %d Minuten: vor dem Klick behalten",
+        nudgeOffersOff: "Angebote zur Aufnahme sind unter „Mitteilungen und Töne“ aus: Das Angebot kommt nicht zurück, und kein Ton wird behalten."
     )
 }
 
@@ -5231,7 +5240,8 @@ extension ForkMeetingStrings {
         lookbackSoundOnlyOne: "La première minute\u{00A0}: son seulement",
         lookbackSoundOnlyFormat: "Les %d premières minutes\u{00A0}: son seulement",
         lookbackKeptBeforeOne: "La première minute\u{00A0}: gardée avant le clic",
-        lookbackKeptBeforeFormat: "Les %d premières minutes\u{00A0}: gardées avant le clic"
+        lookbackKeptBeforeFormat: "Les %d premières minutes\u{00A0}: gardées avant le clic",
+        nudgeOffersOff: "Les propositions d’enregistrement sont coupées dans Notifications et sons\u{00A0}: la proposition ne revient pas et aucun son n’est gardé."
     )
 }
 
@@ -5768,7 +5778,8 @@ extension ForkMeetingStrings {
         lookbackSoundOnlyOne: "Il primo minuto: solo audio",
         lookbackSoundOnlyFormat: "I primi %d minuti: solo audio",
         lookbackKeptBeforeOne: "Il primo minuto: tenuto da prima del clic",
-        lookbackKeptBeforeFormat: "I primi %d minuti: tenuti da prima del clic"
+        lookbackKeptBeforeFormat: "I primi %d minuti: tenuti da prima del clic",
+        nudgeOffersOff: "Le proposte di registrare sono disattivate in Notifiche e suoni: la proposta non torna e nessun suono viene tenuto."
     )
 }
 
@@ -6305,7 +6316,8 @@ extension ForkMeetingStrings {
         lookbackSoundOnlyOne: "最初の1分：音声のみ",
         lookbackSoundOnlyFormat: "最初の%d分：音声のみ",
         lookbackKeptBeforeOne: "最初の1分：クリック前から保持",
-        lookbackKeptBeforeFormat: "最初の%d分：クリック前から保持"
+        lookbackKeptBeforeFormat: "最初の%d分：クリック前から保持",
+        nudgeOffersOff: "「通知とサウンド」で録画の提案がオフになっています。提案は再表示されず、音声も保持されません。"
     )
 }
 
@@ -6842,7 +6854,8 @@ extension ForkMeetingStrings {
         lookbackSoundOnlyOne: "처음 1분: 소리만",
         lookbackSoundOnlyFormat: "처음 %d분: 소리만",
         lookbackKeptBeforeOne: "처음 1분: 클릭 전부터 보관",
-        lookbackKeptBeforeFormat: "처음 %d분: 클릭 전부터 보관"
+        lookbackKeptBeforeFormat: "처음 %d분: 클릭 전부터 보관",
+        nudgeOffersOff: "알림 및 사운드에서 녹화 제안이 꺼져 있습니다. 제안이 다시 나타나지 않고 소리도 보관되지 않습니다."
     )
 }
 
@@ -7379,7 +7392,8 @@ extension ForkMeetingStrings {
         lookbackSoundOnlyOne: "Перша хвилина: лише звук",
         lookbackSoundOnlyFormat: "Перші хвилини (%d): лише звук",
         lookbackKeptBeforeOne: "Перша хвилина: збережена до натискання",
-        lookbackKeptBeforeFormat: "Перші хвилини (%d): збережені до натискання"
+        lookbackKeptBeforeFormat: "Перші хвилини (%d): збережені до натискання",
+        nudgeOffersOff: "Пропозиції записати вимкнено в розділі «Сповіщення і звуки»: пропозиція не повернеться, звук не зберігається."
     )
 }
 
@@ -7916,7 +7930,8 @@ extension ForkMeetingStrings {
         lookbackSoundOnlyOne: "前 1 分钟：仅声音",
         lookbackSoundOnlyFormat: "前 %d 分钟：仅声音",
         lookbackKeptBeforeOne: "前 1 分钟：点击前已保留",
-        lookbackKeptBeforeFormat: "前 %d 分钟：点击前已保留"
+        lookbackKeptBeforeFormat: "前 %d 分钟：点击前已保留",
+        nudgeOffersOff: "“通知和声音”中已关闭录制提议：提议不会再次出现，也不会保留任何声音。"
     )
 }
 
@@ -8453,7 +8468,8 @@ extension ForkMeetingStrings {
         lookbackSoundOnlyOne: "前 1 分鐘：僅聲音",
         lookbackSoundOnlyFormat: "前 %d 分鐘：僅聲音",
         lookbackKeptBeforeOne: "前 1 分鐘：點按前已保留",
-        lookbackKeptBeforeFormat: "前 %d 分鐘：點按前已保留"
+        lookbackKeptBeforeFormat: "前 %d 分鐘：點按前已保留",
+        nudgeOffersOff: "「通知與聲音」中已關閉錄製提議：提議不會再次出現，也不會保留任何聲音。"
     )
 }
 
@@ -8990,6 +9006,7 @@ extension ForkMeetingStrings {
         lookbackSoundOnlyOne: "頭 1 分鐘：只有聲音",
         lookbackSoundOnlyFormat: "頭 %d 分鐘：只有聲音",
         lookbackKeptBeforeOne: "頭 1 分鐘：按下前已保留",
-        lookbackKeptBeforeFormat: "頭 %d 分鐘：按下前已保留"
+        lookbackKeptBeforeFormat: "頭 %d 分鐘：按下前已保留",
+        nudgeOffersOff: "「通知與聲音」中已關閉錄製提議：提議唔會再出現，亦唔會保留任何聲音。"
     )
 }

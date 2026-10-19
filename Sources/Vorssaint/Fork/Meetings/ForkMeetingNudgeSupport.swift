@@ -235,6 +235,10 @@ struct ForkMeetingListenPlan: Equatable {
         var systemAudio = false
         /// The microphone may be read: never asked for here.
         var microphoneAllowed = false
+        /// Offers shown (`ForkMeetingNotifyEvent.offers`): the nudge is an
+        /// offer again, and the kept sound is said only on the offer's
+        /// card. Turned off, nothing listens and nothing is kept.
+        var offersShown = true
     }
 
     var app = false
@@ -245,7 +249,7 @@ struct ForkMeetingListenPlan: Equatable {
     var listens: Bool { app || microphone }
 
     static func plan(_ facts: Facts) -> ForkMeetingListenPlan {
-        guard facts.meeting != nil, !facts.locked, !facts.asleep, !facts.terminating else {
+        guard facts.meeting != nil, facts.offersShown, !facts.locked, !facts.asleep, !facts.terminating else {
             return ForkMeetingListenPlan()
         }
         let keeps = facts.lookbackOn && (facts.systemAudio || facts.microphoneAllowed)
