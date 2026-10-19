@@ -477,6 +477,10 @@ final class ForkMeetingStore: @unchecked Sendable {
             return nil
         case .markInterrupted:
             if let patch { write(patch, in: folder) }
+            // Nothing readable to join the kept minutes to (killed before the
+            // master's first fragment): they go, or they would be looked at
+            // at every launch.
+            try? manager.removeItem(at: folder.appendingPathComponent(ForkMeetingFolder.lookbackName))
             return Recovery(folder: folder, action: action, outcome: nil, seconds: nil)
         case let .complete(removeMaster, discardDrafts):
             if let patch { write(patch, in: folder) }
@@ -573,12 +577,14 @@ final class ForkMeetingStore: @unchecked Sendable {
                 return .hidden(master)
             }
             _ = apply(ForkMeetingSidecarPatch(state: .complete), in: folder)
-        }
-        // Finish D: the master holds nothing kept before the click; shown as
-        // the meeting, the meeting begins at the click, and the kept file goes.
-        if let patch = ForkMeetingLookbackJoin.shownMaster(meeting) {
-            _ = apply(patch, in: folder)
-            try? manager.removeItem(at: folder.appendingPathComponent(ForkMeetingFolder.lookbackName))
+            // Finish D: the master is now the final file for good, and it
+            // holds nothing kept before the click: the meeting begins at the
+            // click, and the kept file goes. Shown as a second name only,
+            // the next launch's last try may still join them.
+            if let patch = ForkMeetingLookbackJoin.shownMaster(meeting) {
+                _ = apply(patch, in: folder)
+                try? manager.removeItem(at: folder.appendingPathComponent(ForkMeetingFolder.lookbackName))
+            }
         }
         if !audioOnly { addToRecentCaptures(final) }
         return .visible(final)

@@ -461,6 +461,8 @@ final class ForkMeetingRecorder: @unchecked Sendable {
         let now = ForkMeetingWriter.hostSeconds()
         guard lock.withLock({ running }) else { return }
         pauseClock.pause(at: now)
+        // Finish D: nothing kept before the click goes past a pause.
+        lock.withLock { self.handOver }?.pause(atHost: now)
         if stoppingStream {
             lock.withLock {
                 suspended = true
@@ -679,8 +681,9 @@ final class ForkMeetingRecorder: @unchecked Sendable {
             return .failed(.captureFailed)
         }
         let (keptSound, kept) = lock.withLock { (self.handOver, keptSeconds) }
-        // The sources are stopped: whatever track is not cut yet is cut here.
-        keptSound?.finish()
+        // The sources are stopped: whatever track is not cut yet is cut here,
+        // and the kept file waited for, so the final pass joins it.
+        if let keptSound { _ = await keptSound.settle(timeout: ForkMeetingLookbackHandOver.stopWait) }
         let result = await withCheckedContinuation { continuation in
             writer.finish(atHostTime: end) { continuation.resume(returning: $0) }
         }
