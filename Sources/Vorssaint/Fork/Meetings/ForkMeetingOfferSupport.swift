@@ -451,6 +451,12 @@ enum ForkMeetingOfferLater: CaseIterable, Equatable {
     case inFifteen
     case whenever
 
+    /// What "Later ▾" offers: a greyed offer, which could not start then
+    /// either, only "When I want".
+    static func choices(blocked: Bool) -> [ForkMeetingOfferLater] {
+        blocked ? [.whenever] : allCases
+    }
+
     /// How long before the start planned; `nil`: none planned.
     var delay: TimeInterval? {
         switch self {
@@ -516,13 +522,17 @@ enum ForkMeetingOfferClick {
 
 extension ForkMeetingOfferText {
     /// The compact card's lines: the service and code, then a CRM's
-    /// appointment under them when it is short enough to hold on one line
-    /// beside the buttons (`limit` characters), else the service and code
-    /// alone and the appointment apart (`bookingApart`: first in ⋯, and
-    /// said with the name). Never a line cut or wrapped mid-way.
-    static func compactLines(subtitle: String?, booking: String?, limit: Int = 32) -> (lines: [String], bookingApart: Bool) {
+    /// appointment under them, on one line: cut with "…" when longer than
+    /// `limit` characters, the whole then said to VoiceOver and shown as the
+    /// words' tooltip (`bookingInFull`). Never in ⋯: a native menu is seen
+    /// in screen shares.
+    static func compactLines(subtitle: String?, booking: String?, limit: Int = 32)
+        -> (lines: [String], bookingInFull: String?) {
         let head = [subtitle].compactMap { $0 }.filter { !$0.isEmpty }
-        guard let booking, !booking.isEmpty else { return (head, false) }
-        return booking.count <= limit ? (head + [booking], false) : (head, true)
+        guard let booking, !booking.isEmpty else { return (head, nil) }
+        guard booking.count > limit else { return (head + [booking], nil) }
+        let kept = String(booking.prefix(max(1, limit - 1)))
+            .trimmingCharacters(in: CharacterSet(charactersIn: " ·\u{00A0}:"))
+        return (head + [kept + "…"], booking)
     }
 }

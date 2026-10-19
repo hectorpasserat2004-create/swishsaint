@@ -576,7 +576,7 @@ enum ForkMeetingDetectionTests {
         var tooLong: [String] = []
         for language in languages {
             let s = ForkMeetingStrings.strings(language)
-            let short = [s.offerRecord, s.offerNotNow, s.offerAlways("FaceTime"), s.offerNever("FaceTime"), s.offerMore,
+            let short = [s.offerRecord, s.offerAlways("FaceTime"), s.offerNever("FaceTime"), s.offerMore,
                          s.endingSoonTitle, s.endingSoon(seconds: 120), s.endingSoonContinue, s.undo(seconds: 5),
                          ForkMeetingNotice.neverOffered("FaceTime").title(s), s.noticeNeverDetail]
             tooLong += short.filter { $0.count > 28 }.map { "\(language.rawValue): \($0)" }
@@ -593,7 +593,7 @@ enum ForkMeetingDetectionTests {
                      },
                      "every language names the app, the meeting, the microphone and the seconds")
         let french = ForkMeetingStrings.strings(.fr)
-        suite.expect(french.offerRecord == "Enregistrer" && french.offerNotNow == "Pas cette fois"
+        suite.expect(french.offerRecord == "Enregistrer" && french.offerDismiss == "Ne plus proposer pour cette réunion"
                         && french.offerAlways("Meet") == "Toujours pour Meet"
                         && french.offerCapture(window: "Chrome", sound: "Chrome", microphone: "AirPods")
                             == "Fenêtre\u{00A0}: Chrome · son\u{00A0}: Chrome · micro\u{00A0}: AirPods"

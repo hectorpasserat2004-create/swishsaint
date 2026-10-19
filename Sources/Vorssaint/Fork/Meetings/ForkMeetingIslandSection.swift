@@ -174,18 +174,23 @@ struct ForkMeetingIslandSection: View {
     /// silenced, Record alone: it can still be recorded from here.
     @ViewBuilder
     private func detectedCard(_ candidate: ForkMeetingCandidate, offer: ForkMeetingIslandOffer?) -> some View {
-        let name = ForkMeetingIslandPage.detectedName(candidate)
+        // The offer's own meeting, so its name, Later and countdown are of
+        // one call; the detection's when nothing is offered.
+        let name = ForkMeetingIslandPage.detectedName(offer?.meeting ?? candidate)
         if let offer, case let .scheduled(startsAt, _) = offer.phase {
             TimelineView(.periodic(from: ForkMeetingOfferTiming.tickStart(until: startsAt, now: Date()), by: 1)) { context in
                 let left = ForkMeetingOfferTiming.countdown(until: startsAt, now: context.date)
+                let spoken = ForkMeetingIslandRules.offerStartsSpoken(until: startsAt, now: context.date,
+                                                                      language: l10n.language, strings: text)
                 ForkMeetingIslandStatusCard(symbol: "timer", tint: .orange, title: name.title,
                                             caption: [name.service, text.offerStartsIn(left)].compactMap { $0 }
                                                 .joined(separator: " · "),
-                                            spoken: page.detectedTitle) {
-                    ForkMeetingIslandCardButton(symbol: "xmark", title: text.offerCancelStart, label: text.offerCancelStart) {
+                                            spoken: page.detectedTitle,
+                                            spokenCaption: [name.service, spoken].compactMap { $0 }.joined(separator: ", ")) {
+                    ForkMeetingIslandCardButton(symbol: nil, title: text.offerCancelStart, label: text.offerCancelStartSpoken) {
                         ForkMeetingService.shared.scheduleOffer(after: nil)
                     }
-                    recordButton(title: text.offerStartNow)
+                    recordButton(title: text.offerStartNow, label: text.recordNow)
                 }
             }
         } else {
@@ -193,8 +198,9 @@ struct ForkMeetingIslandSection: View {
                                         caption: [name.service, page.detectedCaption].compactMap { $0 }
                                             .joined(separator: " · "),
                                         spoken: page.detectedTitle) {
-                if offer != nil {
-                    ForkMeetingLaterButton(title: text.offerLater, items: laterItems)
+                if let offer {
+                    ForkMeetingLaterButton(title: text.offerLater, items: laterItems(blocked: offer.blocked),
+                                           help: text.offerLaterHelp)
                         .environment(\.notchPresentation, true)
                 }
                 recordButton(title: text.offerRecord)
@@ -205,8 +211,8 @@ struct ForkMeetingIslandSection: View {
     /// Later ▾ from the page: a start planned stays on the page, counting
     /// down; "When I want" closes the island, the call waiting in its
     /// activity.
-    private var laterItems: [NotchMenuItem] {
-        ForkMeetingOfferLater.allCases.map { choice in
+    private func laterItems(blocked: Bool) -> [NotchMenuItem] {
+        ForkMeetingOfferLater.choices(blocked: blocked).map { choice in
             NotchMenuItem(title: choice.title(text), symbol: choice.delay == nil ? "hand.tap" : "timer") {
                 if let delay = choice.delay {
                     ForkMeetingService.shared.scheduleOffer(after: delay)
@@ -225,8 +231,9 @@ struct ForkMeetingIslandSection: View {
             shortcut: ForkMeetingShortcut.decode(shortcutStorage)?.displayString, strings: page)
     }
 
-    private func recordButton(title: String) -> some View {
-        ForkMeetingIslandCardButton(symbol: "record.circle", title: title, label: page.recordMeeting, prominent: true) {
+    /// Grey with its red dot, as on the offer's card (W2 F).
+    private func recordButton(title: String, label: String? = nil) -> some View {
+        ForkMeetingIslandCardButton(symbol: nil, title: title, label: label ?? page.recordMeeting, recordDot: true) {
             // The island closes first, so the recording films the window
             // the person was in, not the island.
             service.perform { ForkMeetingService.shared.recordFromIsland() }
@@ -371,6 +378,8 @@ struct ForkMeetingIslandStatusCard<Actions: View>: View {
     /// Said first by VoiceOver, before the title: what the card is about
     /// when the title names something else ("Call detected").
     var spoken: String? = nil
+    /// What VoiceOver reads for the caption, when it shows a clock (W2 F).
+    var spokenCaption: String? = nil
     @ViewBuilder var actions: () -> Actions
 
     var body: some View {
@@ -400,7 +409,7 @@ struct ForkMeetingIslandStatusCard<Actions: View>: View {
                 }
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel([spoken, title, caption].compactMap { $0 }.filter { !$0.isEmpty }
+            .accessibilityLabel([spoken, title, spokenCaption ?? caption].compactMap { $0 }.filter { !$0.isEmpty }
                 .reduce("") { ForkMeetingLiveText.sentences($0, $1) })
             Spacer(minLength: 8)
             actions()
@@ -413,18 +422,28 @@ struct ForkMeetingIslandStatusCard<Actions: View>: View {
 /// The live card's buttons, for the cards around it: a filled red one for
 /// the step the card leads to, white on the island's grey for the others.
 struct ForkMeetingIslandCardButton: View {
-    let symbol: String
+    /// Nil: the title alone (W2 F).
+    let symbol: String?
     let title: String
     let label: String
     var prominent = false
+    /// A red dot before the title, on the grey, as the offer's Record (W2 F).
+    var recordDot = false
     let action: () -> Void
     @Environment(\.isEnabled) private var enabled
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 5) {
-                Image(systemName: symbol)
-                    .font(.system(size: 10, weight: .bold))
+                if recordDot {
+                    Circle()
+                        .fill(Color(nsColor: .systemRed))
+                        .frame(width: 7, height: 7)
+                        .opacity(enabled ? 1 : 0.5)
+                } else if let symbol {
+                    Image(systemName: symbol)
+                        .font(.system(size: 10, weight: .bold))
+                }
                 Text(title)
                     .lineLimit(1)
                     .fixedSize()

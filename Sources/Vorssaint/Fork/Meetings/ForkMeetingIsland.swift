@@ -174,8 +174,11 @@ enum ForkMeetingIsland {
     /// on).
     static func showsOfferActivity(on screen: NSScreen?) -> Bool {
         let island = NotchService.shared
+        // A recording's strip, finishing another meeting, would stand in
+        // the offer's place: the offer is then shown nowhere in the island.
         let shown = island.presentationWindow != nil && island.showsSystemFeedback && !island.hiddenInFullscreen
             && NotchSupport.routes(.capture) && island.compactActivity == .meeting
+            && ForkMeetingIslandModel.shared.snapshot == nil
         return ForkMeetingIslandRules.islandShowsRecording(activityShown: shown, islandScreen: island.geometry.screen,
                                                           filmedScreen: screen?.frame, workedScreen: NSScreen.main?.frame)
     }
@@ -187,7 +190,12 @@ enum ForkMeetingIsland {
     static func watchClicks(outside: @escaping () -> Void) -> Any? {
         NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { _ in
             let island = NotchService.shared
-            let inside = island.geometry.contains(NSEvent.mouseLocation, in: island.surfaceSize)
+            let point = NSEvent.mouseLocation
+            // The island's own exclusions: the menu bar's item, the
+            // accessibility keyboard.
+            guard (NSApp.delegate as? AppDelegate)?.isOverStatusItem(point) != true,
+                  !AssistiveKeyboard.ownsCocoaPoint(point) else { return }
+            let inside = island.geometry.contains(point, in: island.surfaceSize)
             guard ForkMeetingOfferClick.collapses(offerShownInIsland: true, clickInsideIsland: inside) else { return }
             outside()
         }

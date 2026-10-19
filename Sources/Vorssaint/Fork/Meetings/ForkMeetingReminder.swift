@@ -123,30 +123,35 @@ final class ForkMeetingReminderModel: ObservableObject {
 struct ForkMeetingReminderView: View {
     @ObservedObject var model: ForkMeetingReminderModel
     let open: () -> Void
+    @ObservedObject private var l10n = L10n.shared
 
     var body: some View {
+        if let startsAt = model.startsAt {
+            // Measured as it is shown, at its widest: counting down, it only
+            // gets shorter. VoiceOver hears the time left as a duration.
+            TimelineView(.periodic(from: ForkMeetingOfferTiming.tickStart(until: startsAt, now: Date()), by: 1)) { context in
+                pill(model.title.map { $0 + " · " + ForkMeetingOfferTiming.countdown(until: startsAt, now: context.date) } ?? "")
+                    .accessibilityValue(ForkMeetingIslandRules.offerStartsSpoken(
+                        until: startsAt, now: context.date, language: l10n.language,
+                        strings: ForkMeetingStrings.strings(l10n.language)))
+            }
+        } else {
+            pill(model.title ?? "")
+        }
+    }
+
+    /// "○ Meet", or "○ Meet · 4:12": one text, the time in even digits.
+    private func pill(_ title: String) -> some View {
         Button(action: open) {
             HStack(spacing: 6) {
                 Circle()
                     .strokeBorder(Color.white.opacity(0.7), lineWidth: 1.5)
                     .frame(width: 8, height: 8)
-                Text(model.title ?? "")
-                    .font(.system(size: 12, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold).monospacedDigit())
                     .foregroundStyle(Color.white.opacity(0.88))
                     .lineLimit(1)
                     .fixedSize()
-                if let startsAt = model.startsAt {
-                    // Measured as it is shown, at its widest: counting down,
-                    // it only gets shorter.
-                    TimelineView(.periodic(from: ForkMeetingOfferTiming.tickStart(until: startsAt, now: Date()), by: 1)) {
-                        context in
-                        Text("· " + ForkMeetingOfferTiming.countdown(until: startsAt, now: context.date))
-                            .font(.system(size: 12, weight: .semibold).monospacedDigit())
-                            .foregroundStyle(Color.white.opacity(0.88))
-                            .lineLimit(1)
-                            .fixedSize()
-                    }
-                }
             }
             .padding(.horizontal, 12)
             .frame(minWidth: ForkMeetingReminder.height, minHeight: ForkMeetingReminder.height)

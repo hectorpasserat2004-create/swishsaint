@@ -377,7 +377,10 @@ struct ForkMeetingIslandStrip: View {
 
     /// A click opens the offer again, in the island.
     @ViewBuilder private func offerStrip(_ offer: ForkMeetingIslandOffer, now: Date) -> some View {
-        let reading = ForkMeetingIslandRules.offerReading(offer, now: now)
+        // The service's name beside the countdown where the wing has room
+        // (the capsule always has).
+        let named = size != nil || Self.offerNameFits(offer, in: displayGeometry ?? service.compactActivityGeometry)
+        let reading = ForkMeetingIslandRules.offerReading(offer, now: now, named: named)
         Button { ForkMeetingPresenter.shared.openOfferFromIsland() } label: {
             if let size {
                 offerCapsule(offer, reading: reading, now: now, size: size)
@@ -483,7 +486,23 @@ struct ForkMeetingIslandStrip: View {
             enabled: defaults.bool(forKey: ForkFeature.meetings.enabledKey),
             indicator: ForkMeetingIndicator(stored: defaults.string(forKey: ForkDefaultsKey.meetingsIndicator)),
             state: ForkMeetingIslandModel.shared.state, offer: ForkMeetingIslandModel.shared.offer)
-        return shows ? [.meeting] : []
+        guard shows else { return [] }
+        let model = ForkMeetingIslandModel.shared
+        if model.state == .hidden, let offer = model.offer,
+           !ForkMeetingIslandRules.listsOffer(scheduled: offer.phase.isScheduled, otherActivityLive: officialActivityLive) {
+            return []
+        }
+        return [.meeting]
+    }
+
+    /// One of the island's own live activities is up: the official list,
+    /// read from the island's own flags, never through the hook (it would
+    /// ask itself).
+    private static var officialActivityLive: Bool {
+        let island = NotchService.shared
+        return island.hasTimerActivity || island.hasWatchActivity || island.hasDownloadActivity
+            || island.hasAgentActivity || island.hasCalendarActivity || island.hasMusicActivity
+            || island.hasKeepAwakeActivity
     }
 
     /// The wider of the two sides, the mark or the time, drawn as the strip
@@ -495,9 +514,15 @@ struct ForkMeetingIslandStrip: View {
                                                         wing: NotchTimerSupport.stripWingRange.lowerBound)
         let height = provisional.compactActivityContentHeight
         let textSize = NotchTimerSupport.stripTextSize(height: height)
-        let reading = (NotchAgentSupport.readingShape(currentReading) as NSString)
-            .size(withAttributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: textSize, weight: .medium)])
-            .width.rounded(.up)
+        var reading = readingWidth(currentReading(named: false), textSize: textSize)
+        // A countdown takes the service's name too, when the wing allows it.
+        if ForkMeetingIslandModel.shared.snapshot == nil, ForkMeetingIslandModel.shared.offer?.phase.isScheduled == true {
+            let named = readingWidth(currentReading(named: true), textSize: textSize)
+            let inset = provisional.compactActivityEdgeInset(boxHeight: textSize * 0.72, radius: 0)
+            let room = geometry.compactSideRoom ?? 0
+            let limit = min(NotchTimerSupport.stripWingRange.upperBound, room.isFinite && room >= 64 ? room : .infinity)
+            if named + inset + NotchTimerSupport.stripCameraGap <= limit { reading = named }
+        }
         let side = markSide(iconSize: NotchTimerSupport.stripIconSize(height: height))
         var mark = side + provisional.compactActivityEdgeInset(boxHeight: side, radius: side / 2)
         // Room for the microphone crossed out beside the mark, when it is.
@@ -514,9 +539,9 @@ struct ForkMeetingIslandStrip: View {
     static func capsuleSize(geometry: NotchGeometry) -> CGSize {
         let layout = NotchCapsuleLayout.self
         if ForkMeetingIslandModel.shared.snapshot == nil, ForkMeetingIslandModel.shared.offer != nil {
-            // The offer: its mark, then the provider or the time left.
+            // The offer: its mark, then the provider, the time left, or both.
             let content = layout.symbolWidth + layout.spacing
-                + layout.width(NotchAgentSupport.readingShape(currentReading), font: layout.readingFont)
+                + layout.width(NotchAgentSupport.readingShape(currentReading(named: true)), font: layout.readingFont)
             return layout.surface(content: content, maximum: layout.Maximum.activity, geometry: geometry)
         }
         let meters = ForkMeetingIslandModel.shared.phase?.acceptsControls == true
@@ -527,13 +552,32 @@ struct ForkMeetingIslandStrip: View {
     }
 
     /// The time as the strip reads it now; for an offer, the provider or
-    /// the time left before its start.
-    private static var currentReading: String {
+    /// the time left before its start, with the provider (`named`).
+    private static func currentReading(named: Bool) -> String {
         let model = ForkMeetingIslandModel.shared
         if model.snapshot == nil, let offer = model.offer {
-            return ForkMeetingIslandRules.offerReading(offer, now: Date())
+            return ForkMeetingIslandRules.offerReading(offer, now: Date(), named: named)
         }
         return ForkMeetingIslandRules.clock(model.elapsed(at: Date()))
+    }
+
+    private static var currentReading: String { currentReading(named: false) }
+
+    /// A reading's width as the wings draw it, its digits all "0".
+    private static func readingWidth(_ reading: String, textSize: CGFloat) -> CGFloat {
+        (NotchAgentSupport.readingShape(reading) as NSString)
+            .size(withAttributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: textSize, weight: .medium)])
+            .width.rounded(.up)
+    }
+
+    /// The countdown's wing holds "Meet · 4:12" (W2 F): as `wing(in:)`
+    /// measured it, so the strip draws what the island made room for.
+    static func offerNameFits(_ offer: ForkMeetingIslandOffer, in geometry: NotchGeometry) -> Bool {
+        guard offer.phase.isScheduled else { return false }
+        let textSize = NotchTimerSupport.stripTextSize(height: geometry.compactActivityContentHeight)
+        let named = readingWidth(ForkMeetingIslandRules.offerReading(offer, now: Date(), named: true), textSize: textSize)
+        return named + geometry.compactActivityEdgeInset(boxHeight: textSize * 0.72, radius: 0)
+            + NotchTimerSupport.stripCameraGap <= geometry.compactActivityWingWidth
     }
 
     // MARK: The island
@@ -621,9 +665,19 @@ private struct ForkMeetingIslandOfferMark: View {
                 }
                 .transition(.blurReplace)
             case let .scheduled(startsAt, scheduledAt):
-                ForkMeetingIslandGauge(progress: ForkMeetingOfferTiming.progress(from: scheduledAt, until: startsAt, now: now),
-                                       side: side)
-                    .transition(.blurReplace)
+                // The offer's own mark, its ring filling in orange toward the
+                // start: never the gauge of a file being finished.
+                let line = max(1.2, side * 0.12)
+                ZStack {
+                    Circle().strokeBorder(Color.white.opacity(0.3), lineWidth: line)
+                    Circle()
+                        .trim(from: 0, to: max(0.02, ForkMeetingOfferTiming.progress(from: scheduledAt, until: startsAt, now: now)))
+                        .stroke(Color.orange, style: StrokeStyle(lineWidth: line, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                        .padding(line / 2)
+                    Circle().fill(Color.orange).frame(width: side * 0.4, height: side * 0.4)
+                }
+                .transition(.blurReplace)
             }
         }
         .frame(width: side, height: side)

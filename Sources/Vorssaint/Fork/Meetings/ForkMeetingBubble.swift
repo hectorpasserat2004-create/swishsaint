@@ -15,6 +15,9 @@ struct ForkMeetingCard {
     struct Countdown {
         let until: Date
         let words: (Date) -> String
+        /// What VoiceOver reads at that instant, when the words are a
+        /// clock ("4:12"): a spoken duration (W2 F).
+        var spoken: ((Date) -> String)? = nil
     }
 
     struct Action {
@@ -30,6 +33,9 @@ struct ForkMeetingCard {
         // MARK: W2 F
         /// Its tooltip and VoiceOver hint: what Record will record.
         var help: String?
+        /// Its name for VoiceOver when the title alone says too little
+        /// ("Now": "Record Now").
+        var label: String?
         let perform: () -> Void
     }
 
@@ -89,6 +95,9 @@ struct ForkMeetingCard {
     /// "Later ▾": a button that opens this menu, before the actions.
     var later: [NotchMenuItem] = []
     var laterTitle = ""
+    var laterHelp = ""
+    /// The words' tooltip: what a line cut short says in full.
+    var wordsHelp: String?
     /// ✕: the offer's own way to say no for this meeting, in the island's
     /// top row and in the bubble's corner: "Not Now" for VoiceOver, what it
     /// does as its hint and tooltip.
@@ -103,6 +112,13 @@ struct ForkMeetingCardView: View {
     var close: (() -> Void)?
     var closeLabel = ""
     @Environment(\.notchPresentation) private var inIsland
+    @Environment(\.colorScheme) private var colorScheme
+
+    /// Orange on the island's black; darker on a light bubble, where the
+    /// island's orange is too pale to read (W2 F).
+    private var alertTint: Color {
+        inIsland || colorScheme == .dark ? .orange : Color(red: 0.72, green: 0.33, blue: 0)
+    }
 
     /// The island is wide and short: one row, the buttons at its end. The
     /// bubble is narrow: the text wraps, the buttons go under it, at the
@@ -189,7 +205,7 @@ struct ForkMeetingCardView: View {
                 if let countdown = card.countdownLine {
                     ForkMeetingCountdownText(countdown: countdown)
                         .font(.system(size: 11, weight: .medium).monospacedDigit())
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(alertTint)
                 }
                 ForEach(Array(card.lines.enumerated()), id: \.offset) { _, line in
                     Text(line)
@@ -218,16 +234,17 @@ struct ForkMeetingCardView: View {
                 }
                 .labelStyle(ForkMeetingCardLineLabelStyle())
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.orange)
+                .foregroundStyle(alertTint)
             }
         }
         .accessibilityElement(children: .combine)
+        .modifier(ForkMeetingActionHelp(help: card.wordsHelp, hints: false))
     }
 
     @ViewBuilder
     private var buttons: some View {
         if !card.later.isEmpty {
-            ForkMeetingLaterButton(title: card.laterTitle, items: card.later)
+            ForkMeetingLaterButton(title: card.laterTitle, items: card.later, help: card.laterHelp)
         }
         ForEach(Array(card.actions.enumerated()), id: \.offset) { _, action in
             actionButton(action)
@@ -247,7 +264,7 @@ struct ForkMeetingCardView: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
-            .help(card.dismiss == nil ? label : card.dismissHelp)
+            .help(label)
             .accessibilityLabel(label)
             .accessibilityHint(card.dismiss == nil ? "" : card.dismissHelp)
         }
@@ -290,7 +307,7 @@ struct ForkMeetingCardView: View {
             .frame(minHeight: inIsland ? 28 : 0)
         }
         .disabled(!action.enabled)
-        .accessibilityLabel(title)
+        .accessibilityLabel(action.label ?? title)
         .modifier(ForkMeetingActionHelp(help: action.help))
         if inIsland {
             button
@@ -313,6 +330,7 @@ struct ForkMeetingCountdownText: View {
         TimelineView(.periodic(from: ForkMeetingOfferTiming.tickStart(until: countdown.until, now: Date()), by: 1)) {
             context in
             Text(countdown.words(context.date))
+                .accessibilityLabel(countdown.spoken?(context.date) ?? countdown.words(context.date))
         }
     }
 }
@@ -330,13 +348,15 @@ private struct ForkMeetingCardLineLabelStyle: LabelStyle {
 
 // MARK: W2 F
 
-/// What a button records, as its tooltip and VoiceOver hint, when it says.
+/// What a button records, as its tooltip and VoiceOver hint, when it says;
+/// or a tooltip alone (`hints: false`).
 private struct ForkMeetingActionHelp: ViewModifier {
     let help: String?
+    var hints = true
 
     func body(content: Content) -> some View {
         if let help {
-            content.help(help).accessibilityHint(help)
+            if hints { content.help(help).accessibilityHint(help) } else { content.help(help) }
         } else {
             content
         }
@@ -349,6 +369,8 @@ private struct ForkMeetingActionHelp: ViewModifier {
 struct ForkMeetingLaterButton: View {
     let title: String
     let items: [NotchMenuItem]
+    /// Its tooltip: what it offers.
+    var help = ""
     @Environment(\.notchPresentation) private var inIsland
 
     var body: some View {
@@ -369,7 +391,7 @@ struct ForkMeetingLaterButton: View {
                         in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
-        .help(title)
+        .help(help.isEmpty ? title : help)
     }
 }
 
@@ -381,17 +403,8 @@ struct ForkMeetingCardTopActions: View {
         HStack(spacing: 2) {
             if !card.menu.isEmpty { ForkMeetingCardMenu(card: card) }
             if let dismiss = card.dismiss {
-                Button(action: dismiss) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.7))
-                        .frame(width: 28, height: 28)
-                        .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                }
-                .buttonStyle(NotchButtonStyle(cornerRadius: 9))
-                .help(card.dismissHelp)
-                .accessibilityLabel(card.dismissLabel)
-                .accessibilityHint(card.dismissHelp)
+                NotchIconButton(symbol: "xmark", title: card.dismissLabel, action: dismiss)
+                    .accessibilityHint(card.dismissHelp)
             }
         }
     }

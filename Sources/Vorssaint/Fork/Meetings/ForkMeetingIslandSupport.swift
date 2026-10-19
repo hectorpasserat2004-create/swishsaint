@@ -251,6 +251,11 @@ struct ForkMeetingIslandOffer: Equatable {
     var scheduledAt: Date?
     /// One more at each nudge: the activity draws the eye once for each.
     var nudges = 0
+    /// The meeting offered, as the offer names it: the island's Meetings
+    /// page shows the same one.
+    var meeting: ForkMeetingCandidate?
+    /// Greyed: it cannot record now, so nothing is planned for it.
+    var blocked = false
 
     var phase: ForkMeetingIslandOfferPhase {
         guard let startsAt else { return .detected }
@@ -282,11 +287,23 @@ extension ForkMeetingIslandRules {
             || (enabled && indicator.showsStrip && state == .hidden && offer != nil)
     }
 
-    /// Right of the camera: "Meet", or "4:12" before a start planned.
-    static func offerReading(_ offer: ForkMeetingIslandOffer, now: Date) -> String {
+    /// A call only offered never goes before an official activity live (a
+    /// timer, music, agents, a download, the calendar, Keep Awake…): it
+    /// leads the closed island alone, or while its start is planned, its
+    /// countdown being what the person waits on. Not listed, the reminder
+    /// beside the camera holds it. A recording always leads.
+    static func listsOffer(scheduled: Bool, otherActivityLive: Bool) -> Bool {
+        scheduled || !otherActivityLive
+    }
+
+    /// Right of the camera: "Meet", or "4:12" before a start planned, "Meet ·
+    /// 4:12" where the strip has room for the name too (`named`).
+    static func offerReading(_ offer: ForkMeetingIslandOffer, now: Date, named: Bool = false) -> String {
         switch offer.phase {
         case .detected: return offer.provider
-        case let .scheduled(startsAt, _): return ForkMeetingOfferTiming.countdown(until: startsAt, now: now)
+        case let .scheduled(startsAt, _):
+            let left = ForkMeetingOfferTiming.countdown(until: startsAt, now: now)
+            return named ? offer.provider + " · " + left : left
         }
     }
 
@@ -298,6 +315,13 @@ extension ForkMeetingIslandRules {
     static func offerValue(_ offer: ForkMeetingIslandOffer, now: Date, language: AppLanguage,
                            strings s: ForkMeetingStrings) -> String {
         guard case let .scheduled(startsAt, _) = offer.phase else { return "" }
+        return offerStartsSpoken(until: startsAt, now: now, language: language, strings: s)
+    }
+
+    /// "Starts in 4 min 12 s": a start planned's countdown as VoiceOver
+    /// says it, wherever it shows (card, bubble, page, reminder).
+    static func offerStartsSpoken(until startsAt: Date, now: Date, language: AppLanguage,
+                                  strings s: ForkMeetingStrings) -> String {
         let left = TimeInterval(ForkMeetingOfferTiming.secondsLeft(until: startsAt, now: now))
         return s.offerStartsIn(spokenDuration(left, language: language))
     }

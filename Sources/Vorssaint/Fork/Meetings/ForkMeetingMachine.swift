@@ -258,7 +258,7 @@ enum ForkMeetingAnnouncement: Equatable {
         case let .nudged(name): return s.voiceNudge(name)
         case let .scheduled(minutes): return s.voiceScheduled(minutes: minutes)
         case .scheduleCancelled: return s.voiceScheduleCancelled
-        case .notOffered: return s.voiceNotOffered
+        case .notOffered: return ForkMeetingLiveText.sentences(s.noticeNotOffered, s.noticeNotOfferedDetail)
         }
     }
 }
@@ -283,6 +283,12 @@ struct ForkMeetingOffer: Equatable {
     /// When that was chosen: the island's gauge fills from then to
     /// `startsAt`.
     var scheduledAt: Date?
+    /// Its start was asked: the plan stays drawn (the gauge full) until the
+    /// recording starts or the start is refused.
+    var startAsked = false
+    /// Its app had the microphone when the start was planned: one that no
+    /// longer has it at the time is asked again, not recorded.
+    var onMicrophoneAtPlan = false
 }
 
 /// "Not now" sets this meeting aside; "Never" the provider.
@@ -361,6 +367,9 @@ struct ForkMeetingMachine {
     static let undoWindowVoiceOver: TimeInterval = 15
 
     static func undoWindow(voiceOver: Bool) -> TimeInterval { voiceOver ? undoWindowVoiceOver : undoWindow }
+    /// A start planned that comes later than this (the Mac asleep, the
+    /// screen locked) asks again instead of recording.
+    static let lateStart: TimeInterval = 60
 
     /// A start asked, the capture not running yet.
     struct Pending: Equatable {
@@ -602,6 +611,9 @@ struct ForkMeetingMachine {
         /// The start planned is due: the service answers the offer as a
         /// click on Record would (`ForkMeetingService.acceptOffer`).
         case startScheduled
+        /// Opens the folded offer again, plainly: a start planned that came
+        /// too late, or for a call its app has left, asks first.
+        case reopenOffer(ForkMeetingOffer)
     }
 
     private(set) var phase: Phase = .idle
@@ -616,6 +628,8 @@ struct ForkMeetingMachine {
     /// The most recent meeting the detection sees, set aside or not: a
     /// start by hand records it.
     private var detected: ForkMeetingCandidate?
+    /// The meetings whose app used the microphone at the last reading.
+    private var onMicrophone: Set<ForkMeetingIdentity> = []
     /// VoiceOver runs, as the service read it before the start's answer:
     /// "Cancel" stays `undoWindowVoiceOver`.
     var voiceOver = false
@@ -639,7 +653,9 @@ struct ForkMeetingMachine {
     @discardableResult
     mutating func handle(_ event: Event, now: Date) -> [Effect] {
         switch event {
-        case let .candidates(candidates, _): detected = candidates.first
+        case let .candidates(candidates, request):
+            detected = candidates.first
+            onMicrophone = request.facts.meetingsOnMicrophone
         case .featureDisabled: detected = nil
         default: break
         }
@@ -1072,6 +1088,14 @@ struct ForkMeetingMachine {
             updated.candidate.silenced = true
             updated.candidate.microphoneSince = offer.candidate.microphoneSince
             updated.blocked = Self.refusal(request)
+            // "Never for Meet" chosen meanwhile calls a start planned off.
+            if current.policy == .never, updated.startsAt != nil {
+                updated.startsAt = nil
+                updated.scheduledAt = nil
+                updated.startAsked = false
+                phase = .offering(updated)
+                return [.showOffer(updated), .announce(.scheduleCancelled)]
+            }
             guard updated != offer else { return [] }
             phase = .offering(updated)
             return [.showOffer(updated)]
@@ -1080,9 +1104,20 @@ struct ForkMeetingMachine {
             // The start planned comes first; on a locked screen it waits for
             // the unlock, as a start nobody can see would film the lock.
             if let startsAt = offer.startsAt, now >= startsAt, !locked, !terminating {
+                let late = now.timeIntervalSince(startsAt)
+                // Asked and still not started (the answer lost on the way):
+                // the plan goes, the offer asks again.
+                if offer.startAsked {
+                    guard late > Self.lateStart / 2 else { return [] }
+                    return reopen(offer, now: now)
+                }
+                // Long after its time (the Mac asleep, the screen locked), or
+                // its app off the microphone since: asked again, never
+                // recorded on the strength of a plan made for another moment.
+                let leftTheCall = offer.onMicrophoneAtPlan && !onMicrophone.contains(offer.candidate.identity)
+                if late > Self.lateStart || leftTheCall { return reopen(offer, now: now) }
                 var due = offer
-                due.startsAt = nil
-                due.scheduledAt = nil
+                due.startAsked = true
                 phase = .offering(due)
                 return [.showOffer(due), .startScheduled]
             }
@@ -1096,8 +1131,13 @@ struct ForkMeetingMachine {
             guard !terminating else { return [] }
             var planned = offer
             if let delay, delay.isFinite, delay > 0 {
+                // A greyed offer could not start then either: only "When I
+                // want" is offered for it.
+                guard offer.blocked == nil else { return [] }
                 planned.startsAt = now.addingTimeInterval(delay)
                 planned.scheduledAt = now
+                planned.startAsked = false
+                planned.onMicrophoneAtPlan = onMicrophone.contains(candidate.identity)
                 // Answered: it folds now, into the island's countdown.
                 planned.collapsed = true
                 phase = .offering(planned)
@@ -1106,11 +1146,20 @@ struct ForkMeetingMachine {
             guard offer.startsAt != nil else { return [] }
             planned.startsAt = nil
             planned.scheduledAt = nil
+            planned.startAsked = false
             phase = .offering(planned)
             return [.showOffer(planned), .announce(.scheduleCancelled)]
 
         case let .accept(request):
-            return startOffered(.offered, request: request, offer: offer)
+            let effects = startOffered(.offered, request: request, offer: offer)
+            // A start planned and refused: the plan goes with its full gauge.
+            guard case .offering = phase, offer.startsAt != nil else { return effects }
+            var cleared = offer
+            cleared.startsAt = nil
+            cleared.scheduledAt = nil
+            cleared.startAsked = false
+            phase = .offering(cleared)
+            return effects + [.showOffer(cleared)]
 
         case let .always(request):
             // Not offered for FaceTime and the other web calls: there it only records.
@@ -1153,8 +1202,11 @@ struct ForkMeetingMachine {
             return [.hideOffer]
 
         case let .nudge(identity):
-            // A greyed offer could not record anyway: it is not raised.
-            guard identity == candidate.identity, offer.blocked == nil, !terminating else { return [] }
+            // A greyed offer could not record anyway: it is not raised; nor
+            // one whose start is planned: the person already answered.
+            guard identity == candidate.identity, offer.blocked == nil, offer.startsAt == nil, !terminating else {
+                return []
+            }
             var raised = offer
             raised.collapsed = false
             raised.collapsesAt = now.addingTimeInterval(Self.offerCollapse)
@@ -1185,6 +1237,19 @@ struct ForkMeetingMachine {
              .cancelAutoStart, .continueRecording:
             return []
         }
+    }
+
+    /// A start planned that will not come: the plan goes and the offer
+    /// opens again, plainly, for 20 s, said as an offer is.
+    private mutating func reopen(_ offer: ForkMeetingOffer, now: Date) -> [Effect] {
+        var reopened = offer
+        reopened.startsAt = nil
+        reopened.scheduledAt = nil
+        reopened.startAsked = false
+        reopened.collapsed = false
+        reopened.collapsesAt = now.addingTimeInterval(Self.offerCollapse)
+        phase = .offering(reopened)
+        return [.reopenOffer(reopened), .announce(.offered(offer.candidate.name))]
     }
 
     /// "Always" would start it on its own but for its proof: set to it,

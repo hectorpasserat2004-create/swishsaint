@@ -220,7 +220,12 @@ extension ForkMeetingPresenter {
             renderOffer()
         case .undo:
             if let until = ui.undoUntil { showOfferBubble(undoCard(until: until), as: .undo) }
-        case .endingSoon, .note:
+        case .note:
+            // Its line goes with the island: nothing waits to take it away.
+            ui.noteWork?.cancel()
+            ui.noteWork = nil
+            ui.noteShown = false
+        case .endingSoon:
             break
         }
     }
@@ -289,6 +294,8 @@ extension ForkMeetingPresenter {
         var shown = ForkMeetingIslandOffer(provider: ForkMeetingOfferText.reminderTitle(offer.candidate),
                                            startsAt: offer.startsAt, scheduledAt: offer.scheduledAt)
         shown.nudges = ui.nudges
+        shown.meeting = offer.candidate
+        shown.blocked = offer.blocked != nil
         ForkMeetingIslandModel.shared.showOffer(shown)
     }
 
@@ -302,6 +309,17 @@ extension ForkMeetingPresenter {
             DispatchQueue.main.async { self.openOfferFromIsland() }
             return
         }
+        reopenOffer()
+    }
+
+    /// The machine asks again (a start planned too late, or for a call its
+    /// app has left): the offer opens again as from its activity.
+    func reopenOffer(_ offer: ForkMeetingOffer) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { self.reopenOffer(offer) }
+            return
+        }
+        offerUI.offer = offer
         reopenOffer()
     }
 
@@ -373,6 +391,13 @@ extension ForkMeetingPresenter {
         }
     }
 
+    /// Where a meeting set aside can still be recorded from: the island and
+    /// the Command Bar, and the shortcut when one is set.
+    var notOfferedDetail: String {
+        let stored = UserDefaults.standard.string(forKey: ForkDefaultsKey.meetingsShortcut) ?? ""
+        return ForkMeetingShortcut.decode(stored) == nil ? text.noticeNotOfferedDetail : text.noticeNotOfferedShortcutDetail
+    }
+
     /// The line stays long enough to be read.
     private static let noteHold: TimeInterval = 6
     /// The compact offer's least height in the island: its one row; the
@@ -396,7 +421,7 @@ extension ForkMeetingPresenter {
     private func notOfferedCard() -> ForkMeetingCard {
         let notice = ForkMeetingNotice.notOffered
         var card = ForkMeetingCard(symbol: ForkMeetingIsland.symbol(for: notice), tint: .secondary,
-                                   title: notice.title(text), lines: [notice.detail(text)].compactMap { $0 })
+                                   title: notice.title(text), lines: [notOfferedDetail])
         card.closable = true
         return card
     }
@@ -476,6 +501,7 @@ extension ForkMeetingPresenter {
         }
         actions.cancelStart = { service.scheduleOffer(after: nil) }
         var card = Self.offerCard(offer, facts: facts, actions: actions, text: text)
+        card.dismissHelp = notOfferedDetail
         // MARK: Finish D
         let words = text
         let language = L10n.shared.language
@@ -614,17 +640,21 @@ extension ForkMeetingPresenter {
             mainWindow: facts.mainWindow,
             sound: ForkMeetingOfferText.sound(setting: settings.systemAudio, providerDefault: candidate.defaultSound),
             soundApp: facts.soundApp, microphone: facts.microphone, strings: text)
-        // The appointment goes under the service and code when it holds on
-        // one line ("RDV : ACME · 10:00"), else heads the ⋯ menu and is said
-        // with the name (W2 F).
+        // The appointment goes under the service and code, on one line, cut
+        // when it must; then said whole with the name and shown whole as the
+        // words' tooltip (W2 F). Never in ⋯, which shares see.
         let compact = ForkMeetingOfferText.compactLines(subtitle: heading.subtitle, booking: facts.booking)
         card.lines = compact.lines
-        let bookingApart = compact.bookingApart ? facts.booking : nil
-        if let bookingApart { card.spokenTitle = (card.spokenTitle ?? card.title) + ", " + bookingApart }
+        if let whole = compact.bookingInFull {
+            card.spokenTitle = (card.spokenTitle ?? card.title) + ", " + whole
+            card.wordsHelp = whole
+        }
         if facts.consentReminder { card.info = text.consentRemind }
         var record = ForkMeetingCard.Action(title: offer.startsAt == nil ? text.offerRecord : text.offerStartNow,
                                             prominent: true, recordDot: true, perform: actions.record)
         record.help = capture
+        // "Now" alone says nothing to VoiceOver: "Record Now".
+        if offer.startsAt != nil { record.label = text.recordNow }
         if let blocked = offer.blocked {
             card.dimmed = true
             card.warning = ForkMeetingOfferText.blocked(blocked, strings: text)
@@ -638,24 +668,30 @@ extension ForkMeetingPresenter {
             }
         }
         if let startsAt = offer.startsAt {
-            card.countdownLine = ForkMeetingCard.Countdown(until: startsAt) { now in
+            let language = L10n.shared.language
+            card.countdownLine = ForkMeetingCard.Countdown(until: startsAt, words: { now in
                 text.offerStartsIn(ForkMeetingOfferTiming.countdown(until: startsAt, now: now))
-            }
-            card.actions = [ForkMeetingCard.Action(title: text.offerCancelStart, perform: actions.cancelStart), record]
+            }, spoken: { now in
+                ForkMeetingIslandRules.offerStartsSpoken(until: startsAt, now: now, language: language, strings: text)
+            })
+            var cancel = ForkMeetingCard.Action(title: text.offerCancelStart, perform: actions.cancelStart)
+            cancel.label = text.offerCancelStartSpoken
+            card.actions = [cancel, record]
         } else {
             if let later = actions.later {
-                card.later = ForkMeetingOfferLater.allCases.map { choice in
+                // A greyed offer could not start then either: "When I want" only.
+                card.later = ForkMeetingOfferLater.choices(blocked: offer.blocked != nil).map { choice in
                     NotchMenuItem(title: choice.title(text), symbol: choice.delay == nil ? "hand.tap" : "timer") {
                         later(choice)
                     }
                 }
                 card.laterTitle = text.offerLater
+                card.laterHelp = text.offerLaterHelp
             }
             card.actions = [record]
         }
-        // What it will record, first in ⋯ (after the appointment that did
-        // not fit the line): read there, never clicked.
-        card.menu = [bookingApart, capture].compactMap { $0 }.map { NotchMenuItem(title: $0, enabled: false) } + [.separator]
+        // What it will record, first in ⋯: read there, never clicked.
+        card.menu = [NotchMenuItem(title: capture, enabled: false), .separator]
         let provider = ForkMeetingOfferText.reminderTitle(candidate)
         if ForkMeetingOfferText.showsAlways(offer, microphoneSignal: facts.microphoneSignal) {
             card.menu.append(NotchMenuItem(title: text.offerAlways(provider), enabled: ForkMeetingOfferText.allowsAlways(offer),
@@ -666,7 +702,7 @@ extension ForkMeetingPresenter {
             card.menu.insert(NotchMenuItem(title: other.filmsPicture ? text.offerRecordWithPicture : text.offerRecordSoundOnly,
                                            symbol: other.filmsPicture ? "video" : "waveform",
                                            enabled: ForkMeetingOfferText.recordsOtherwise(offer, as: other),
-                                           action: recordOtherwise), at: bookingApart == nil ? 2 : 3)
+                                           action: recordOtherwise), at: 2)
         }
         card.menu += [
             NotchMenuItem(title: ForkMeetingOfferText.neverTitle(candidate, strings: text), action: actions.never),
@@ -680,8 +716,8 @@ extension ForkMeetingPresenter {
         // ✕: not for this meeting; recording stays possible from the island,
         // the shortcut and the Command Bar, which the card says once pressed.
         card.dismiss = actions.notNow
-        card.dismissLabel = text.offerNotNow
-        card.dismissHelp = text.offerDismiss
+        card.dismissLabel = text.offerDismiss
+        card.dismissHelp = text.noticeNotOfferedDetail
         // One row in the island, unless a reminder or a reason needs the room.
         card.stacked = card.info != nil || card.warning != nil
         card.closable = true
