@@ -42,6 +42,7 @@ protocol ForkMeetingExporter {
 enum ForkMeetingExportKind: String, Codable, CaseIterable {
     case dropFolder
     case webhook
+    case immich
 }
 
 /// Sent when asked from the library, or after each meeting on its own.
@@ -73,10 +74,18 @@ struct ForkMeetingExporterConfig: Equatable, Identifiable {
     /// was saved. A different one means the address changed behind the
     /// page's back: nothing is sent and the secret is never read.
     var origin: String?
+    /// Immich: the album the meeting's video joins, made when missing;
+    /// none, the video only lands in the timeline.
+    var album: String?
+
+    /// Sends to an address with a secret in the Keychain: a webhook, an
+    /// Immich server (its API key).
+    var usesAddress: Bool { kind == .webhook || kind == .immich }
 
     init(id: String = UUID().uuidString, kind: ForkMeetingExportKind, mode: ForkMeetingExportMode = .manual,
          includesMeetCode: Bool = false, includesNotes: Bool = false, includesSummary: Bool = false,
-         folder: String? = nil, address: String? = nil, origin: String? = nil) {
+         folder: String? = nil, address: String? = nil, origin: String? = nil, album: String? = nil) {
+        self.album = album
         self.id = id
         self.kind = kind
         self.mode = mode
@@ -93,11 +102,15 @@ struct ForkMeetingExporterConfig: Equatable, Identifiable {
     /// preferences finds no secret instead of the real one, and two
     /// exporters never share one without a word.
     var secretAccount: String? {
-        guard kind == .webhook, let origin, !origin.isEmpty else { return nil }
-        return Self.secretAccount(origin: origin, id: id)
+        guard usesAddress, let origin, !origin.isEmpty else { return nil }
+        return Self.secretAccount(origin: origin, id: id, kind: kind)
     }
 
-    static func secretAccount(origin: String, id: String) -> String { "webhook@\(origin)#\(id)" }
+    /// An Immich key is filed apart from a webhook's secret
+    /// (`immich@<host[:port]>#<id>`): neither kind ever reads the other's.
+    static func secretAccount(origin: String, id: String, kind: ForkMeetingExportKind = .webhook) -> String {
+        "\(kind == .immich ? "immich" : "webhook")@\(origin)#\(id)"
+    }
 
     /// What the page and the menus call it after its kind: the folder's
     /// name, or the host.
@@ -106,7 +119,7 @@ struct ForkMeetingExporterConfig: Equatable, Identifiable {
         case .dropFolder:
             guard let folder, !folder.isEmpty else { return nil }
             return (folder as NSString).lastPathComponent
-        case .webhook:
+        case .webhook, .immich:
             return origin
         }
     }
@@ -122,7 +135,7 @@ extension ForkMeetingExporterConfig {
         guard let frozen = ForkMeetingOriginPolicy.Origin(name: frozenName) else { throw ForkMeetingExportFailure.originChanged }
         switch ForkMeetingOriginPolicy.destination(address, frozen: frozen) {
         case let .approved(url, origin):
-            return (url, Self.secretAccount(origin: origin.name, id: id))
+            return (url, Self.secretAccount(origin: origin.name, id: id, kind: kind))
         case .refused(.unapprovedHost):
             throw ForkMeetingExportFailure.originChanged
         case let .refused(refusal):
@@ -136,7 +149,7 @@ extension ForkMeetingExporterConfig {
         switch kind {
         case .dropFolder:
             return (folder ?? "").isEmpty ? .notConfigured : nil
-        case .webhook:
+        case .webhook, .immich:
             do {
                 let target = try approvedTarget()
                 return hasSecret(target.account) ? nil : .noSecret
@@ -192,7 +205,7 @@ extension ForkMeetingExporterList {
 
 extension ForkMeetingExporterConfig: Codable {
     private enum CodingKeys: String, CodingKey {
-        case id, kind, mode, includesMeetCode, includesNotes, includesSummary, folder, address, origin
+        case id, kind, mode, includesMeetCode, includesNotes, includesSummary, folder, address, origin, album
     }
 
     /// Lenient: a missing or unknown mode is manual, a missing option off.
@@ -210,6 +223,7 @@ extension ForkMeetingExporterConfig: Codable {
         folder = (try? container.decodeIfPresent(String.self, forKey: .folder)) ?? nil
         address = (try? container.decodeIfPresent(String.self, forKey: .address)) ?? nil
         origin = (try? container.decodeIfPresent(String.self, forKey: .origin)) ?? nil
+        album = (try? container.decodeIfPresent(String.self, forKey: .album)) ?? nil
     }
 }
 
@@ -271,6 +285,8 @@ struct ForkMeetingExportPackage {
     /// The summary written on this Mac; sent only when the exporter asks
     /// (`includesSummary`).
     var summary: String? = nil
+    /// The meeting's video, read in place, when it has one (Immich).
+    var video: URL?
 
     /// The name of what is sent: the folder's, without the Google Meet code
     /// unless asked (`ForkMeetingExportDocument.name`).
@@ -332,6 +348,8 @@ enum ForkMeetingExportFailure: Error, Equatable {
     case listChanged
     /// The drop folder's own disk is full.
     case dropFolderFull
+    /// The meeting has no video: Immich keeps photos and videos only.
+    case noVideo
 
     var code: String {
         switch self {
@@ -354,6 +372,7 @@ enum ForkMeetingExportFailure: Error, Equatable {
         case .earlyAnswer: return "earlyAnswer"
         case .listChanged: return "listChanged"
         case .dropFolderFull: return "dropFolderFull"
+        case .noVideo: return "noVideo"
         }
     }
 
@@ -383,6 +402,7 @@ enum ForkMeetingExportFailure: Error, Equatable {
         case "earlyAnswer": self = .earlyAnswer
         case "listChanged": self = .listChanged
         case "dropFolderFull": self = .dropFolderFull
+        case "noVideo": self = .noVideo
         case let code? where code.hasPrefix("refusedAddress"):
             self = .refusedAddress(Self.refusal(String(code.dropFirst("refusedAddress.".count))))
         default: self = .network
@@ -735,6 +755,17 @@ extension ForkMeetingExportKind {
         switch self {
         case .dropFolder: return strings.exportKindDropFolder
         case .webhook: return strings.exportKindWebhook
+        case .immich: return "Immich"
+        }
+    }
+}
+
+extension ForkMeetingExportKind {
+    var symbol: String {
+        switch self {
+        case .dropFolder: return "folder"
+        case .webhook: return "network"
+        case .immich: return "photo.on.rectangle.angled"
         }
     }
 }
@@ -783,6 +814,7 @@ extension ForkMeetingExportFailure {
         case .earlyAnswer: return strings.exportFailEarlyAnswer
         case .listChanged: return strings.exportFailListUnconfirmed
         case .dropFolderFull: return strings.exportFailDropFolderFull
+        case .noVideo: return strings.exportFailNoVideo
         }
     }
 }
