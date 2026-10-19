@@ -166,6 +166,11 @@ struct ForkMeetingSidecar: Equatable {
         /// The meeting app's sound was lost from here on (`seconds` 0): its
         /// tap lost its reader, and nothing else hears that app alone.
         case soundLost
+        // MARK: Finish D
+        /// Not a loss: the sound kept in memory before the click ("the last
+        /// 5 minutes") opens the file, its picture black (`at` 0, `seconds`
+        /// how long): the first minutes are sound only.
+        case lookback
     }
 
     /// `at` and every time below are seconds of recording, pauses excluded;

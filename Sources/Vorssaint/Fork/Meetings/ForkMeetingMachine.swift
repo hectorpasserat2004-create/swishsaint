@@ -205,6 +205,10 @@ enum ForkMeetingAnnouncement: Equatable {
     /// "Cancel" took back the "Always" chosen by hand; the provider's
     /// short name.
     case askedAgain(String)
+    // MARK: Finish D
+    /// Others started talking in the offered meeting: the offer is back;
+    /// the meeting's name.
+    case nudged(String)
 
     func text(_ s: ForkMeetingStrings) -> String {
         switch self {
@@ -234,6 +238,7 @@ enum ForkMeetingAnnouncement: Equatable {
         case .neverOfferedWebCalls: return s.voiceNeverWebCalls
         case .meetingBack: return s.voiceMeetingBack
         case let .askedAgain(provider): return s.voiceAskAgain(provider)
+        case let .nudged(name): return s.voiceNudge(name)
         }
     }
 }
@@ -504,6 +509,11 @@ struct ForkMeetingMachine {
         /// The resolver says this meeting probably ended. `countdown` is
         /// the delay before stopping; `nil` (auto stop off): never.
         case endProbable(ForkMeetingIdentity, countdown: TimeInterval?)
+        // MARK: Finish D
+        /// Others are talking in this offered meeting while nothing records
+        /// (`ForkMeetingNudgePlan`): the offer, folded or left alone, comes
+        /// back to ask again.
+        case nudge(ForkMeetingIdentity)
     }
 
     enum Effect: Equatable {
@@ -550,6 +560,9 @@ struct ForkMeetingMachine {
         /// closed. `askedAgain`: "Cancel" also took back the "Always" chosen
         /// by hand for this provider (its short name), said with the outcome.
         case discard(URL, askedAgain: String? = nil)
+        // MARK: Finish D
+        /// Opens the offer again, drawing the eye: "It's started · Record?".
+        case nudgeOffer(ForkMeetingOffer)
     }
 
     private(set) var phase: Phase = .idle
@@ -946,7 +959,7 @@ struct ForkMeetingMachine {
             guard case .recording = phase else { return [] }
             return beginCountdown(session, countdown: countdown, now: now)
 
-        case .accept, .dismiss, .always, .continueRecording:
+        case .accept, .dismiss, .always, .continueRecording, .nudge:
             return []
         }
     }
@@ -1068,6 +1081,15 @@ struct ForkMeetingMachine {
             guard identity == candidate.identity else { return [] }
             phase = .idle
             return [.hideOffer]
+
+        case let .nudge(identity):
+            // A greyed offer could not record anyway: it is not raised.
+            guard identity == candidate.identity, offer.blocked == nil, !terminating else { return [] }
+            var raised = offer
+            raised.collapsed = false
+            raised.collapsesAt = now.addingTimeInterval(Self.offerCollapse)
+            phase = .offering(raised)
+            return [.nudgeOffer(raised), .announce(.nudged(candidate.name))]
 
         case .appWillTerminate, .featureDisabled:
             if case .appWillTerminate = event { terminating = true }

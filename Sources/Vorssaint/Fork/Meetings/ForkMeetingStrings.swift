@@ -775,6 +775,24 @@ struct ForkMeetingStrings {
     /// The detail's line when the meeting track was silent and the echo of
     /// the speakers could not be filtered: short.
     let transcriptMeetingSilent: String
+
+    // MARK: Finish D
+
+    /// The offer back once others talk: "It’s started · Record?".
+    let nudgeTitle: String
+    let voiceNudgeFormat: String
+    let nudgeSetting: String
+    let nudgeCaption: String
+    let lookbackSetting: String
+    let lookbackCaption: String
+    /// "+4 min 12 s already kept"; %@ is a duration.
+    let lookbackKeptFormat: String
+    let lookbackMinutesFormat: String
+    let lookbackSecondsFormat: String
+    let lookbackSoundOnlyOne: String
+    let lookbackSoundOnlyFormat: String
+
+    func voiceNudge(_ meeting: String) -> String { String(format: voiceNudgeFormat, meeting) }
 }
 
 extension ForkMeetingStrings {
@@ -1209,7 +1227,19 @@ extension ForkMeetingStrings {
         // MARK: Fixes O
         transcriptWordsOne: "1 word",
         noticeParakeetMissing: "Parakeet not installed",
-        transcriptMeetingSilent: "Meeting track silent: echo not filtered"
+        transcriptMeetingSilent: "Meeting track silent: echo not filtered",
+        // MARK: Finish D
+        nudgeTitle: "It’s started · Record?",
+        voiceNudgeFormat: "%@ has started. Do you want to record it?",
+        nudgeSetting: "Offer again when the meeting really starts",
+        nudgeCaption: "When others start talking in a detected call you left unanswered, the offer comes back once, then a last time after 2 minutes. Only the level of the meeting app’s sound is read: nothing is kept or written. Without the system audio permission, the microphone is read instead, after a minute of talk.",
+        lookbackSetting: "Keep the last 5 minutes",
+        lookbackCaption: "During a detected call, keep the last 5 minutes of sound in memory, never written until you start recording. The recording then opens with them, sound only. Emptied when the call ends, on Not Now or Never, when the Mac locks or sleeps, and when this is turned off.",
+        lookbackKeptFormat: "+%@ already kept",
+        lookbackMinutesFormat: "%d min",
+        lookbackSecondsFormat: "%d s",
+        lookbackSoundOnlyOne: "The first minute: sound only",
+        lookbackSoundOnlyFormat: "The first %d minutes: sound only"
     )
 }
 
@@ -1645,7 +1675,19 @@ extension ForkMeetingStrings {
         // MARK: Fixes O
         transcriptWordsOne: "1 palavra",
         noticeParakeetMissing: "Parakeet não instalado",
-        transcriptMeetingSilent: "Faixa Reunião muda: eco não filtrado"
+        transcriptMeetingSilent: "Faixa Reunião muda: eco não filtrado",
+        // MARK: Finish D
+        nudgeTitle: "Começou · Gravar?",
+        voiceNudgeFormat: "%@ começou. Quer gravá-la?",
+        nudgeSetting: "Oferecer de novo quando a reunião começar de verdade",
+        nudgeCaption: "Quando outras pessoas começam a falar numa chamada detectada que você não respondeu, a oferta volta uma vez e uma última vez depois de 2 minutos. Só o nível do som do app de reunião é lido: nada é guardado nem gravado. Sem a permissão de áudio do sistema, o microfone é lido no lugar, após um minuto de conversa.",
+        lookbackSetting: "Guardar os últimos 5 minutos",
+        lookbackCaption: "Durante uma chamada detectada, guarda na memória os últimos 5 minutos de som, nunca gravados enquanto você não iniciar a gravação. A gravação então começa com eles, só com som. Apagados quando a chamada termina, em Agora não ou Nunca, quando o Mac bloqueia ou dorme e quando isto é desativado.",
+        lookbackKeptFormat: "+%@ já guardados",
+        lookbackMinutesFormat: "%d\u{00A0}min",
+        lookbackSecondsFormat: "%d\u{00A0}s",
+        lookbackSoundOnlyOne: "O primeiro minuto: só som",
+        lookbackSoundOnlyFormat: "Os primeiros %d minutos: só som"
     )
 }
 
@@ -2081,7 +2123,19 @@ extension ForkMeetingStrings {
         // MARK: Fixes O
         transcriptWordsOne: "1 sözcük",
         noticeParakeetMissing: "Parakeet yüklü değil",
-        transcriptMeetingSilent: "Toplantı kanalı sessiz: yankı süzülmedi"
+        transcriptMeetingSilent: "Toplantı kanalı sessiz: yankı süzülmedi",
+        // MARK: Finish D
+        nudgeTitle: "Başladı · Kaydedilsin mi?",
+        voiceNudgeFormat: "%@ başladı. Kaydetmek ister misiniz?",
+        nudgeSetting: "Toplantı gerçekten başlayınca yeniden öner",
+        nudgeCaption: "Yanıtlamadığınız algılanan bir görüşmede başkaları konuşmaya başlayınca öneri bir kez, 2 dakika sonra da son kez geri gelir. Yalnızca toplantı uygulamasının ses düzeyi okunur: hiçbir şey saklanmaz ya da yazılmaz. Sistem sesi izni yoksa bir dakikalık konuşmadan sonra onun yerine mikrofon okunur.",
+        lookbackSetting: "Son 5 dakikayı sakla",
+        lookbackCaption: "Algılanan bir görüşme sırasında sesin son 5 dakikası bellekte tutulur ve siz kaydı başlatana kadar asla yazılmaz. Kayıt bu dakikalarla, yalnızca sesle başlar. Görüşme bitince, Bu sefer değil ya da Asla seçilince, Mac kilitlenince ya da uyuyunca ve bu ayar kapatılınca silinir.",
+        lookbackKeptFormat: "+%@ saklandı",
+        lookbackMinutesFormat: "%d dk",
+        lookbackSecondsFormat: "%d sn",
+        lookbackSoundOnlyOne: "İlk dakika: yalnızca ses",
+        lookbackSoundOnlyFormat: "İlk %d dakika: yalnızca ses"
     )
 }
 
@@ -2517,7 +2571,19 @@ extension ForkMeetingStrings {
         // MARK: Fixes O
         transcriptWordsOne: "1 слово",
         noticeParakeetMissing: "Parakeet не установлен",
-        transcriptMeetingSilent: "Дорожка «Встреча» пуста: эхо не убрано"
+        transcriptMeetingSilent: "Дорожка «Встреча» пуста: эхо не убрано",
+        // MARK: Finish D
+        nudgeTitle: "Началось · Записать?",
+        voiceNudgeFormat: "%@ началась. Записать её?",
+        nudgeSetting: "Предлагать снова, когда встреча действительно начнётся",
+        nudgeCaption: "Когда в обнаруженном звонке, на который вы не ответили, начинают говорить другие, предложение возвращается один раз, а затем последний раз через 2 минуты. Читается только уровень звука приложения встречи: ничего не хранится и не записывается. Без разрешения на системный звук вместо этого слушается микрофон, после минуты разговора.",
+        lookbackSetting: "Хранить последние 5 минут",
+        lookbackCaption: "Во время обнаруженного звонка последние 5 минут звука хранятся в памяти и никогда не записываются, пока вы не начнёте запись. Запись тогда начинается с них, только звук. Удаляются, когда звонок заканчивается, при «Не сейчас» или «Никогда», при блокировке или сне Mac и при выключении этой функции.",
+        lookbackKeptFormat: "+%@ уже сохранено",
+        lookbackMinutesFormat: "%d мин",
+        lookbackSecondsFormat: "%d с",
+        lookbackSoundOnlyOne: "Первая минута: только звук",
+        lookbackSoundOnlyFormat: "Первые минуты (%d): только звук"
     )
 }
 
@@ -2953,7 +3019,19 @@ extension ForkMeetingStrings {
         // MARK: Fixes O
         transcriptWordsOne: "1 palabra",
         noticeParakeetMissing: "Parakeet no instalado",
-        transcriptMeetingSilent: "Pista Reunión muda: eco sin filtrar"
+        transcriptMeetingSilent: "Pista Reunión muda: eco sin filtrar",
+        // MARK: Finish D
+        nudgeTitle: "Ha empezado · ¿Grabar?",
+        voiceNudgeFormat: "%@ ha empezado. ¿Quieres grabarla?",
+        nudgeSetting: "Ofrecer de nuevo cuando la reunión empiece de verdad",
+        nudgeCaption: "Cuando otras personas empiezan a hablar en una llamada detectada que no respondiste, la oferta vuelve una vez y una última vez después de 2 minutos. Solo se lee el nivel del sonido de la app de reunión: no se guarda ni se escribe nada. Sin el permiso de audio del sistema, se lee el micrófono en su lugar, tras un minuto de conversación.",
+        lookbackSetting: "Guardar los últimos 5 minutos",
+        lookbackCaption: "Durante una llamada detectada, guarda en memoria los últimos 5 minutos de sonido, nunca escritos mientras no empieces a grabar. La grabación empieza entonces con ellos, solo sonido. Se borran cuando la llamada termina, con Ahora no o Nunca, cuando el Mac se bloquea o duerme y cuando esto se desactiva.",
+        lookbackKeptFormat: "+%@ ya guardados",
+        lookbackMinutesFormat: "%d\u{00A0}min",
+        lookbackSecondsFormat: "%d\u{00A0}s",
+        lookbackSoundOnlyOne: "El primer minuto: solo sonido",
+        lookbackSoundOnlyFormat: "Los primeros %d minutos: solo sonido"
     )
 }
 
@@ -3389,7 +3467,19 @@ extension ForkMeetingStrings {
         // MARK: Fixes O
         transcriptWordsOne: "1 slovo",
         noticeParakeetMissing: "Parakeet chýba",
-        transcriptMeetingSilent: "Stopa Stretnutie je tichá: ozvena zostala"
+        transcriptMeetingSilent: "Stopa Stretnutie je tichá: ozvena zostala",
+        // MARK: Finish D
+        nudgeTitle: "Začalo sa · Nahrávať?",
+        voiceNudgeFormat: "%@ sa začalo. Chcete ho nahrať?",
+        nudgeSetting: "Ponúknuť znova, keď sa stretnutie naozaj začne",
+        nudgeCaption: "Keď v rozpoznanom hovore, na ktorý ste neodpovedali, začnú hovoriť ostatní, ponuka sa vráti raz a naposledy po 2 minútach. Číta sa len úroveň zvuku aplikácie stretnutia: nič sa neuchováva ani nezapisuje. Bez povolenia systémového zvuku sa namiesto toho číta mikrofón, po minúte rozhovoru.",
+        lookbackSetting: "Uchovať posledných 5 minút",
+        lookbackCaption: "Počas rozpoznaného hovoru uchováva v pamäti posledných 5 minút zvuku, ktoré sa nikdy nezapíšu, kým nespustíte nahrávanie. Nahrávka sa potom nimi začne, len so zvukom. Vymažú sa, keď hovor skončí, pri Teraz nie alebo Nikdy, keď sa Mac uzamkne alebo uspí a keď sa toto vypne.",
+        lookbackKeptFormat: "+%@ už uchované",
+        lookbackMinutesFormat: "%d\u{00A0}min",
+        lookbackSecondsFormat: "%d\u{00A0}s",
+        lookbackSoundOnlyOne: "Prvá minúta: len zvuk",
+        lookbackSoundOnlyFormat: "Prvé minúty (%d): len zvuk"
     )
 }
 
@@ -3825,7 +3915,19 @@ extension ForkMeetingStrings {
         // MARK: Fixes O
         transcriptWordsOne: "1 Wort",
         noticeParakeetMissing: "Parakeet nicht installiert",
-        transcriptMeetingSilent: "Spur „Besprechung“ stumm: Echo nicht gefiltert"
+        transcriptMeetingSilent: "Spur „Besprechung“ stumm: Echo nicht gefiltert",
+        // MARK: Finish D
+        nudgeTitle: "Es hat begonnen · Aufnehmen?",
+        voiceNudgeFormat: "%@ hat begonnen. Möchtest du sie aufnehmen?",
+        nudgeSetting: "Erneut anbieten, wenn die Besprechung wirklich beginnt",
+        nudgeCaption: "Wenn in einem erkannten Anruf, den du nicht beantwortet hast, andere zu sprechen beginnen, kommt das Angebot einmal zurück und nach 2 Minuten ein letztes Mal. Gelesen wird nur der Pegel des Tons der Besprechungs-App: Nichts wird behalten oder geschrieben. Ohne die Berechtigung für Systemaudio wird stattdessen nach einer Minute Gespräch das Mikrofon gelesen.",
+        lookbackSetting: "Die letzten 5 Minuten behalten",
+        lookbackCaption: "Während eines erkannten Anrufs werden die letzten 5 Minuten Ton im Arbeitsspeicher behalten und nie geschrieben, solange du die Aufnahme nicht startest. Die Aufnahme beginnt dann mit ihnen, nur Ton. Gelöscht, wenn der Anruf endet, bei Diesmal nicht oder Nie, wenn der Mac gesperrt wird oder in den Ruhezustand geht und wenn dies ausgeschaltet wird.",
+        lookbackKeptFormat: "+%@ bereits behalten",
+        lookbackMinutesFormat: "%d\u{00A0}Min.",
+        lookbackSecondsFormat: "%d\u{00A0}s",
+        lookbackSoundOnlyOne: "Die erste Minute: nur Ton",
+        lookbackSoundOnlyFormat: "Die ersten %d Minuten: nur Ton"
     )
 }
 
@@ -4261,7 +4363,19 @@ extension ForkMeetingStrings {
         // MARK: Fixes O
         transcriptWordsOne: "1 mot",
         noticeParakeetMissing: "Parakeet non installé",
-        transcriptMeetingSilent: "Piste Réunion muette\u{00A0}: écho non filtré"
+        transcriptMeetingSilent: "Piste Réunion muette\u{00A0}: écho non filtré",
+        // MARK: Finish D
+        nudgeTitle: "Ça a commencé · Enregistrer\u{00A0}?",
+        voiceNudgeFormat: "%@ a commencé. Voulez-vous l’enregistrer\u{00A0}?",
+        nudgeSetting: "Proposer à nouveau quand la réunion commence vraiment",
+        nudgeCaption: "Quand d’autres personnes se mettent à parler dans un appel détecté auquel vous n’avez pas répondu, la proposition revient une fois, puis une dernière fois après 2\u{00A0}minutes. Seul le niveau du son de l’app de réunion est lu\u{00A0}: rien n’est gardé ni écrit. Sans l’autorisation audio système, c’est le micro qui est lu à la place, après une minute de parole.",
+        lookbackSetting: "Garder les 5 dernières minutes",
+        lookbackCaption: "Pendant un appel détecté, garder en mémoire les 5 dernières minutes de son, jamais écrites tant que vous ne lancez pas l’enregistrement. L’enregistrement commence alors avec elles, son seulement. Vidées quand l’appel se termine, à «\u{00A0}Pas cette fois\u{00A0}» ou «\u{00A0}Jamais\u{00A0}», au verrouillage, à la mise en veille et quand ce réglage est coupé.",
+        lookbackKeptFormat: "+%@ déjà gardées",
+        lookbackMinutesFormat: "%d\u{00A0}min",
+        lookbackSecondsFormat: "%d\u{00A0}s",
+        lookbackSoundOnlyOne: "La première minute\u{00A0}: son seulement",
+        lookbackSoundOnlyFormat: "Les %d premières minutes\u{00A0}: son seulement"
     )
 }
 
@@ -4697,7 +4811,19 @@ extension ForkMeetingStrings {
         // MARK: Fixes O
         transcriptWordsOne: "1 parola",
         noticeParakeetMissing: "Parakeet non installato",
-        transcriptMeetingSilent: "Traccia Riunione muta: eco non filtrata"
+        transcriptMeetingSilent: "Traccia Riunione muta: eco non filtrata",
+        // MARK: Finish D
+        nudgeTitle: "È iniziata · Registrare?",
+        voiceNudgeFormat: "%@ è iniziata. Vuoi registrarla?",
+        nudgeSetting: "Proponi di nuovo quando la riunione inizia davvero",
+        nudgeCaption: "Quando altre persone iniziano a parlare in una chiamata rilevata a cui non hai risposto, la proposta torna una volta e un’ultima volta dopo 2 minuti. Viene letto solo il livello del suono dell’app della riunione: nulla viene conservato né scritto. Senza il permesso per l’audio di sistema, viene letto invece il microfono, dopo un minuto di conversazione.",
+        lookbackSetting: "Conserva gli ultimi 5 minuti",
+        lookbackCaption: "Durante una chiamata rilevata, conserva in memoria gli ultimi 5 minuti di suono, mai scritti finché non avvii la registrazione. La registrazione inizia allora con essi, solo audio. Cancellati quando la chiamata finisce, con Non ora o Mai, quando il Mac si blocca o va in stop e quando questa opzione viene disattivata.",
+        lookbackKeptFormat: "+%@ già conservati",
+        lookbackMinutesFormat: "%d\u{00A0}min",
+        lookbackSecondsFormat: "%d\u{00A0}s",
+        lookbackSoundOnlyOne: "Il primo minuto: solo audio",
+        lookbackSoundOnlyFormat: "I primi %d minuti: solo audio"
     )
 }
 
@@ -5133,7 +5259,19 @@ extension ForkMeetingStrings {
         // MARK: Fixes O
         transcriptWordsOne: "1 語",
         noticeParakeetMissing: "Parakeet 未インストール",
-        transcriptMeetingSilent: "ミーティングのトラックが無音：エコー未除去"
+        transcriptMeetingSilent: "ミーティングのトラックが無音：エコー未除去",
+        // MARK: Finish D
+        nudgeTitle: "始まりました · 録画しますか？",
+        voiceNudgeFormat: "%@が始まりました。録画しますか？",
+        nudgeSetting: "会議が本当に始まったら再度提案",
+        nudgeCaption: "応答しなかった検出済みの通話で他の人が話し始めると、提案が一度、さらに2分後に最後にもう一度表示されます。読み取るのは会議アプリの音のレベルだけで、何も保存・書き込みされません。システムオーディオの許可がない場合は、1分間の会話の後に代わりにマイクを読み取ります。",
+        lookbackSetting: "直前の5分間を保持",
+        lookbackCaption: "検出された通話中、直前5分間の音をメモリに保持し、録画を開始するまでは決して書き込みません。録画はその音から、音声のみで始まります。通話の終了時、「今回はしない」または「録画しない」を選んだとき、Macのロック時やスリープ時、この設定をオフにしたときに消去されます。",
+        lookbackKeptFormat: "+%@ 保持済み",
+        lookbackMinutesFormat: "%d分",
+        lookbackSecondsFormat: "%d秒",
+        lookbackSoundOnlyOne: "最初の1分：音声のみ",
+        lookbackSoundOnlyFormat: "最初の%d分：音声のみ"
     )
 }
 
@@ -5569,7 +5707,19 @@ extension ForkMeetingStrings {
         // MARK: Fixes O
         transcriptWordsOne: "1단어",
         noticeParakeetMissing: "Parakeet 미설치",
-        transcriptMeetingSilent: "회의 트랙 무음: 에코 미제거"
+        transcriptMeetingSilent: "회의 트랙 무음: 에코 미제거",
+        // MARK: Finish D
+        nudgeTitle: "시작됨 · 녹화할까요?",
+        voiceNudgeFormat: "%@이(가) 시작되었습니다. 녹화하시겠습니까?",
+        nudgeSetting: "회의가 실제로 시작되면 다시 제안",
+        nudgeCaption: "응답하지 않은 감지된 통화에서 다른 사람이 말하기 시작하면 제안이 한 번, 2분 뒤 마지막으로 한 번 더 다시 나타납니다. 회의 앱 소리의 레벨만 읽으며 아무것도 보관하거나 기록하지 않습니다. 시스템 오디오 권한이 없으면 1분간 대화한 뒤 대신 마이크를 읽습니다.",
+        lookbackSetting: "마지막 5분 보관",
+        lookbackCaption: "감지된 통화 중 마지막 5분의 소리를 메모리에 보관하며, 녹화를 시작하기 전에는 절대 기록하지 않습니다. 그러면 녹화가 그 소리로 시작되며 소리만 담깁니다. 통화가 끝날 때, 이번에는 안 함 또는 녹화 안 함을 선택할 때, Mac이 잠기거나 잠자기에 들어갈 때, 이 옵션을 끌 때 지워집니다.",
+        lookbackKeptFormat: "+%@ 보관됨",
+        lookbackMinutesFormat: "%d분",
+        lookbackSecondsFormat: "%d초",
+        lookbackSoundOnlyOne: "처음 1분: 소리만",
+        lookbackSoundOnlyFormat: "처음 %d분: 소리만"
     )
 }
 
@@ -6005,7 +6155,19 @@ extension ForkMeetingStrings {
         // MARK: Fixes O
         transcriptWordsOne: "1 слово",
         noticeParakeetMissing: "Parakeet не встановлено",
-        transcriptMeetingSilent: "Доріжка «Зустріч» порожня: луну не прибрано"
+        transcriptMeetingSilent: "Доріжка «Зустріч» порожня: луну не прибрано",
+        // MARK: Finish D
+        nudgeTitle: "Почалося · Записати?",
+        voiceNudgeFormat: "%@ почалася. Записати її?",
+        nudgeSetting: "Пропонувати знову, коли зустріч справді почнеться",
+        nudgeCaption: "Коли у виявленому дзвінку, на який ви не відповіли, починають говорити інші, пропозиція повертається один раз, а потім востаннє через 2 хвилини. Читається лише рівень звуку застосунку зустрічі: нічого не зберігається і не записується. Без дозволу на системний звук натомість слухається мікрофон, після хвилини розмови.",
+        lookbackSetting: "Зберігати останні 5 хвилин",
+        lookbackCaption: "Під час виявленого дзвінка останні 5 хвилин звуку зберігаються в пам’яті й ніколи не записуються, доки ви не почнете запис. Запис тоді починається з них, лише звук. Видаляються, коли дзвінок закінчується, при «Не зараз» або «Ніколи», коли Mac блокується чи засинає, і коли цю функцію вимкнено.",
+        lookbackKeptFormat: "+%@ уже збережено",
+        lookbackMinutesFormat: "%d хв",
+        lookbackSecondsFormat: "%d с",
+        lookbackSoundOnlyOne: "Перша хвилина: лише звук",
+        lookbackSoundOnlyFormat: "Перші хвилини (%d): лише звук"
     )
 }
 
@@ -6441,7 +6603,19 @@ extension ForkMeetingStrings {
         // MARK: Fixes O
         transcriptWordsOne: "1 个词",
         noticeParakeetMissing: "未安装 Parakeet",
-        transcriptMeetingSilent: "会议音轨无声：未过滤回声"
+        transcriptMeetingSilent: "会议音轨无声：未过滤回声",
+        // MARK: Finish D
+        nudgeTitle: "已开始 · 要录制吗？",
+        voiceNudgeFormat: "%@已开始。要录制吗？",
+        nudgeSetting: "会议真正开始时再次提议",
+        nudgeCaption: "在你未回应的已检测通话中，其他人开始说话时，提议会再出现一次，2 分钟后再最后出现一次。只读取会议 App 声音的音量：不保留也不写入任何内容。没有系统音频权限时，会在一分钟的对话后改为读取麦克风。",
+        lookbackSetting: "保留最近 5 分钟",
+        lookbackCaption: "在已检测的通话期间，将最近 5 分钟的声音保留在内存中，在你开始录制之前绝不写入。录制随后以这些声音开头，仅有声音。通话结束、选择“这次不要”或“永不录制”、Mac 锁定或睡眠以及关闭此选项时会被清空。",
+        lookbackKeptFormat: "已保留 +%@",
+        lookbackMinutesFormat: "%d 分钟",
+        lookbackSecondsFormat: "%d 秒",
+        lookbackSoundOnlyOne: "前 1 分钟：仅声音",
+        lookbackSoundOnlyFormat: "前 %d 分钟：仅声音"
     )
 }
 
@@ -6877,7 +7051,19 @@ extension ForkMeetingStrings {
         // MARK: Fixes O
         transcriptWordsOne: "1 個詞",
         noticeParakeetMissing: "未安裝 Parakeet",
-        transcriptMeetingSilent: "會議音軌無聲：未過濾回音"
+        transcriptMeetingSilent: "會議音軌無聲：未過濾回音",
+        // MARK: Finish D
+        nudgeTitle: "已開始 · 要錄製嗎？",
+        voiceNudgeFormat: "%@已開始。要錄製嗎？",
+        nudgeSetting: "會議真正開始時再次提議",
+        nudgeCaption: "在你未回應的已偵測通話中，其他人開始說話時，提議會再出現一次，2 分鐘後再最後出現一次。只讀取會議 App 聲音的音量：不保留也不寫入任何內容。沒有系統音訊權限時，會在一分鐘的對話後改為讀取麥克風。",
+        lookbackSetting: "保留最近 5 分鐘",
+        lookbackCaption: "在已偵測的通話期間，將最近 5 分鐘的聲音保留在記憶體中，在你開始錄製之前絕不寫入。錄製隨後以這些聲音開頭，僅有聲音。通話結束、選擇「這次不要」或「永不錄製」、Mac 鎖定或睡眠以及關閉此選項時會被清空。",
+        lookbackKeptFormat: "已保留 +%@",
+        lookbackMinutesFormat: "%d 分鐘",
+        lookbackSecondsFormat: "%d 秒",
+        lookbackSoundOnlyOne: "前 1 分鐘：僅聲音",
+        lookbackSoundOnlyFormat: "前 %d 分鐘：僅聲音"
     )
 }
 
@@ -7313,6 +7499,18 @@ extension ForkMeetingStrings {
         // MARK: Fixes O
         transcriptWordsOne: "1 個詞",
         noticeParakeetMissing: "未安裝 Parakeet",
-        transcriptMeetingSilent: "會議音軌無聲：未過濾回音"
+        transcriptMeetingSilent: "會議音軌無聲：未過濾回音",
+        // MARK: Finish D
+        nudgeTitle: "已開始 · 要錄製嗎？",
+        voiceNudgeFormat: "%@已開始。要錄製嗎？",
+        nudgeSetting: "會議真正開始時再次提議",
+        nudgeCaption: "喺你未回應嘅已偵測通話入面，其他人開始講嘢時，提議會再出現一次，2 分鐘後再最後出現一次。只讀取會議 App 聲音嘅音量：唔會保留或寫入任何內容。冇系統音訊權限時，會喺一分鐘對話之後改為讀取咪高峰。",
+        lookbackSetting: "保留最近 5 分鐘",
+        lookbackCaption: "喺已偵測嘅通話期間，將最近 5 分鐘嘅聲音保留喺記憶體入面，喺你開始錄製之前絕對唔會寫入。錄製之後會以呢啲聲音開頭，只有聲音。通話結束、揀「今次唔使」或「永不錄製」、Mac 鎖定或者睡眠，同埋關閉呢個選項時會清空。",
+        lookbackKeptFormat: "已保留 +%@",
+        lookbackMinutesFormat: "%d 分鐘",
+        lookbackSecondsFormat: "%d 秒",
+        lookbackSoundOnlyOne: "頭 1 分鐘：只有聲音",
+        lookbackSoundOnlyFormat: "頭 %d 分鐘：只有聲音"
     )
 }

@@ -421,6 +421,8 @@ private struct ForkMeetingDetectionSection: View {
                 }
             }
             .disabled(!autoStop)
+            // MARK: Finish D
+            ForkMeetingForgetRows(text: text)
         }
     }
 

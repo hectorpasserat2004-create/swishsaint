@@ -99,6 +99,13 @@ enum ForkDefaultsKey {
     /// (`ForkMeetingTranscriber`). Off until a real meeting has been read
     /// back (plan §10).
     static let meetingsTranscribe = "fork.meetings.transcribe"
+    // MARK: Finish D
+    /// The offer comes back when others start talking in a detected call
+    /// left unanswered (`ForkMeetingNudgePlan`). On by default.
+    static let meetingsNudge = "fork.meetings.nudge"
+    /// During a detected call, the last 5 minutes of sound are kept in
+    /// memory and open the recording if one starts. Off by default.
+    static let meetingsLookback = "fork.meetings.lookback"
     /// The meetings folder's path; empty: a folder in Movies, named in the
     /// person's language and saved here at the first recording. Machine
     /// state, like the official recorder's folder: kept out of the backup.
@@ -173,6 +180,8 @@ enum ForkDefaults {
         ForkDefaultsKey.meetingsCalendarNaming: false,
         ForkDefaultsKey.meetingsRetentionDays: ForkMeetingRetention.fallback,
         ForkDefaultsKey.meetingsTranscribe: false,
+        ForkDefaultsKey.meetingsNudge: true,
+        ForkDefaultsKey.meetingsLookback: false,
     ]
 
     /// Where each setting lived in the test builds made before the fork

@@ -215,7 +215,7 @@ extension ForkMeetingService {
         case .announce, .notify:
             presenter.apply(effect, context: context)
         case .showOffer, .collapseOffer, .hideOffer, .showUndo, .hideUndo, .showEndingSoon, .hideEndingSoon,
-             .silence, .setPolicy, .discard:
+             .silence, .setPolicy, .discard, .nudgeOffer:
             runDetection(effect)
         }
     }
@@ -251,6 +251,7 @@ extension ForkMeetingService {
         syncSystemEvents()
         systemEvents.hold(ForkMeetingServiceSupport.awake(phase: machine.phase))
         syncDetectionClock()
+        syncListening()
     }
 
     /// The engine of the session recording or paused.
@@ -305,7 +306,10 @@ extension ForkMeetingService {
         }
         let capture = ForkMeetingSidecar.Capture(target: config.settings.target, systemAudio: config.settings.systemAudio,
                                                  microphone: microphone, quality: config.settings.quality)
-        store.createMeeting(id: UUID(), startedAt: Date(), origin: config.origin, title: config.title,
+        // The kept sound opens the file: the meeting began that much earlier.
+        let kept = lookback(for: config).map { max($0.app.storedSeconds, $0.microphone.storedSeconds) } ?? 0
+        store.createMeeting(id: UUID(), startedAt: Date().addingTimeInterval(-kept), origin: config.origin,
+                            title: config.title,
                             titleSource: ForkMeetingDetectionSupport.titleSource(title: config.title,
                                                                                 meeting: config.meeting),
                             capture: capture, meeting: config.meeting) { [weak self] result in
@@ -355,7 +359,8 @@ extension ForkMeetingService {
             }
             recorder.start(config: config, folder: folder, meetingWindow: window,
                            meetingMicrophone: meetingMicrophone(for: config.meeting), excludingWindows: excluded,
-                           titles: trackTitles, meetingSound: sound) { [weak self] result in
+                           titles: trackTitles, meetingSound: sound,
+                           lookback: lookback(for: config)) { [weak self] result in
                 self?.captureAnswered(result, config: config, folder: folder, token: token)
             }
         }
@@ -381,6 +386,12 @@ extension ForkMeetingService {
             context.trackSound = start.trackSound
             send(.captureStarted(token, folder: folder, target: start.target, microphone: start.microphone,
                                  systemAudio: start.heard, startedAt: start.startedAt))
+            // The kept sound opens the file: "The first 4 minutes: sound only".
+            if start.lookbackSeconds > 0 {
+                log.notice("recording opens with \(Int(start.lookbackSeconds)) s of kept sound")
+                store.update(folder, with: ForkMeetingSidecarPatch(
+                    gap: ForkMeetingSidecar.Gap(at: 0, seconds: start.lookbackSeconds, kind: .lookback)))
+            }
             // Lost, or judged, while the capture came up: said once it records.
             if start.trackSound == .lost { send(.soundLost(token)) }
             if let verdict = pendingVerdicts.take(token) { systemAudioJudged(verdict, token: token) }

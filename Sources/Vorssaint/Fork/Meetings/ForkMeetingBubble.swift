@@ -62,6 +62,13 @@ struct ForkMeetingCard {
     var stacked = false
     /// The bubble's ×; an offer has "Not Now" instead.
     var closable = true
+
+    // MARK: Finish D
+
+    /// Raised by a nudge: ringed, sprung, the Record button pointed at.
+    var attention = false
+    /// "+4 min 12 s already kept" since then, counting.
+    var keptSince: Date?
 }
 
 struct ForkMeetingCardView: View {
@@ -116,6 +123,7 @@ struct ForkMeetingCardView: View {
                 }
             }
         }
+        .modifier(ForkMeetingAttention(on: card.attention))
     }
 
     @ViewBuilder
@@ -147,6 +155,11 @@ struct ForkMeetingCardView: View {
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityLabel(card.spokenTitle ?? card.title)
+                if let since = card.keptSince {
+                    ForkMeetingKeptText(since: since)
+                        .font(.system(size: 11, weight: .medium).monospacedDigit())
+                        .foregroundStyle(Color(nsColor: .systemRed))
+                }
                 if let countdown = card.countdownLine {
                     ForkMeetingCountdownText(countdown: countdown)
                         .font(.system(size: 11, weight: .medium).monospacedDigit())
@@ -225,6 +238,9 @@ struct ForkMeetingCardView: View {
     private func actionButton(_ action: ForkMeetingCard.Action, title: String) -> some View {
         let button = Button(action: action.perform) {
             HStack(spacing: 5) {
+                if action.recordDot, card.attention {
+                    ForkMeetingNudgeArrow()
+                }
                 if action.recordDot {
                     Circle()
                         .fill(Color(nsColor: .systemRed))

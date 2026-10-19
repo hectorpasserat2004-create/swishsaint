@@ -52,6 +52,12 @@ struct ForkMeetingLibraryDetail: View {
                     .frame(height: 250)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 facts
+                // MARK: Finish D
+                if let soundOnly = entry.soundOnlySeconds {
+                    Label(ForkMeetingLookbackText.soundOnly(seconds: soundOnly, strings: text), systemImage: "waveform")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
                 ForkMeetingExportStatus(folder: model.folderURL(entry), live: model.isLive(entry), text: text, language: language)
                 notesField
                 ForkMeetingTranscriptRow(model: model, entry: entry, text: text)

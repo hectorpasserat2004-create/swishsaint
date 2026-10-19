@@ -340,7 +340,7 @@ extension ForkMeetingService {
     func runDetection(_ effect: ForkMeetingMachine.Effect) {
         onDetectionEffect?(effect)
         switch effect {
-        case .showOffer, .collapseOffer, .hideOffer, .showUndo, .hideUndo, .showEndingSoon, .hideEndingSoon:
+        case .showOffer, .collapseOffer, .hideOffer, .showUndo, .hideUndo, .showEndingSoon, .hideEndingSoon, .nudgeOffer:
             // The presenter draws them (`ForkMeetingPresenter+Offer`), its
             // buttons configured with the others: "Settings" in the offer's
             // menu goes through `onFailureAction(.openMeetingsPage)`.
