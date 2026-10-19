@@ -554,8 +554,8 @@ final class ForkMeetingStore: @unchecked Sendable {
         guard readable else { return .hidden(master) }
         // Without picture, under the `.m4a`'s name: an MP4 and an M4A are
         // the same container.
-        let audioOnly = (try? ForkMeetingSidecar.read(at: folder.appendingPathComponent(ForkMeetingFolder.sidecarName))
-            .get())?.isAudioOnly == true
+        let meeting = try? ForkMeetingSidecar.read(at: folder.appendingPathComponent(ForkMeetingFolder.sidecarName)).get()
+        let audioOnly = meeting?.isAudioOnly == true
         let final = folder.appendingPathComponent(
             "\(folder.lastPathComponent).\(ForkMeetingFolder.finalExtension(audioOnly: audioOnly))")
         if manager.fileExists(atPath: final.path) {
@@ -573,6 +573,12 @@ final class ForkMeetingStore: @unchecked Sendable {
                 return .hidden(master)
             }
             _ = apply(ForkMeetingSidecarPatch(state: .complete), in: folder)
+        }
+        // Finish D: the master holds nothing kept before the click; shown as
+        // the meeting, the meeting begins at the click, and the kept file goes.
+        if let patch = ForkMeetingLookbackJoin.shownMaster(meeting) {
+            _ = apply(patch, in: folder)
+            try? manager.removeItem(at: folder.appendingPathComponent(ForkMeetingFolder.lookbackName))
         }
         if !audioOnly { addToRecentCaptures(final) }
         return .visible(final)

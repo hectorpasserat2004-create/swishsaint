@@ -156,6 +156,15 @@ enum ForkMeetingLookbackJoin {
         return .join(seconds: seconds, joins: joins)
     }
 
+    /// The master shown as the meeting after a final pass that failed
+    /// (`ForkMeetingStore.revealMaster`): it holds nothing from before the
+    /// click, so the meeting shown begins there, its times moved back.
+    /// `nil` when nothing was kept.
+    static func shownMaster(_ sidecar: ForkMeetingSidecar?) -> ForkMeetingSidecarPatch? {
+        guard let sidecar, sidecar.lookbackSeconds != nil || sidecar.lookbackJoins != nil else { return nil }
+        return ForkMeetingSidecarPatch(dropsLookback: true)
+    }
+
     /// Where a piece of a track goes in the final file, in seconds.
     struct Piece: Equatable {
         enum Source: Equatable { case kept, master }

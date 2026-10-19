@@ -440,6 +440,16 @@ enum ForkMeetingFinishDTests {
         suite.expect(ForkMeetingSidecarPatch(dropsLookback: true).applied(to: dropped) == dropped,
                      "and dropping twice changes nothing")
 
+        suite.expect(ForkMeetingLookbackJoin.shownMaster(whole).map { $0.applied(to: whole) } == dropped
+                        && ForkMeetingLookbackJoin.shownMaster(dropped) == nil,
+                     "a master shown after a failed final pass begins at the click: the same times as a dropped kept file")
+        let store = ForkMeetingFinalizeTests.source("Sources/Vorssaint/Fork/Meetings/ForkMeetingStore.swift")
+        let reveal = store.components(separatedBy: "private func reveal(").dropFirst().first?
+            .components(separatedBy: "\n    }\n").first ?? ""
+        suite.expect(reveal.contains("ForkMeetingLookbackJoin.shownMaster(meeting)")
+                        && reveal.range(of: "shownMaster")!.lowerBound > reveal.range(of: "linkItem")!.lowerBound,
+                     "and the store applies it once the master is shown, never before")
+
         let pieces = ForkMeetingLookbackJoin.pieces(seconds: 120, join: 0.6, keptLength: 121.2, masterLength: 60)
         suite.expect(pieces == [.init(source: .kept, from: 0, to: 120.6, at: 0),
                                 .init(source: .master, from: 0.6, to: 60, at: 120.6)],
