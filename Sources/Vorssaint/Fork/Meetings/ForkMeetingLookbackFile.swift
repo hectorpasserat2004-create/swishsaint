@@ -11,8 +11,9 @@ import os
 /// their own file beside the master (`ForkMeetingFolder.lookbackName`).
 ///
 /// ```
-/// click ─► begin (seconds kept, the rings go on) ─► the master's first sound per track ─► cut
+/// click ─► begin (seconds kept, the rings go on) ─► the master's first sound per track, or a pause ─► cut
 ///       ─► both cut, or 3 s, or the stop ─► write (its own queue) ─► meeting.json: lookbackJoins
+/// stop ─► settle: the writing waited for (bounded) before the master closes and its final pass starts
 /// ```
 /// The listener that filled the rings goes on until then, so the seconds
 /// between the click and the recording's own first sound are kept too; it
@@ -31,13 +32,21 @@ final class ForkMeetingLookbackHandOver: @unchecked Sendable {
     private var seconds: TimeInterval = 0
     private var cuts: [Double?] = [nil, nil]
     private var settled = false
+    /// The file is written (or given up) and `onWritten` sent.
+    private var complete = false
+    /// The stop stopped waiting for it: written later, it would be a file
+    /// nothing joins, so it is removed instead.
+    private var abandoned = false
 
     /// Main thread: the file is whole, with each track's join; `nil` when
     /// nothing was written.
     var onWritten: ((URL, [Double]?) -> Void)?
 
     /// For a buffer of the listener still on its way when a track is cut.
-    static let settle: TimeInterval = 0.5
+    static let settleDelay: TimeInterval = 0.5
+    /// How long a stop waits for the kept file: well within the stop's own
+    /// bound (`ForkMeetingCaptureSupport.stopTimeout`).
+    static let stopWait: TimeInterval = 5
 
     init(lookback: ForkMeetingLookback, listener: ForkMeetingCallListener?) {
         self.lookback = lookback
@@ -74,11 +83,48 @@ final class ForkMeetingLookbackHandOver: @unchecked Sendable {
         if both { queue.async { [self] in finish() } }
     }
 
+    /// The recording paused: no track is kept past that instant. Nothing of
+    /// the pause enters the file, and the master's sound after the resume
+    /// is never replaced by the rings'.
+    func pause(atHost host: Double) {
+        let both = lock.withLock { () -> Bool in
+            guard let zero, !settled else { return false }
+            for track in cuts.indices where cuts[track] == nil {
+                let cut = min(max(zero, host), zero + ForkMeetingLookbackPlan.cutLimit)
+                cuts[track] = cut
+                lookback.rings[track].cut(atHost: cut)
+            }
+            return true
+        }
+        if both { queue.async { [self] in finish() } }
+    }
+
+    /// The recording stops: the file is written now and waited for, at most
+    /// `timeout`, so the final pass that follows finds it whole and joins
+    /// it. Past that it is given up: removed if it comes later. `true` when
+    /// it is settled either way in time.
+    func settle(timeout: TimeInterval) async -> Bool {
+        finish()
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if lock.withLock({ complete }) { return true }
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+        return lock.withLock { () -> Bool in
+            if !complete { abandoned = true }
+            return complete
+        }
+    }
+
     /// The recording stopped, or the cut limit passed: what is not cut yet
     /// is cut now, and the file written. Once.
     func finish() {
         let taken = lock.withLock { () -> (zero: Double, folder: URL, seconds: TimeInterval, cuts: [Double])? in
-            guard let zero, let folder, !settled else { return nil }
+            guard let zero, let folder, !settled else {
+                // Nothing was begun, or it is settled already.
+                if self.zero == nil { complete = true }
+                return nil
+            }
             settled = true
             let now = ForkMeetingWriter.hostSeconds()
             let filled = cuts.map { $0 ?? min(now, zero + ForkMeetingLookbackPlan.cutLimit) }
@@ -86,7 +132,7 @@ final class ForkMeetingLookbackHandOver: @unchecked Sendable {
         }
         guard let taken else { return }
         for (index, host) in taken.cuts.enumerated() { lookback.rings[index].cut(atHost: host) }
-        queue.asyncAfter(deadline: .now() + Self.settle) { [self] in
+        queue.asyncAfter(deadline: .now() + Self.settleDelay) { [self] in
             listener?.stop()
             let url = taken.folder.appendingPathComponent(ForkMeetingFolder.lookbackName)
             let plan = ForkMeetingLookbackPlan.plan(spans: lookback.rings.map(\.span), zero: taken.zero,
@@ -101,13 +147,27 @@ final class ForkMeetingLookbackHandOver: @unchecked Sendable {
             }
             lookback.clear()
             let done = onWritten
-            DispatchQueue.main.async { done?(taken.folder, joins) }
+            lock.withLock {
+                if abandoned {
+                    // The final pass may already have gone on without it.
+                    try? FileManager.default.removeItem(at: url)
+                    joins = nil
+                }
+                // Sent before `settle` returns: the joins reach meeting.json
+                // before the stop's answer, and so before the final pass.
+                let written = joins
+                DispatchQueue.main.async { done?(taken.folder, written) }
+                complete = true
+            }
         }
     }
 
     /// The recording did not start: nothing is written, everything goes.
     func discard() {
-        lock.withLock { settled = true }
+        lock.withLock {
+            settled = true
+            complete = true
+        }
         listener?.stop()
         lookback.clear()
     }

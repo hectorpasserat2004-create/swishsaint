@@ -447,8 +447,27 @@ enum ForkMeetingFinishDTests {
         let reveal = store.components(separatedBy: "private func reveal(").dropFirst().first?
             .components(separatedBy: "\n    }\n").first ?? ""
         suite.expect(reveal.contains("ForkMeetingLookbackJoin.shownMaster(meeting)")
-                        && reveal.range(of: "shownMaster")!.lowerBound > reveal.range(of: "linkItem")!.lowerBound,
-                     "and the store applies it once the master is shown, never before")
+                        && reveal.range(of: "shownMaster")!.lowerBound > reveal.range(of: "Self.replace(final, with: master)")!.lowerBound,
+                     "and the store applies it only when the master becomes the final file, never for a second name")
+        var retried = whole
+        retried.state = .finalizing
+        var last = whole
+        last.state = .interrupted
+        suite.expect(ForkMeetingLookbackJoin.givenUp(retried) == nil
+                        && ForkMeetingLookbackJoin.givenUp(last).map { $0.applied(to: last).lookbackSeconds == nil } == true,
+                     "a failed pass that will be tried again keeps the kept minutes; its last try gives them up")
+        let finalizer = ForkMeetingFinalizeTests.source("Sources/Vorssaint/Fork/Meetings/ForkMeetingFinalizer.swift")
+        let failed = finalizer.components(separatedBy: "private func failed(").dropFirst().first?
+            .components(separatedBy: "\n    }\n").first ?? ""
+        suite.expect(failed.contains("ForkMeetingLookbackJoin.givenUp"), "and the final pass asks it before letting them go")
+        let recorder = ForkMeetingFinalizeTests.source("Sources/Vorssaint/Fork/Meetings/ForkMeetingRecorder.swift")
+        let pause = recorder.components(separatedBy: "func pause(stoppingStream").dropFirst().first?
+            .components(separatedBy: "\n    }\n").first ?? ""
+        let tearDown = recorder.components(separatedBy: "private func tearDown(").dropFirst().first?
+            .components(separatedBy: "\n    }\n").first ?? ""
+        suite.expect(pause.contains(".pause(atHost: now)")
+                        && tearDown.range(of: ".settle(timeout:").map { $0.lowerBound < tearDown.range(of: "writer.finish(")!.lowerBound } == true,
+                     "a pause cuts what is kept; a stop waits for the kept file before the master closes and its final pass")
 
         let pieces = ForkMeetingLookbackJoin.pieces(seconds: 120, join: 0.6, keptLength: 121.2, masterLength: 60)
         suite.expect(pieces == [.init(source: .kept, from: 0, to: 120.6, at: 0),

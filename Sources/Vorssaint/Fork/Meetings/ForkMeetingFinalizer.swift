@@ -376,9 +376,15 @@ final class ForkMeetingFinalizer: ObservableObject, @unchecked Sendable {
     }
 
     /// The master stays where it is; `state` stays `finalizing`, so the
-    /// next launch tries again.
+    /// next launch tries again. The kept minutes stay for that try; only
+    /// the last one (`interrupted`) gives them up for good, the master
+    /// then being the meeting as it is (`ForkMeetingLookbackJoin.givenUp`).
     private func failed(_ job: Job, note: String, seconds: Double?) -> Outcome {
         store.write(ForkMeetingSidecarPatch(finalPass: .failed), in: job.folder)
+        if let patch = ForkMeetingLookbackJoin.givenUp((try? store.sidecar(in: job.folder).get())) {
+            store.write(patch, in: job.folder)
+            try? FileManager.default.removeItem(at: Paths(job.folder).kept)
+        }
         return Outcome(folder: job.folder, finalPass: .failed, video: nil, audio: nil, seconds: seconds,
                        videoBytes: nil, audioBytes: nil, note: note)
     }

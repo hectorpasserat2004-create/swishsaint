@@ -156,13 +156,21 @@ enum ForkMeetingLookbackJoin {
         return .join(seconds: seconds, joins: joins)
     }
 
-    /// The master shown as the meeting after a final pass that failed
-    /// (`ForkMeetingStore.revealMaster`): it holds nothing from before the
-    /// click, so the meeting shown begins there, its times moved back.
-    /// `nil` when nothing was kept.
+    /// The master made the meeting's final file after a final pass that
+    /// failed (`ForkMeetingStore.revealMaster`, where it cannot be a second
+    /// name): it holds nothing from before the click, so the meeting begins
+    /// there, its times moved back. `nil` when nothing was kept.
     static func shownMaster(_ sidecar: ForkMeetingSidecar?) -> ForkMeetingSidecarPatch? {
         guard let sidecar, sidecar.lookbackSeconds != nil || sidecar.lookbackJoins != nil else { return nil }
         return ForkMeetingSidecarPatch(dropsLookback: true)
+    }
+
+    /// A final pass failed: only its last try (`interrupted`, after the
+    /// recovery's) gives the kept minutes up for good; a pass that may still
+    /// be tried again keeps them to join. `nil`: kept.
+    static func givenUp(_ sidecar: ForkMeetingSidecar?) -> ForkMeetingSidecarPatch? {
+        guard sidecar?.state == .interrupted else { return nil }
+        return shownMaster(sidecar)
     }
 
     /// Where a piece of a track goes in the final file, in seconds.
