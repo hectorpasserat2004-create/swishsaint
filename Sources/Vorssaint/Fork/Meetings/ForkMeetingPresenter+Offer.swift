@@ -614,11 +614,11 @@ extension ForkMeetingPresenter {
             mainWindow: facts.mainWindow,
             sound: ForkMeetingOfferText.sound(setting: settings.systemAudio, providerDefault: candidate.defaultSound),
             soundApp: facts.soundApp, microphone: facts.microphone, strings: text)
-        // The appointment joins the one line when it fits ("Google Meet ·
-        // abc-defg-hij · RDV : ACME · 10:00"), else heads the ⋯ menu and is
-        // said with the name (W2 F).
-        let compact = ForkMeetingOfferText.compactLine(subtitle: heading.subtitle, booking: facts.booking)
-        card.lines = [compact.line].compactMap { $0 }
+        // The appointment goes under the service and code when it holds on
+        // one line ("RDV : ACME · 10:00"), else heads the ⋯ menu and is said
+        // with the name (W2 F).
+        let compact = ForkMeetingOfferText.compactLines(subtitle: heading.subtitle, booking: facts.booking)
+        card.lines = compact.lines
         let bookingApart = compact.bookingApart ? facts.booking : nil
         if let bookingApart { card.spokenTitle = (card.spokenTitle ?? card.title) + ", " + bookingApart }
         if facts.consentReminder { card.info = text.consentRemind }

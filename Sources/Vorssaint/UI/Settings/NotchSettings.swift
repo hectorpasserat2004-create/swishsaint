@@ -319,6 +319,7 @@ struct NotchSettings: View {
                     let available = module.isAvailable()
                     NotchSectionHeader(module: module, shown: isShown(module),
                                        reason: available ? nil : moduleFeature(module).map { $0.enableReason(l10n) } ?? text.disabled) {
+                        if module == .meetings { return ForkMeetingIslandSettings.openFeature() } // FORK(notch-meetings7)
                         SettingsRouter.shared.request(FeatureSettingsDestination(.features), targetFeature: moduleFeature(module))
                     }
                     if !wide { preview(width: detailWidth, limit: 280) }
@@ -520,6 +521,7 @@ struct NotchSettings: View {
         case .watch:
             NotchWatchSettingsControls()
                 .toggleStyle(TrailingSwitchToggleStyle())
+        case .meetings: ForkMeetingIslandSettings() // FORK(notch-meetings7)
         case .mixer, .system, .tools:
             EmptyView()
         }
@@ -623,6 +625,7 @@ struct NotchSettings: View {
                 switchRow("lock.display", locked.show, caption: locked.showHint, isOn: $lockScreen)
                 switchRow("speaker.wave.2", locked.sounds, caption: locked.soundsHint, isOn: $lockSounds)
             }
+            ForkMeetingIslandActivityCard() // FORK(notch-meetings8)
         }
     }
 
@@ -855,6 +858,7 @@ struct NotchSettings: View {
         case .scratchpad: return .scratchpad
         case .agents: return .notchAgents
         case .watch: return .notchWatch
+        case .meetings: return nil // FORK(notch-meetings7)
         }
     }
 

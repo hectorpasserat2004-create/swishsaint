@@ -95,6 +95,9 @@ final class ForkMeetingLiveCard {
 
 /// The card itself, in the island's look (`panelCard` in the island).
 struct ForkMeetingLiveCardView: View {
+    /// On the island's Meetings page, a still of what is filmed leads the
+    /// card (`ForkMeetingLivePreview`).
+    var showsPreview = false
     @ObservedObject private var model = ForkMeetingIslandModel.shared
     @ObservedObject private var l10n = L10n.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -111,6 +114,9 @@ struct ForkMeetingLiveCardView: View {
     private func card(_ snapshot: ForkMeetingIslandSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 10) {
+                if showsPreview {
+                    ForkMeetingLivePreviewView(snapshot: snapshot)
+                }
                 ZStack {
                     ForkMeetingLiveCardMark(phase: snapshot.phase)
                         .id(snapshot.phase.mark)

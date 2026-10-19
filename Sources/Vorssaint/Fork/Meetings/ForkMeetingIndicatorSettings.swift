@@ -7,6 +7,8 @@ import SwiftUI
 /// the recording in the closed island, like the official live activities,
 /// and, while it is there, whether the floating indicator (the pill)
 /// steps aside or stays. Off, the pill alone says that a meeting records.
+/// The same setting shows in the Dynamic Island's Activity and Content tabs
+/// (`ForkMeetingIslandSettings`), and each leads to the other.
 struct ForkMeetingIndicatorSection: View {
     let text: ForkMeetingStrings
 
@@ -36,6 +38,11 @@ struct ForkMeetingIndicatorSection: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+            }
+            // The island's Meetings section, its other half, in its own settings.
+            HStack {
+                Spacer()
+                ForkMeetingIslandSettingsLink()
             }
         }
         .onChange(of: stored) { _, _ in

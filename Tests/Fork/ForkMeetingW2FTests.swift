@@ -236,19 +236,20 @@ enum ForkMeetingW2FTests {
     }
 
     /// A CRM's appointment ("RDV : ACME · 10:00", its time written out here:
-    /// nothing reads the Mac's 12- or 24-hour setting) joins the compact
-    /// card's one line when the whole fits, else stands apart.
+    /// nothing reads the Mac's 12- or 24-hour setting) gets the compact
+    /// card's second line when it holds on one, else stands apart.
     private static func booking(_ suite: TestSuite) {
-        let line = ForkMeetingOfferText.compactLine(subtitle: "Meet · abc-defg-hij", booking: "RDV : ACME · 10:00")
-        suite.expect(line.line == "Meet · abc-defg-hij · RDV : ACME · 10:00" && !line.bookingApart,
-                     "short enough, the appointment follows the service and the code on the one line")
-        let long = ForkMeetingOfferText.compactLine(subtitle: "Google Meet · abc-defg-hij",
-                                                    booking: "RDV : Laboratoires Pierre Fabre · 10:00")
-        suite.expect(long.line == "Google Meet · abc-defg-hij" && long.bookingApart,
-                     "too long, the line keeps the service and code; the appointment goes first in ⋯ and to VoiceOver")
-        suite.expect(ForkMeetingOfferText.compactLine(subtitle: nil, booking: "RDV : ACME") == ("RDV : ACME", false)
-                        && ForkMeetingOfferText.compactLine(subtitle: "Meet", booking: nil) == ("Meet", false)
-                        && ForkMeetingOfferText.compactLine(subtitle: nil, booking: nil) == (nil, false),
+        let short = ForkMeetingOfferText.compactLines(subtitle: "Google Meet · abc-defg-hij", booking: "RDV : ACME · 10:00")
+        suite.expect(short.lines == ["Google Meet · abc-defg-hij", "RDV : ACME · 10:00"] && !short.bookingApart,
+                     "short enough, the appointment goes under the service and the code")
+        let long = ForkMeetingOfferText.compactLines(subtitle: "Google Meet · abc-defg-hij",
+                                                     booking: "RDV : Laboratoires Pierre Fabre · 10:00")
+        suite.expect(long.lines == ["Google Meet · abc-defg-hij"] && long.bookingApart,
+                     "too long, the card keeps the service and code; the appointment goes first in ⋯ and to VoiceOver")
+        let alone = ForkMeetingOfferText.compactLines(subtitle: nil, booking: "RDV : ACME")
+        let none = ForkMeetingOfferText.compactLines(subtitle: "Meet", booking: nil)
+        suite.expect(alone.lines == ["RDV : ACME"] && !alone.bookingApart && none.lines == ["Meet"] && !none.bookingApart
+                        && ForkMeetingOfferText.compactLines(subtitle: nil, booking: nil).lines.isEmpty,
                      "alone, the appointment is the line; without one, nothing changes")
     }
 

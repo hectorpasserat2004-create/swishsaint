@@ -695,6 +695,8 @@ final class ForkMeetingRecorder: @unchecked Sendable {
         ForkMeetingCaptureStream.Callbacks(
             video: { [weak self] sample in
                 self?.lock.withLock { self?.writer }?.appendVideo(sample)
+                // The island's Meetings page, while it shows: a still a second.
+                ForkMeetingLivePreview.shared.offer(sample)
             },
             audio: { [weak self] sample in self?.streamSound(sample) },
             frozen: { [weak self] frozen in

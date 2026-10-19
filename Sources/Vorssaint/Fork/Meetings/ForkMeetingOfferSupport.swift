@@ -515,15 +515,14 @@ enum ForkMeetingOfferClick {
 }
 
 extension ForkMeetingOfferText {
-    /// The compact card's one line: the service and code, with a CRM's
-    /// appointment after them when the whole fits (`limit` characters, about
-    /// what the island leaves beside its buttons), else the service and code
-    /// alone and the appointment apart (`bookingApart`: first in ⋯, and said
-    /// with the name). Alone, the appointment is the line.
-    static func compactLine(subtitle: String?, booking: String?, limit: Int = 44) -> (line: String?, bookingApart: Bool) {
-        guard let booking, !booking.isEmpty else { return (subtitle, false) }
-        guard let subtitle, !subtitle.isEmpty else { return (booking, false) }
-        let joined = subtitle + " · " + booking
-        return joined.count <= limit ? (joined, false) : (subtitle, true)
+    /// The compact card's lines: the service and code, then a CRM's
+    /// appointment under them when it is short enough to hold on one line
+    /// beside the buttons (`limit` characters), else the service and code
+    /// alone and the appointment apart (`bookingApart`: first in ⋯, and
+    /// said with the name). Never a line cut or wrapped mid-way.
+    static func compactLines(subtitle: String?, booking: String?, limit: Int = 32) -> (lines: [String], bookingApart: Bool) {
+        let head = [subtitle].compactMap { $0 }.filter { !$0.isEmpty }
+        guard let booking, !booking.isEmpty else { return (head, false) }
+        return booking.count <= limit ? (head + [booking], false) : (head, true)
     }
 }

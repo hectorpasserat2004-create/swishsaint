@@ -106,6 +106,7 @@ final class ForkMeetingIslandModel: ObservableObject {
         markedWork = nil
         levels = { .silent }
         actions = ForkMeetingPill.Actions()
+        ForkMeetingLivePreview.shared.reset()
         context = ForkMeetingLiveContext()
         showOffer(nil)
         show(.hidden)
@@ -220,7 +221,7 @@ struct ForkMeetingIslandStrip: View {
 
     @ViewBuilder private func strip(_ snapshot: ForkMeetingIslandSnapshot, now: Date) -> some View {
         let reading = ForkMeetingIslandRules.clock(snapshot.elapsed(at: now))
-        Button { ForkMeetingLiveCard.shared.present() } label: {
+        Button { Self.open(from: service) } label: {
             if let size {
                 capsule(snapshot, reading: reading, size: size)
             } else {
@@ -451,6 +452,17 @@ struct ForkMeetingIslandStrip: View {
             .fixedSize(horizontal: size != nil, vertical: false)
             .modifier(NotchRollingDigits(value: reading, countsDown: true, everySecond: false))
             .modifier(ForkMeetingIslandOfferAttention(nudges: offer.nudges))
+    }
+
+    /// A click on the strip opens the Meetings section, as the timer's
+    /// opens Timer, with the same choice of what the island opens on;
+    /// with that section hidden, the live card holds the controls.
+    static func open(from service: NotchService) {
+        if service.modules.contains(.meetings) {
+            service.openActivity(.meetings)
+        } else {
+            ForkMeetingLiveCard.shared.present()
+        }
     }
 
     // MARK: Measures

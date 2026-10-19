@@ -21,7 +21,9 @@ final class ForkMeetingLibraryModel: ObservableObject {
     @Published private(set) var entries: [ForkMeetingLibraryEntry] = [] {
         didSet {
             entriesVersion += 1
-            indexTranscripts()
+            // The island's page reads the transcripts only once a search
+            // needs them.
+            if !forIsland || isSearching { indexTranscripts() }
         }
     }
     /// The transcripts, read once and kept in memory for the search.
@@ -44,6 +46,9 @@ final class ForkMeetingLibraryModel: ObservableObject {
     /// under the search (a note typed, a rename) stays selected and shown.
     @Published var query = "" {
         didSet {
+            if forIsland, isSearching, oldValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                indexTranscripts()
+            }
             guard query != oldValue, let selection, !filtered.contains(where: { $0.folderName == selection }) else { return }
             self.selection = ForkMeetingLibrary.order(groups).first
         }
@@ -100,9 +105,19 @@ final class ForkMeetingLibraryModel: ObservableObject {
     /// and is read again rather than shown.
     private var changes = 0
     private var noteExpiry: DispatchWorkItem?
+    /// The island's Meetings page (`ForkMeetingIslandSection`), lighter than
+    /// the window: the transcripts are read only once a search is typed, and
+    /// a change inside a folder this app is writing (a recording writes
+    /// every 2 s) scans nothing; the page asks for a scan when a recording
+    /// starts, stops or is finished.
+    let forIsland: Bool
+
+    private var isSearching: Bool { !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     init(store: ForkMeetingStore = .shared, language: AppLanguage? = nil, now: @escaping () -> Date = Date.init,
-         calendar: Calendar = .current, writing: @escaping () -> Set<String> = { ForkMeetingService.shared.writingFolders }) {
+         calendar: Calendar = .current, writing: @escaping () -> Set<String> = { ForkMeetingService.shared.writingFolders },
+         forIsland: Bool = false) {
+        self.forIsland = forIsland
         self.store = store
         self.language = language
         self.now = now
@@ -119,6 +134,7 @@ final class ForkMeetingLibraryModel: ObservableObject {
         self.now = { now }
         self.calendar = calendar
         writing = { [] }
+        forIsland = false
         self.root = root
         self.entries = entries
         self.probes = probes
@@ -235,8 +251,16 @@ final class ForkMeetingLibraryModel: ObservableObject {
         // meeting): watched itself from now on, not its parent.
         if let watch, watch.path == path, watch.watchesItself || !FileManager.default.fileExists(atPath: path) { return }
         watch?.stop()
-        watch = ForkMeetingFolderWatch(path: path) { [weak self] rescan in self?.refresh(rescan) }
+        watch = ForkMeetingFolderWatch(path: path) { [weak self] rescan in self?.folderChanged(rescan) }
         watch?.start()
+    }
+
+    /// What the Finder or this app changed in the folder. On the island's
+    /// page, nothing for a meeting still being written.
+    private func folderChanged(_ rescan: ForkMeetingLibrary.Rescan) {
+        guard forIsland else { return refresh(rescan) }
+        guard let kept = ForkMeetingIslandPage.rescan(rescan, root: root, writing: writing()) else { return }
+        refresh(kept)
     }
 
     /// A scan, one at a time: a change during a scan asks for one more.

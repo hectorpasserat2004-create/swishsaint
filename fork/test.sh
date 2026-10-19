@@ -64,6 +64,8 @@ FORK_SOURCES=(
     Sources/Vorssaint/Fork/Meetings/ForkMeetingFailure.swift
     Sources/Vorssaint/Fork/Meetings/ForkMeetingFinalPass.swift
     Sources/Vorssaint/Fork/Meetings/ForkMeetingFolder.swift
+    Sources/Vorssaint/Fork/Meetings/ForkMeetingIslandPageSupport.swift
+    Sources/Vorssaint/Fork/Meetings/ForkMeetingIslandStrings.swift
     Sources/Vorssaint/Fork/Meetings/ForkMeetingIslandSupport.swift
     Sources/Vorssaint/Fork/Meetings/ForkMeetingLibrary.swift
     Sources/Vorssaint/Fork/Meetings/ForkMeetingLibraryRules.swift
