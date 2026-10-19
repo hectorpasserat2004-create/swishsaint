@@ -22,6 +22,7 @@ enum ForkMeetingFinishDTests {
         texts(suite)
         sidecar(suite)
         soundOnlyMeeting(suite)
+        fileTime(suite)
     }
 
     private static let t0 = Date(timeIntervalSinceReferenceDate: 800_000_000)
@@ -369,6 +370,65 @@ enum ForkMeetingFinishDTests {
         let entry = ForkMeetingLibraryEntry(folderName: "2026-10-19 10h00 — Point hebdo", sidecar: .success(back),
                                             contents: contents)
         suite.expect(entry?.soundOnlySeconds == 252, "and the library's detail reads it")
+    }
+
+    // MARK: - Markers and the transcript (Finish E)
+
+    /// The kept minutes are the file's first: the meeting's clock starts
+    /// with them, so a ★ pressed after the click, the transcript's lines and
+    /// the `.srt` the review plays from are all in the same file time.
+    private static func fileTime(_ suite: TestSuite) {
+        var machine = ForkMeetingMachine()
+        let facts = ForkMeetingStartFacts(freeBytes: 50_000_000_000, screenRecordingAllowed: true,
+                                          microphoneAllowed: true, officialRecorderBusy: false)
+        let settings = ForkMeetingCaptureSettings(target: .window, systemAudio: .app, microphone: "meeting",
+                                                  quality: .standard)
+        machine.handle(.manualStart(.init(settings: settings, facts: facts)), now: at(0))
+        guard case let .starting(pending) = machine.phase else { return suite.expect(false, "the recording starts") }
+        // The engine answers that the file's zero came 252 s before the
+        // click: the kept sound opens it.
+        machine.handle(.captureStarted(pending.token, folder: URL(fileURLWithPath: "/tmp/Meetings/Point hebdo"),
+                                       target: .window, startedAt: at(1 - 252)), now: at(1))
+        let early = machine.activeSession.map { $0.recorded(at: at(31)) }
+        machine.handle(.pause, now: at(41))
+        machine.handle(.resume, now: at(61))
+        let late = machine.activeSession.map { $0.recorded(at: at(71)) }
+        suite.expect(early == 282 && late == 302,
+                     "the meeting's clock counts the kept 252 s, then the time since the click, pauses left out")
+        let marker = ForkMeetingMarkers.time(recorded: late ?? 0)
+        suite.expect(marker == 302 && ForkMeetingMarkers.clock(marker) == "00:05:02",
+                     "a ★ pressed 50 s after the click (20 s of them paused) is at 5:02 of the file")
+
+        // Heard before the click (1:40, in the kept sound) and after it.
+        let word = { (text: String, start: Double) in
+            ForkParakeetWord(text: text, start: start, end: start + 1, confidence: 0.9)
+        }
+        let document = ForkMeetingTranscriptFormat.document(
+            me: [word("Bonjour.", 100), word("On commence.", 300)],
+            participants: [word("Oui.", 120), word("Allons-y.", 305)],
+            microEnvelope: nil, meetingEnvelope: nil, label: { $0 == .me ? "Moi : " : "Eux : " }, markers: [marker])
+        suite.expect(document.text == """
+                        [00:01:40] Moi : Bonjour.
+
+                        [00:02:00] Eux : Oui.
+
+                        [00:05:00] Moi : On commence.
+
+                        ★ [00:05:02]
+
+                        [00:05:05] Eux : Allons-y.
+
+                        """,
+                     "the transcript writes the kept minutes' words at their file time, the ★ between the lines around it")
+        let cues = ForkMeetingPlayback.cues(srt: document.srt)
+        let rows = ForkMeetingPlayback.rows(cues: cues, markers: [marker])
+        suite.expect(cues.map(\.start) == [100, 120, 300, 305] && rows.map(\.time) == [100, 120, 300, 302, 305]
+                        && ForkMeetingPlayback.current(rows, at: 306).map { rows[$0].time } == 305
+                        && ForkMeetingPlayback.current(rows, at: 101).map { rows[$0].time } == 100
+                        && ForkMeetingMarkers.playFrom(marker) == 299,
+                     "the review lines the .srt and the ★ up in file time, the kept minutes' lines lit as they play")
+        suite.expect(ForkMeetingMarkers.fraction(marker, duration: 252 + 70 - 20) == marker / 302,
+                     "and the player's strip places the ★ on the whole file, kept minutes included")
     }
 
     // MARK: - With sound only (Finish C)

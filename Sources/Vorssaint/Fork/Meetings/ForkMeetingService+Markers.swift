@@ -7,7 +7,9 @@ import Foundation
 /// and the Command Bar's row all come here. The time is the file's own (the engine's pause
 /// clock, pauses left out), so the marker points at the same instant of the
 /// video; it goes into `meeting.json` at once, like a gap, so a crash keeps
-/// it with the meeting it recovers.
+/// it with the meeting it recovers. Minutes kept before the click open the
+/// file (`ForkMeetingLookback`): that clock starts with them, and so does
+/// the transcript's, so the ★ and the `.srt` stay in line.
 extension ForkMeetingService {
     /// Main thread. `false` when nothing records or the recording is paused
     /// (nothing to mark), or when the press is the same moment as the last
