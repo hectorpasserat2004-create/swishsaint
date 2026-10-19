@@ -33,7 +33,21 @@ enum ForkMeetingIslandPage {
     /// The meetings in the window's order, newest first, without the one
     /// the live card above already shows.
     static func rows(_ ordered: [ForkMeetingLibraryEntry], showsLive: Bool) -> [ForkMeetingLibraryEntry] {
-        ordered.filter { !(showsLive && $0.status == .recording) }
+        // A meeting finishing is the live card's too until it is saved.
+        ordered.filter { !(showsLive && $0.status.isInProgress) }
+    }
+
+    /// A change the folder watch saw, for the island's page: the folders
+    /// this app is still writing are left out (a recording writes every
+    /// 2 s), and nothing is scanned when only they changed. A change of the
+    /// whole folder is scanned. `writing` holds standardized paths.
+    static func rescan(_ rescan: ForkMeetingLibrary.Rescan, root: URL,
+                       writing: Set<String>) -> ForkMeetingLibrary.Rescan? {
+        guard case let .folders(names) = rescan else { return rescan }
+        let kept = names.filter { name in
+            !writing.contains(root.appendingPathComponent(name, isDirectory: true).standardizedFileURL.path)
+        }
+        return kept.isEmpty ? nil : .folders(kept)
     }
 
     /// What a row says of its meeting, in this order, after its date and

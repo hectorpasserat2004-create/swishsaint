@@ -29,8 +29,9 @@ final class ForkMeetingLivePreview: ObservableObject, @unchecked Sendable {
     private var scaling = false
 
     private let queue = DispatchQueue(label: "fork.meetings.preview", qos: .utility)
-    /// Used on `queue` only.
-    private lazy var context = CIContext(options: [.cacheIntermediates: false, .useSoftwareRenderer: false])
+    /// Used on `queue` only; made for the first still, let go when no page
+    /// watches any more.
+    private var context: CIContext?
 
     private init() {}
 
@@ -49,14 +50,23 @@ final class ForkMeetingLivePreview: ObservableObject, @unchecked Sendable {
             watchers = max(0, watchers - 1)
             return watchers == 0
         }
-        if none { image = nil }
+        if none { release() }
     }
 
-    /// The recording ended: its last still must not stand for the next one.
-    /// Main thread.
+    /// The recording ended, or the feature went off: no still stands for
+    /// the next recording, and nothing is kept. The page's preview watches
+    /// again as it appears with the next recording. Main thread.
     func reset() {
-        lock.withLock { lastTaken = -.infinity }
+        lock.withLock {
+            watchers = 0
+            lastTaken = -.infinity
+        }
+        release()
+    }
+
+    private func release() {
         image = nil
+        queue.async { [self] in context = nil }
     }
 
     /// Every frame the recorder writes, on the capture queue: nearly always
@@ -75,7 +85,9 @@ final class ForkMeetingLivePreview: ObservableObject, @unchecked Sendable {
             return
         }
         queue.async { [self] in
-            let still = Self.still(of: buffer, context: context)
+            let renderer = context ?? CIContext(options: [.cacheIntermediates: false])
+            context = renderer
+            let still = Self.still(of: buffer, context: renderer)
             lock.withLock { scaling = false }
             DispatchQueue.main.async { [weak self] in
                 guard let self, let still, self.lock.withLock({ self.watchers > 0 }) else { return }

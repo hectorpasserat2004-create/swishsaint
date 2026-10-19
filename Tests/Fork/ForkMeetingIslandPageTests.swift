@@ -103,9 +103,20 @@ enum ForkMeetingIslandPageTests {
     private static func rows(_ suite: TestSuite) {
         guard let recording = entry(state: .recording, live: true, name: "2026-10-18 11h00 — Live"),
               let saved = entry() else { return suite.expect(false, "the fixture's meetings read") }
-        suite.expect(ForkMeetingIslandPage.rows([recording, saved], showsLive: true) == [saved]
+        guard let finishing = entry(state: .finalizing, live: true, name: "2026-10-18 10h30 — Done") else {
+            return suite.expect(false, "the fixture's finishing meeting reads")
+        }
+        suite.expect(ForkMeetingIslandPage.rows([recording, finishing, saved], showsLive: true) == [saved]
                         && ForkMeetingIslandPage.rows([recording, saved], showsLive: false) == [recording, saved],
-                     "the meeting the live card shows is not listed twice; the others keep the window's order")
+                     "the meeting the live card shows, recording or finishing, is not listed twice; the others keep the window's order")
+        let root = URL(fileURLWithPath: "/Users/me/Meetings", isDirectory: true)
+        let writing: Set<String> = ["/Users/me/Meetings/2026-10-18 11h00 — Live"]
+        typealias R = ForkMeetingLibrary.Rescan
+        suite.expect(ForkMeetingIslandPage.rescan(.folders(["2026-10-18 11h00 — Live"]), root: root, writing: writing) == nil
+                        && ForkMeetingIslandPage.rescan(.folders(["2026-10-18 11h00 — Live", "Old"]), root: root,
+                                                        writing: writing) == R.folders(["Old"])
+                        && ForkMeetingIslandPage.rescan(.all, root: root, writing: writing) == R.all,
+                     "a recording's own writes scan nothing on the island's page; other changes still do")
     }
 
     private static func badges(_ suite: TestSuite) {

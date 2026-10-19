@@ -13,13 +13,14 @@ import SwiftUI
 /// the first words of its transcript and its actions, and ↗ shows it in the
 /// Meetings window.
 ///
-/// The list is the window's own model (`ForkMeetingLibraryModel`), started
-/// while the page shows and stopped when it goes: the disk is read off the
-/// main thread, and a change in the folder reads it again.
+/// The list is the window's model (`ForkMeetingLibraryModel`), one kept
+/// for the island across its openings (`.island`), started while the page
+/// shows and stopped when it goes, never in the Settings preview: the disk
+/// is read off the main thread, and a change in the folder reads it again.
 struct ForkMeetingIslandSection: View {
     @ObservedObject var service: NotchService
     let size: CGSize
-    @StateObject private var library: ForkMeetingLibraryModel
+    @ObservedObject private var library: ForkMeetingLibraryModel
     /// Given rows (the render harness): no scan, no watch.
     private let givenLibrary: Bool
     @ObservedObject private var model = ForkMeetingIslandModel.shared
@@ -40,7 +41,7 @@ struct ForkMeetingIslandSection: View {
         self.service = service
         self.size = size
         givenLibrary = library != nil
-        _library = StateObject(wrappedValue: library ?? ForkMeetingLibraryModel())
+        _library = ObservedObject(wrappedValue: library ?? .island)
         _opened = State(initialValue: open)
     }
 
@@ -109,15 +110,24 @@ struct ForkMeetingIslandSection: View {
         .onChange(of: searching) { _, focused in
             if !focused, !isSearching { searchOpen = false }
         }
+        // The folders being written are not watched: a recording that
+        // starts, stops or is finished reads them again.
+        .onChange(of: [meetings.isRecording, meetings.isBusy]) { _, _ in
+            if scans { library.refresh() }
+        }
     }
 
+    /// The page in the island, not in the Settings preview nor the harness:
+    /// only it reads the disk.
+    private var scans: Bool { !givenLibrary && !preview }
+
     private func appeared() {
-        if !givenLibrary { library.start() }
+        if scans { library.start() }
         if let opened, let entry = library.entries.first(where: { $0.folderName == opened }) { readExcerpt(entry) }
     }
 
     private func disappeared() {
-        if !givenLibrary { library.stop() }
+        if scans { library.stop() }
         if !preview { service.setPageLayer(.meetings, close: nil) }
     }
 
@@ -238,9 +248,10 @@ struct ForkMeetingIslandSection: View {
     }
 
     /// The transcript's first words, read off the main thread the first
-    /// time the meeting opens, and kept while the page shows.
+    /// time the meeting opens, and kept while the page shows. Never in the
+    /// Settings preview.
     private func readExcerpt(_ entry: ForkMeetingLibraryEntry) {
-        guard let key = excerptKey(entry), excerpts[key] == nil, let url = library.transcriptURL(entry) else { return }
+        guard !preview, let key = excerptKey(entry), excerpts[key] == nil, let url = library.transcriptURL(entry) else { return }
         DispatchQueue.global(qos: .userInitiated).async {
             let words = Self.firstWords(of: url)
             DispatchQueue.main.async { excerpts[key] = words }
@@ -773,6 +784,14 @@ private struct ForkMeetingIslandFiles: View {
         case .summary: return "list.bullet.rectangle"
         }
     }
+}
+
+// MARK: - The island's library
+
+extension ForkMeetingLibraryModel {
+    /// The island's Meetings page's own, kept while the app runs so the
+    /// page opens on its rows at once and scans in the background.
+    static let island = ForkMeetingLibraryModel(forIsland: true)
 }
 
 // MARK: - Recording from the island

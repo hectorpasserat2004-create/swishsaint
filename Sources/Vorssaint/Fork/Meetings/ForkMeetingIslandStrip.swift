@@ -106,6 +106,7 @@ final class ForkMeetingIslandModel: ObservableObject {
         markedWork = nil
         levels = { .silent }
         actions = ForkMeetingPill.Actions()
+        ForkMeetingLivePreview.shared.reset()
         context = ForkMeetingLiveContext()
         show(.hidden)
     }
