@@ -21,6 +21,7 @@ enum ForkMeetingFinishDTests {
         machine(suite)
         texts(suite)
         sidecar(suite)
+        soundOnlyMeeting(suite)
     }
 
     private static let t0 = Date(timeIntervalSinceReferenceDate: 800_000_000)
@@ -368,6 +369,60 @@ enum ForkMeetingFinishDTests {
         let entry = ForkMeetingLibraryEntry(folderName: "2026-10-19 10h00 — Point hebdo", sidecar: .success(back),
                                             contents: contents)
         suite.expect(entry?.soundOnlySeconds == 252, "and the library's detail reads it")
+    }
+
+    // MARK: - With sound only (Finish C)
+
+    /// A meeting recorded as sound only, opened by 252 s kept before the
+    /// click: its `.m4a` has no picture at all, so the detail never speaks
+    /// of a picture missing; it says where those minutes come from.
+    private static func soundOnlyMeeting(_ suite: TestSuite) {
+        let name = "2026-10-19 10h00 — Point hebdo"
+        var meeting = ForkMeetingSidecar.started(id: UUID(), startedAt: t0, origin: .offered, title: "Point hebdo",
+                                                 titleSource: .window,
+                                                 capture: .init(target: .audioOnly, systemAudio: .app,
+                                                                microphone: "AirPods", quality: .standard))
+        meeting = ForkMeetingSidecarPatch(gap: .init(at: 0, seconds: 252, kind: .lookback)).applied(to: meeting)
+        meeting.state = .complete
+        meeting.recordedSeconds = 262
+        let contents = ForkMeetingFolder.contents(of: ["\(name).m4a", ForkMeetingFolder.sidecarName], folderName: name)
+        let entry = ForkMeetingLibraryEntry(folderName: name, sidecar: .success(meeting), contents: contents)
+        suite.expect(entry?.isAudioOnly == true && entry?.playable == "\(name).m4a" && entry?.status == .complete
+                        && entry?.soundOnlySeconds == 252,
+                     "sound only and opened by the kept minutes: it plays its .m4a, complete, and knows how it opens")
+        let english = ForkMeetingStrings.strings(.enUS), french = ForkMeetingStrings.strings(.fr)
+        suite.expect(ForkMeetingLookbackText.opening(seconds: 252, audioOnly: true, strings: english)
+                        == "The first 4 minutes: kept from before the click"
+                        && ForkMeetingLookbackText.opening(seconds: 40, audioOnly: true, strings: french)
+                        == "La première minute\u{00A0}: gardée avant le clic"
+                        && ForkMeetingLookbackText.opening(seconds: 252, audioOnly: false, strings: english)
+                        == ForkMeetingLookbackText.soundOnly(seconds: 252, strings: english),
+                     "without picture the detail says the first minutes come from before the click; a video's still says sound only")
+        var wrong: [String] = []
+        for language in AppLanguage.allCases {
+            let s = ForkMeetingStrings.strings(language)
+            let one = ForkMeetingLookbackText.opening(seconds: 30, audioOnly: true, strings: s)
+            let four = ForkMeetingLookbackText.opening(seconds: 252, audioOnly: true, strings: s)
+            if !four.contains("4") || one == four || one == s.lookbackSoundOnlyOne
+                || four == ForkMeetingLookbackText.soundOnly(seconds: 252, strings: s) { wrong.append(language.rawValue) }
+        }
+        suite.expect(wrong.isEmpty, "in every language, its own words with the minutes: \(wrong)")
+
+        // Killed while recording: the kept minutes are the file's own, the
+        // recovery measures them in its length and leaves the gap alone.
+        var crashed = meeting
+        crashed.state = .recording
+        crashed.recordedSeconds = 252
+        let facts = ForkMeetingRecoveryPlan.Facts(sidecar: .success(crashed), master: .init(duration: 300))
+        let action = ForkMeetingRecoveryPlan.plan(facts)
+        let patch = ForkMeetingRecoveryPlan.patch(for: action, facts: facts)
+        let recovered = patch.map { $0.applied(to: crashed) }
+        suite.expect(action == .finalize(stopReason: .crash, recovered: true, discardDrafts: false)
+                        && recovered?.recordedSeconds == 300 && recovered?.gaps == crashed.gaps
+                        && recovered?.isAudioOnly == true,
+                     "recovered, its .m4a is finalized again with the kept minutes counted and still said")
+        suite.expect(ForkMeetingTranscript.source(video: contents.media(audioOnly: true), hasMaster: false) == "\(name).m4a",
+                     "and it is transcribed from its .m4a, whose time starts with the kept minutes")
     }
 }
 

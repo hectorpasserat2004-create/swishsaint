@@ -60,7 +60,8 @@ struct ForkMeetingLibraryDetail: View {
                 facts
                 // MARK: Finish D
                 if let soundOnly = entry.soundOnlySeconds {
-                    Label(ForkMeetingLookbackText.soundOnly(seconds: soundOnly, strings: text), systemImage: "waveform")
+                    Label(ForkMeetingLookbackText.opening(seconds: soundOnly, audioOnly: entry.isAudioOnly, strings: text),
+                          systemImage: "waveform")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }

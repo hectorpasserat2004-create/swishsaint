@@ -471,4 +471,14 @@ enum ForkMeetingLookbackText {
         let minutes = max(1, Int((seconds / 60).rounded()))
         return minutes == 1 ? s.lookbackSoundOnlyOne : String(format: s.lookbackSoundOnlyFormat, minutes)
     }
+
+    /// How the file opens, as the library's detail says it. A video: its
+    /// first minutes are sound only. A meeting without picture is sound
+    /// only throughout, so what tells those minutes apart is where they
+    /// come from: "The first 4 minutes: kept from before the click".
+    static func opening(seconds: TimeInterval, audioOnly: Bool, strings s: ForkMeetingStrings) -> String {
+        guard audioOnly else { return soundOnly(seconds: seconds, strings: s) }
+        let minutes = max(1, Int((seconds / 60).rounded()))
+        return minutes == 1 ? s.lookbackKeptBeforeOne : String(format: s.lookbackKeptBeforeFormat, minutes)
+    }
 }

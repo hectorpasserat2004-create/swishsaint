@@ -114,7 +114,9 @@ struct ForkMeetingLibraryEntry: Equatable {
     let folderFile: UInt64?
     // MARK: Finish D
     /// How long the file opens on sound only: the minutes kept in memory
-    /// before the click (`GapKind.lookback`); `nil` for none.
+    /// before the click (`GapKind.lookback`); `nil` for none. Without
+    /// picture (`isAudioOnly`) the whole file is sound: these are the
+    /// minutes from before the click (`ForkMeetingLookbackText.opening`).
     private(set) var soundOnlySeconds: Double?
 
     /// `nil` for a folder without `meeting.json`: what tells a meeting

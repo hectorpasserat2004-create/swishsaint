@@ -932,6 +932,9 @@ struct ForkMeetingStrings {
     let lookbackSecondsFormat: String
     let lookbackSoundOnlyOne: String
     let lookbackSoundOnlyFormat: String
+    /// Sound only from the start: what the kept minutes are, not the picture.
+    let lookbackKeptBeforeOne: String
+    let lookbackKeptBeforeFormat: String
 
     func voiceNudge(_ meeting: String) -> String { String(format: voiceNudgeFormat, meeting) }
 }
@@ -1467,7 +1470,9 @@ extension ForkMeetingStrings {
         lookbackMinutesFormat: "%d min",
         lookbackSecondsFormat: "%d s",
         lookbackSoundOnlyOne: "The first minute: sound only",
-        lookbackSoundOnlyFormat: "The first %d minutes: sound only"
+        lookbackSoundOnlyFormat: "The first %d minutes: sound only",
+        lookbackKeptBeforeOne: "The first minute: kept from before the click",
+        lookbackKeptBeforeFormat: "The first %d minutes: kept from before the click"
     )
 }
 
@@ -2002,7 +2007,9 @@ extension ForkMeetingStrings {
         lookbackMinutesFormat: "%d\u{00A0}min",
         lookbackSecondsFormat: "%d\u{00A0}s",
         lookbackSoundOnlyOne: "O primeiro minuto: só som",
-        lookbackSoundOnlyFormat: "Os primeiros %d minutos: só som"
+        lookbackSoundOnlyFormat: "Os primeiros %d minutos: só som",
+        lookbackKeptBeforeOne: "O primeiro minuto: guardado antes do clique",
+        lookbackKeptBeforeFormat: "Os primeiros %d minutos: guardados antes do clique"
     )
 }
 
@@ -2537,7 +2544,9 @@ extension ForkMeetingStrings {
         lookbackMinutesFormat: "%d dk",
         lookbackSecondsFormat: "%d sn",
         lookbackSoundOnlyOne: "İlk dakika: yalnızca ses",
-        lookbackSoundOnlyFormat: "İlk %d dakika: yalnızca ses"
+        lookbackSoundOnlyFormat: "İlk %d dakika: yalnızca ses",
+        lookbackKeptBeforeOne: "İlk dakika: tıklamadan önce tutuldu",
+        lookbackKeptBeforeFormat: "İlk %d dakika: tıklamadan önce tutuldu"
     )
 }
 
@@ -3072,7 +3081,9 @@ extension ForkMeetingStrings {
         lookbackMinutesFormat: "%d мин",
         lookbackSecondsFormat: "%d с",
         lookbackSoundOnlyOne: "Первая минута: только звук",
-        lookbackSoundOnlyFormat: "Первые минуты (%d): только звук"
+        lookbackSoundOnlyFormat: "Первые минуты (%d): только звук",
+        lookbackKeptBeforeOne: "Первая минута: сохранена до нажатия",
+        lookbackKeptBeforeFormat: "Первые минуты (%d): сохранены до нажатия"
     )
 }
 
@@ -3607,7 +3618,9 @@ extension ForkMeetingStrings {
         lookbackMinutesFormat: "%d\u{00A0}min",
         lookbackSecondsFormat: "%d\u{00A0}s",
         lookbackSoundOnlyOne: "El primer minuto: solo sonido",
-        lookbackSoundOnlyFormat: "Los primeros %d minutos: solo sonido"
+        lookbackSoundOnlyFormat: "Los primeros %d minutos: solo sonido",
+        lookbackKeptBeforeOne: "El primer minuto: guardado antes del clic",
+        lookbackKeptBeforeFormat: "Los primeros %d minutos: guardados antes del clic"
     )
 }
 
@@ -4142,7 +4155,9 @@ extension ForkMeetingStrings {
         lookbackMinutesFormat: "%d\u{00A0}min",
         lookbackSecondsFormat: "%d\u{00A0}s",
         lookbackSoundOnlyOne: "Prvá minúta: len zvuk",
-        lookbackSoundOnlyFormat: "Prvé minúty (%d): len zvuk"
+        lookbackSoundOnlyFormat: "Prvé minúty (%d): len zvuk",
+        lookbackKeptBeforeOne: "Prvá minúta: uchovaná pred kliknutím",
+        lookbackKeptBeforeFormat: "Prvé minúty (%d): uchované pred kliknutím"
     )
 }
 
@@ -4677,7 +4692,9 @@ extension ForkMeetingStrings {
         lookbackMinutesFormat: "%d\u{00A0}Min.",
         lookbackSecondsFormat: "%d\u{00A0}s",
         lookbackSoundOnlyOne: "Die erste Minute: nur Ton",
-        lookbackSoundOnlyFormat: "Die ersten %d Minuten: nur Ton"
+        lookbackSoundOnlyFormat: "Die ersten %d Minuten: nur Ton",
+        lookbackKeptBeforeOne: "Die erste Minute: vor dem Klick behalten",
+        lookbackKeptBeforeFormat: "Die ersten %d Minuten: vor dem Klick behalten"
     )
 }
 
@@ -5212,7 +5229,9 @@ extension ForkMeetingStrings {
         lookbackMinutesFormat: "%d\u{00A0}min",
         lookbackSecondsFormat: "%d\u{00A0}s",
         lookbackSoundOnlyOne: "La première minute\u{00A0}: son seulement",
-        lookbackSoundOnlyFormat: "Les %d premières minutes\u{00A0}: son seulement"
+        lookbackSoundOnlyFormat: "Les %d premières minutes\u{00A0}: son seulement",
+        lookbackKeptBeforeOne: "La première minute\u{00A0}: gardée avant le clic",
+        lookbackKeptBeforeFormat: "Les %d premières minutes\u{00A0}: gardées avant le clic"
     )
 }
 
@@ -5747,7 +5766,9 @@ extension ForkMeetingStrings {
         lookbackMinutesFormat: "%d\u{00A0}min",
         lookbackSecondsFormat: "%d\u{00A0}s",
         lookbackSoundOnlyOne: "Il primo minuto: solo audio",
-        lookbackSoundOnlyFormat: "I primi %d minuti: solo audio"
+        lookbackSoundOnlyFormat: "I primi %d minuti: solo audio",
+        lookbackKeptBeforeOne: "Il primo minuto: tenuto da prima del clic",
+        lookbackKeptBeforeFormat: "I primi %d minuti: tenuti da prima del clic"
     )
 }
 
@@ -6282,7 +6303,9 @@ extension ForkMeetingStrings {
         lookbackMinutesFormat: "%d分",
         lookbackSecondsFormat: "%d秒",
         lookbackSoundOnlyOne: "最初の1分：音声のみ",
-        lookbackSoundOnlyFormat: "最初の%d分：音声のみ"
+        lookbackSoundOnlyFormat: "最初の%d分：音声のみ",
+        lookbackKeptBeforeOne: "最初の1分：クリック前から保持",
+        lookbackKeptBeforeFormat: "最初の%d分：クリック前から保持"
     )
 }
 
@@ -6817,7 +6840,9 @@ extension ForkMeetingStrings {
         lookbackMinutesFormat: "%d분",
         lookbackSecondsFormat: "%d초",
         lookbackSoundOnlyOne: "처음 1분: 소리만",
-        lookbackSoundOnlyFormat: "처음 %d분: 소리만"
+        lookbackSoundOnlyFormat: "처음 %d분: 소리만",
+        lookbackKeptBeforeOne: "처음 1분: 클릭 전부터 보관",
+        lookbackKeptBeforeFormat: "처음 %d분: 클릭 전부터 보관"
     )
 }
 
@@ -7352,7 +7377,9 @@ extension ForkMeetingStrings {
         lookbackMinutesFormat: "%d хв",
         lookbackSecondsFormat: "%d с",
         lookbackSoundOnlyOne: "Перша хвилина: лише звук",
-        lookbackSoundOnlyFormat: "Перші хвилини (%d): лише звук"
+        lookbackSoundOnlyFormat: "Перші хвилини (%d): лише звук",
+        lookbackKeptBeforeOne: "Перша хвилина: збережена до натискання",
+        lookbackKeptBeforeFormat: "Перші хвилини (%d): збережені до натискання"
     )
 }
 
@@ -7887,7 +7914,9 @@ extension ForkMeetingStrings {
         lookbackMinutesFormat: "%d 分钟",
         lookbackSecondsFormat: "%d 秒",
         lookbackSoundOnlyOne: "前 1 分钟：仅声音",
-        lookbackSoundOnlyFormat: "前 %d 分钟：仅声音"
+        lookbackSoundOnlyFormat: "前 %d 分钟：仅声音",
+        lookbackKeptBeforeOne: "前 1 分钟：点击前已保留",
+        lookbackKeptBeforeFormat: "前 %d 分钟：点击前已保留"
     )
 }
 
@@ -8422,7 +8451,9 @@ extension ForkMeetingStrings {
         lookbackMinutesFormat: "%d 分鐘",
         lookbackSecondsFormat: "%d 秒",
         lookbackSoundOnlyOne: "前 1 分鐘：僅聲音",
-        lookbackSoundOnlyFormat: "前 %d 分鐘：僅聲音"
+        lookbackSoundOnlyFormat: "前 %d 分鐘：僅聲音",
+        lookbackKeptBeforeOne: "前 1 分鐘：點按前已保留",
+        lookbackKeptBeforeFormat: "前 %d 分鐘：點按前已保留"
     )
 }
 
@@ -8957,6 +8988,8 @@ extension ForkMeetingStrings {
         lookbackMinutesFormat: "%d 分鐘",
         lookbackSecondsFormat: "%d 秒",
         lookbackSoundOnlyOne: "頭 1 分鐘：只有聲音",
-        lookbackSoundOnlyFormat: "頭 %d 分鐘：只有聲音"
+        lookbackSoundOnlyFormat: "頭 %d 分鐘：只有聲音",
+        lookbackKeptBeforeOne: "頭 1 分鐘：按下前已保留",
+        lookbackKeptBeforeFormat: "頭 %d 分鐘：按下前已保留"
     )
 }

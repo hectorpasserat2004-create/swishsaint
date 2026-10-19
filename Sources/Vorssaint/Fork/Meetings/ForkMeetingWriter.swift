@@ -237,7 +237,9 @@ final class ForkMeetingWriter: @unchecked Sendable {
     /// `lookback`, asked with that instant, gives the sound kept before it
     /// ("the last 5 minutes"): the file then begins that much earlier, both
     /// tracks open with it and the picture is black until the instant
-    /// itself. Answers how many seconds come before the picture (0 without).
+    /// itself (no picture at all without a video track: the `.m4a` of a
+    /// meeting recorded as sound only). Answers how many seconds come
+    /// before the click (0 without).
     @discardableResult
     func beginSession(atHostTime time: Double, lookback: ((Double) -> Lookback?)? = nil) -> TimeInterval {
         queue.sync {
@@ -270,10 +272,11 @@ final class ForkMeetingWriter: @unchecked Sendable {
         func release() { rings.forEach { $0.clear() } }
     }
 
-    /// Writer queue. Second by second, the black picture, then each track's
-    /// silence or kept sound, 16 kHz brought to 48 kHz by linear steps, so
-    /// every sample lands where its host time says. An input that is not
-    /// ready is waited for a little (nothing here is real time yet).
+    /// Writer queue. Second by second, the black picture (when the file has
+    /// one), then each track's silence or kept sound, 16 kHz brought to
+    /// 48 kHz by linear steps, so every sample lands where its host time
+    /// says. An input that is not ready is waited for a little (nothing
+    /// here is real time yet).
     private func writeLookback(_ kept: Lookback) {
         defer { kept.release() }
         let plan = kept.plan

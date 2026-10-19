@@ -173,7 +173,8 @@ struct ForkMeetingSidecar: Equatable {
         // MARK: Finish D
         /// Not a loss: the sound kept in memory before the click ("the last
         /// 5 minutes") opens the file, its picture black (`at` 0, `seconds`
-        /// how long): the first minutes are sound only.
+        /// how long): the first minutes are sound only. Recorded without
+        /// picture, there is no black either: the file is sound throughout.
         case lookback
     }
 
