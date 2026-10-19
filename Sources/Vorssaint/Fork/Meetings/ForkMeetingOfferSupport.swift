@@ -210,7 +210,8 @@ struct ForkMeetingSpoken: Equatable {
 
     static func forgets(after effect: ForkMeetingMachine.Effect) -> Bool {
         switch effect {
-        case .hideOffer, .hideEndingSoon, .showPill(.hidden): return true
+        // A nudge says its words again, even the same ones as the last.
+        case .hideOffer, .hideEndingSoon, .showPill(.hidden), .nudgeOffer: return true
         default: return false
         }
     }

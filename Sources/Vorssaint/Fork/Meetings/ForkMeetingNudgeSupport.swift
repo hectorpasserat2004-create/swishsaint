@@ -248,11 +248,17 @@ struct ForkMeetingListenPlan: Equatable {
 
     var listens: Bool { app || microphone }
 
+    /// Whether "the last 5 minutes" can keep anything on this Mac: system
+    /// audio proven allowed, or the microphone allowed and on.
+    static func canKeep(systemAudio: Bool, microphoneAllowed: Bool) -> Bool {
+        systemAudio || microphoneAllowed
+    }
+
     static func plan(_ facts: Facts) -> ForkMeetingListenPlan {
         guard facts.meeting != nil, facts.offersShown, !facts.locked, !facts.asleep, !facts.terminating else {
             return ForkMeetingListenPlan()
         }
-        let keeps = facts.lookbackOn && (facts.systemAudio || facts.microphoneAllowed)
+        let keeps = facts.lookbackOn && canKeep(systemAudio: facts.systemAudio, microphoneAllowed: facts.microphoneAllowed)
         let nudges = facts.nudgeOn && facts.nudgesLeft
         var plan = ForkMeetingListenPlan()
         plan.app = facts.systemAudio && (keeps || nudges)
@@ -277,7 +283,6 @@ struct ForkMeetingListenPlan: Equatable {
         let before = plan(old), after = plan(new)
         return before.keeps && before.microphone && !after.microphone
     }
-
 }
 
 /// A few minutes of one sound, in memory only: 16 kHz mono, 16-bit, a
@@ -513,19 +518,21 @@ enum ForkMeetingLookbackText {
         return String(format: s.lookbackMinutesFormat, minutes) + " " + String(format: s.lookbackSecondsFormat, rest)
     }
 
-    /// "The first 4 minutes: sound only", in whole minutes, the nearest.
+    /// "Sound only for the first 4 min 12 s", to the second.
     static func soundOnly(seconds: TimeInterval, strings s: ForkMeetingStrings) -> String {
-        let minutes = max(1, Int((seconds / 60).rounded()))
-        return minutes == 1 ? s.lookbackSoundOnlyOne : String(format: s.lookbackSoundOnlyFormat, minutes)
+        String(format: s.lookbackSoundOnlyFormat, duration(wholeSeconds(seconds), strings: s))
+    }
+
+    private static func wholeSeconds(_ seconds: TimeInterval) -> Int {
+        seconds.isFinite ? max(1, Int(seconds.rounded())) : 1
     }
 
     /// How the file opens, as the library's detail says it. A video: its
     /// first minutes are sound only. A meeting without picture is sound
     /// only throughout, so what tells those minutes apart is where they
-    /// come from: "The first 4 minutes: kept from before the click".
+    /// come from: "Kept from before the click: the first 4 min 12 s".
     static func opening(seconds: TimeInterval, audioOnly: Bool, strings s: ForkMeetingStrings) -> String {
         guard audioOnly else { return soundOnly(seconds: seconds, strings: s) }
-        let minutes = max(1, Int((seconds / 60).rounded()))
-        return minutes == 1 ? s.lookbackKeptBeforeOne : String(format: s.lookbackKeptBeforeFormat, minutes)
+        return String(format: s.lookbackKeptBeforeFormat, duration(wholeSeconds(seconds), strings: s))
     }
 }

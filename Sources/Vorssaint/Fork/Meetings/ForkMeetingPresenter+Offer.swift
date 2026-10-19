@@ -287,7 +287,14 @@ extension ForkMeetingPresenter {
         actions.recordOtherwise = { service.acceptOffer(target: settings.target.alternative) }
         var card = Self.offerCard(offer, facts: facts, actions: actions, text: text)
         // MARK: Finish D
-        card.keptSince = service.lookbackSince(candidate.identity)
+        let words = text
+        let language = L10n.shared.language
+        card.kept = service.lookbackSince(candidate.identity).map { since in
+            ForkMeetingCard.Kept(since: since,
+                                 words: { ForkMeetingLookbackText.kept(since: since, now: $0, strings: words) },
+                                 spoken: { ForkMeetingLookbackText.spokenKept(since: since, now: $0, strings: words,
+                                                                              language: language) })
+        }
         if offerUI.attention { Self.raise(&card, text: text, inIsland: inIsland) }
         return card
     }
@@ -325,10 +332,12 @@ extension ForkMeetingPresenter {
         renderOffer()
     }
 
-    /// "It's started · Record?" above the meeting's name, the card ringed.
+    /// "It's started · Record?" above the meeting's name, the card ringed;
+    /// VoiceOver reads a sentence, not the dot: "Meeting started: Weekly
+    /// sync. Do you want to record it?".
     static func raise(_ card: inout ForkMeetingCard, text: ForkMeetingStrings, inIsland: Bool = false) {
         card.lines.insert(card.title, at: 0)
-        card.spokenTitle = text.nudgeTitle + " " + (card.spokenTitle ?? card.title)
+        card.spokenTitle = text.voiceNudge(card.spokenTitle ?? card.title)
         card.title = text.nudgeTitle
         card.attention = true
         card.attentionInIsland = inIsland

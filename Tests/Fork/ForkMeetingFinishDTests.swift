@@ -359,13 +359,15 @@ enum ForkMeetingFinishDTests {
                         == "+4\u{00A0}min 12\u{00A0}s déjà gardées",
                      "in French too")
         suite.expect(ForkMeetingLookbackText.soundOnly(seconds: 252, strings: french)
-                        == "Les 4 premières minutes\u{00A0}: son seulement"
-                        && ForkMeetingLookbackText.soundOnly(seconds: 40, strings: french)
-                        == "La première minute\u{00A0}: son seulement",
-                     "the detail says how the file begins, to the nearest minute")
+                        == "Son seulement pendant les 4\u{00A0}min 12\u{00A0}s du début"
+                        && ForkMeetingLookbackText.soundOnly(seconds: 20, strings: english)
+                        == "Sound only for the first 20 s",
+                     "the detail says how the file begins, to the second: 20 s are never \"the first minute\"")
         suite.expect(french.nudgeTitle == "Ça commence · Enregistrer\u{00A0}?" && french.nudgeTitle.count == 27
+                        && ForkMeetingAnnouncement.nudged("Point hebdo").text(french)
+                        == "La réunion a commencé\u{00A0}: Point hebdo. Voulez-vous l’enregistrer\u{00A0}?"
                         && ForkMeetingAnnouncement.nudged("Point hebdo").text(english)
-                        == "Point hebdo has started. Do you want to record it?",
+                        == "Meeting started: Point hebdo. Do you want to record it?",
                      "the offer back says it started, and VoiceOver with its name")
         var tooLong: [String] = []
         for language in AppLanguage.allCases {
@@ -448,12 +450,6 @@ enum ForkMeetingFinishDTests {
 
         var folder = ForkMeetingFolder.contents(of: [".recording.mp4", ForkMeetingFolder.lookbackName, "meeting.json"],
                                                 folderName: "2026-10-19 10h00 — Point hebdo")
-        // Privacy: the microphone turned off empties its kept sound alone.
-        let both = facts { $0.lookbackOn = true }
-        suite.expect(ForkMeetingListenPlan.clearsMicrophone(from: both, to: facts { $0.lookbackOn = true; $0.microphoneAllowed = false })
-                        && !ForkMeetingListenPlan.clears(from: both, to: facts { $0.lookbackOn = true; $0.microphoneAllowed = false })
-                        && !ForkMeetingListenPlan.clearsMicrophone(from: both, to: both),
-                     "the microphone off: its kept sound goes, the meeting app's stays")
         suite.expect(folder.hasLookback && folder.video == nil && folder.audio == nil,
                      "the kept file is the folder's own, never taken for its sound")
         folder.hasMaster = false
@@ -461,6 +457,23 @@ enum ForkMeetingFinishDTests {
         complete.state = .complete
         suite.expect(ForkMeetingRecoveryPlan.needsInspection(.success(complete), contents: folder),
                      "left behind by a final pass that ended right after its file, it is looked at, and goes")
+
+        // Privacy: the microphone turned off empties its kept sound alone.
+        let both = facts { $0.lookbackOn = true }
+        suite.expect(ForkMeetingListenPlan.clearsMicrophone(from: both, to: facts { $0.lookbackOn = true; $0.microphoneAllowed = false })
+                        && !ForkMeetingListenPlan.clears(from: both, to: facts { $0.lookbackOn = true; $0.microphoneAllowed = false })
+                        && !ForkMeetingListenPlan.clearsMicrophone(from: both, to: both),
+                     "the microphone off: its kept sound goes, the meeting app's stays")
+        suite.expect(!ForkMeetingListenPlan.canKeep(systemAudio: false, microphoneAllowed: false)
+                        && ForkMeetingListenPlan.canKeep(systemAudio: true, microphoneAllowed: false),
+                     "nothing can be kept without system audio or the microphone, and the page says so")
+        suite.expect(ForkMeetingSpoken.forgets(after: .nudgeOffer(offeringOffer())),
+                     "the second nudge is said too, the same words again")
+    }
+
+    private static func offeringOffer() -> ForkMeetingOffer {
+        if case let .offering(offer) = offering().phase { return offer }
+        return ForkMeetingOffer(candidate: candidate(), collapsesAt: t0)
     }
 
     // MARK: - The island (Finish A)
@@ -607,9 +620,9 @@ enum ForkMeetingFinishDTests {
                      "sound only and opened by the kept minutes: it plays its .m4a, complete, and knows how it opens")
         let english = ForkMeetingStrings.strings(.enUS), french = ForkMeetingStrings.strings(.fr)
         suite.expect(ForkMeetingLookbackText.opening(seconds: 252, audioOnly: true, strings: english)
-                        == "The first 4 minutes: kept from before the click"
+                        == "Kept from before the click: the first 4 min 12 s"
                         && ForkMeetingLookbackText.opening(seconds: 40, audioOnly: true, strings: french)
-                        == "La première minute\u{00A0}: gardée avant le clic"
+                        == "Gardé d’avant le clic\u{00A0}: les 40\u{00A0}s du début"
                         && ForkMeetingLookbackText.opening(seconds: 252, audioOnly: false, strings: english)
                         == ForkMeetingLookbackText.soundOnly(seconds: 252, strings: english),
                      "without picture the detail says the first minutes come from before the click; a video's still says sound only")
@@ -618,7 +631,7 @@ enum ForkMeetingFinishDTests {
             let s = ForkMeetingStrings.strings(language)
             let one = ForkMeetingLookbackText.opening(seconds: 30, audioOnly: true, strings: s)
             let four = ForkMeetingLookbackText.opening(seconds: 252, audioOnly: true, strings: s)
-            if !four.contains("4") || one == four || one == s.lookbackSoundOnlyOne
+            if !four.contains("4") || !four.contains("12") || one == four
                 || four == ForkMeetingLookbackText.soundOnly(seconds: 252, strings: s) { wrong.append(language.rawValue) }
         }
         suite.expect(wrong.isEmpty, "in every language, its own words with the minutes: \(wrong)")

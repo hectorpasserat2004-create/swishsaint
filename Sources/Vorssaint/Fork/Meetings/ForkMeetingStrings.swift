@@ -930,13 +930,13 @@ struct ForkMeetingStrings {
     let lookbackKeptFormat: String
     let lookbackMinutesFormat: String
     let lookbackSecondsFormat: String
-    let lookbackSoundOnlyOne: String
     let lookbackSoundOnlyFormat: String
     /// Sound only from the start: what the kept minutes are, not the picture.
-    let lookbackKeptBeforeOne: String
     let lookbackKeptBeforeFormat: String
     /// Under the nudge's switch while the offers are silenced.
     let nudgeOffersOff: String
+    /// Under the kept minutes' switch, on, while nothing could be kept.
+    let lookbackNothingToKeep: String
 
     func voiceNudge(_ meeting: String) -> String { String(format: voiceNudgeFormat, meeting) }
 }
@@ -1463,19 +1463,18 @@ extension ForkMeetingStrings {
         exportIncludeSummaryCaption: "The summary written on this Mac, when there is one, goes in meeting.json as summary. Otherwise it stays on this Mac.",
         // MARK: Finish D
         nudgeTitle: "It’s started · Record?",
-        voiceNudgeFormat: "%@ has started. Do you want to record it?",
+        voiceNudgeFormat: "Meeting started: %@. Do you want to record it?",
         nudgeSetting: "Offer again when the meeting really starts",
-        nudgeCaption: "When others start talking in a detected call you left unanswered, the offer comes back once, then a last time after 2 minutes. Only the level of the meeting app’s sound is read: nothing is kept or written. Without the system audio permission, the microphone is read instead, after a minute of talk.",
-        lookbackSetting: "Keep the last 5 minutes",
-        lookbackCaption: "During a detected call, keep the last 5 minutes of sound in memory, never written until you start recording. The recording then opens with them, sound only. Emptied when the call ends, on Not Now or Never, when the Mac locks or sleeps, and when this is turned off.",
+        nudgeCaption: "When others start talking in a detected call you left unanswered, the offer comes back once, then a last time after 2 minutes. For this, only the level of the meeting app’s sound is measured, and nothing is written. Without System audio recording, your microphone is listened to instead, after a minute of talk.",
+        lookbackSetting: "Keep the last 5 minutes of sound",
+        lookbackCaption: "While a detected call is offered, the last 5 minutes of the meeting app’s sound and of your microphone stay in this Mac’s memory, never on disk until you click Record. The recording then opens with them, sound only: the picture starts at the click. Emptied when the call ends, on Not Now or Never, when the Mac locks or sleeps, when the app quits and when this is turned off. Meanwhile macOS lists the app as using the microphone; the orange dot is already lit by the call.",
         lookbackKeptFormat: "+%@ already kept",
         lookbackMinutesFormat: "%d min",
         lookbackSecondsFormat: "%d s",
-        lookbackSoundOnlyOne: "The first minute: sound only",
-        lookbackSoundOnlyFormat: "The first %d minutes: sound only",
-        lookbackKeptBeforeOne: "The first minute: kept from before the click",
-        lookbackKeptBeforeFormat: "The first %d minutes: kept from before the click",
-        nudgeOffersOff: "Offers to record are turned off in Notifications and sounds: the offer does not come back, and no sound is kept."
+        lookbackSoundOnlyFormat: "Sound only for the first %@",
+        lookbackKeptBeforeFormat: "Kept from before the click: the first %@",
+        nudgeOffersOff: "Offers to record are turned off in Notifications and sounds: the offer does not come back, and no sound is kept.",
+        lookbackNothingToKeep: "Nothing can be kept yet: allow System audio recording or the microphone first."
     )
 }
 
@@ -2001,19 +2000,18 @@ extension ForkMeetingStrings {
         exportIncludeSummaryCaption: "O resumo escrito neste Mac, quando houver, vai no meeting.json como summary. Caso contrário, fica neste Mac.",
         // MARK: Finish D
         nudgeTitle: "Começou · Gravar?",
-        voiceNudgeFormat: "%@ começou. Quer gravá-la?",
+        voiceNudgeFormat: "A reunião começou: %@. Quer gravá-la?",
         nudgeSetting: "Oferecer de novo quando a reunião começar de verdade",
-        nudgeCaption: "Quando outras pessoas começam a falar numa chamada detectada que você não respondeu, a oferta volta uma vez e uma última vez depois de 2 minutos. Só o nível do som do app de reunião é lido: nada é guardado nem gravado. Sem a permissão de áudio do sistema, o microfone é lido no lugar, após um minuto de conversa.",
-        lookbackSetting: "Guardar os últimos 5 minutos",
-        lookbackCaption: "Durante uma chamada detectada, guarda na memória os últimos 5 minutos de som, nunca gravados enquanto você não iniciar a gravação. A gravação então começa com eles, só com som. Apagados quando a chamada termina, em Agora não ou Nunca, quando o Mac bloqueia ou dorme e quando isto é desativado.",
+        nudgeCaption: "Quando outras pessoas começam a falar numa chamada detectada que você não respondeu, a oferta volta uma vez e uma última vez depois de 2 minutos. Para isso, só o volume do som do app de reunião é medido, e nada é gravado. Sem a Gravação do áudio do sistema, é o seu microfone que é escutado, após um minuto de conversa.",
+        lookbackSetting: "Guardar os últimos 5 minutos de som",
+        lookbackCaption: "Enquanto uma chamada detectada é oferecida, os últimos 5 minutos do som do app de reunião e do seu microfone ficam na memória deste Mac, nunca no disco até você clicar em Gravar. A gravação então começa com eles, só com som: a imagem começa no clique. Apagados quando a chamada termina, em Agora não ou Nunca, quando o Mac bloqueia ou dorme, quando o app é encerrado e quando isto é desativado. Enquanto isso, o macOS mostra o app entre os que usam o microfone; o ponto laranja já está aceso pela chamada.",
         lookbackKeptFormat: "+%@ já guardados",
         lookbackMinutesFormat: "%d\u{00A0}min",
         lookbackSecondsFormat: "%d\u{00A0}s",
-        lookbackSoundOnlyOne: "O primeiro minuto: só som",
-        lookbackSoundOnlyFormat: "Os primeiros %d minutos: só som",
-        lookbackKeptBeforeOne: "O primeiro minuto: guardado antes do clique",
-        lookbackKeptBeforeFormat: "Os primeiros %d minutos: guardados antes do clique",
-        nudgeOffersOff: "As propostas de gravação estão desativadas em Notificações e sons: a proposta não volta e nenhum som é guardado."
+        lookbackSoundOnlyFormat: "Só som nos primeiros %@",
+        lookbackKeptBeforeFormat: "Guardado de antes do clique: os primeiros %@",
+        nudgeOffersOff: "As propostas de gravação estão desativadas em Notificações e sons: a proposta não volta e nenhum som é guardado.",
+        lookbackNothingToKeep: "Ainda nada pode ser guardado: permita primeiro a Gravação do áudio do sistema ou o microfone."
     )
 }
 
@@ -2539,19 +2537,18 @@ extension ForkMeetingStrings {
         exportIncludeSummaryCaption: "Bu Mac’te yazılan özet, varsa, meeting.json içinde summary olarak gider. Yoksa bu Mac’te kalır.",
         // MARK: Finish D
         nudgeTitle: "Başladı · Kaydedilsin mi?",
-        voiceNudgeFormat: "%@ başladı. Kaydetmek ister misiniz?",
+        voiceNudgeFormat: "Toplantı başladı: %@. Kaydetmek ister misiniz?",
         nudgeSetting: "Toplantı gerçekten başlayınca yeniden öner",
-        nudgeCaption: "Yanıtlamadığınız algılanan bir görüşmede başkaları konuşmaya başlayınca öneri bir kez, 2 dakika sonra da son kez geri gelir. Yalnızca toplantı uygulamasının ses düzeyi okunur: hiçbir şey saklanmaz ya da yazılmaz. Sistem sesi izni yoksa bir dakikalık konuşmadan sonra onun yerine mikrofon okunur.",
-        lookbackSetting: "Son 5 dakikayı sakla",
-        lookbackCaption: "Algılanan bir görüşme sırasında sesin son 5 dakikası bellekte tutulur ve siz kaydı başlatana kadar asla yazılmaz. Kayıt bu dakikalarla, yalnızca sesle başlar. Görüşme bitince, Bu sefer değil ya da Asla seçilince, Mac kilitlenince ya da uyuyunca ve bu ayar kapatılınca silinir.",
+        nudgeCaption: "Yanıtlamadığınız algılanan bir görüşmede başkaları konuşmaya başlayınca öneri bir kez, 2 dakika sonra da son kez geri gelir. Bunun için yalnızca toplantı uygulamasının ses düzeyi ölçülür ve hiçbir şey yazılmaz. Sistem sesi kaydı yoksa bir dakikalık konuşmadan sonra onun yerine mikrofonunuz dinlenir.",
+        lookbackSetting: "Sesin son 5 dakikasını sakla",
+        lookbackCaption: "Algılanan bir görüşme önerilirken toplantı uygulamasının sesinin ve mikrofonunuzun son 5 dakikası bu Mac’in belleğinde kalır, Kaydet’e tıklayana kadar asla diske yazılmaz. Kayıt bu dakikalarla, yalnızca sesle başlar: görüntü tıklamayla başlar. Görüşme bitince, Bu sefer değil ya da Asla seçilince, Mac kilitlenince ya da uyuyunca, uygulama kapanınca ve bu ayar kapatılınca silinir. Bu sırada macOS uygulamayı mikrofonu kullananlar arasında gösterir; turuncu nokta zaten görüşme yüzünden yanıyor.",
         lookbackKeptFormat: "+%@ saklandı",
         lookbackMinutesFormat: "%d dk",
         lookbackSecondsFormat: "%d sn",
-        lookbackSoundOnlyOne: "İlk dakika: yalnızca ses",
-        lookbackSoundOnlyFormat: "İlk %d dakika: yalnızca ses",
-        lookbackKeptBeforeOne: "İlk dakika: tıklamadan önce tutuldu",
-        lookbackKeptBeforeFormat: "İlk %d dakika: tıklamadan önce tutuldu",
-        nudgeOffersOff: "Kaydetme önerileri Bildirimler ve seslerde kapalı: öneri geri gelmez ve hiçbir ses tutulmaz."
+        lookbackSoundOnlyFormat: "İlk %@ yalnızca ses",
+        lookbackKeptBeforeFormat: "Tıklamadan önce tutuldu: ilk %@",
+        nudgeOffersOff: "Kaydetme önerileri Bildirimler ve seslerde kapalı: öneri geri gelmez ve hiçbir ses tutulmaz.",
+        lookbackNothingToKeep: "Henüz hiçbir şey saklanamaz: önce Sistem sesi kaydına ya da mikrofona izin verin."
     )
 }
 
@@ -3077,19 +3074,18 @@ extension ForkMeetingStrings {
         exportIncludeSummaryCaption: "Сводка, составленная на этом Mac, если она есть, отправляется в meeting.json как summary. Иначе она остаётся на этом Mac.",
         // MARK: Finish D
         nudgeTitle: "Началось · Записать?",
-        voiceNudgeFormat: "%@ началась. Записать её?",
+        voiceNudgeFormat: "Встреча началась: %@. Записать её?",
         nudgeSetting: "Предлагать снова, когда встреча действительно начнётся",
-        nudgeCaption: "Когда в обнаруженном звонке, на который вы не ответили, начинают говорить другие, предложение возвращается один раз, а затем последний раз через 2 минуты. Читается только уровень звука приложения встречи: ничего не хранится и не записывается. Без разрешения на системный звук вместо этого слушается микрофон, после минуты разговора.",
-        lookbackSetting: "Хранить последние 5 минут",
-        lookbackCaption: "Во время обнаруженного звонка последние 5 минут звука хранятся в памяти и никогда не записываются, пока вы не начнёте запись. Запись тогда начинается с них, только звук. Удаляются, когда звонок заканчивается, при «Не сейчас» или «Никогда», при блокировке или сне Mac и при выключении этой функции.",
+        nudgeCaption: "Когда в обнаруженном звонке, на который вы не ответили, начинают говорить другие, предложение возвращается один раз, а затем последний раз через 2 минуты. Для этого измеряется только громкость звука приложения встречи, и ничего не записывается. Без «Записи системного звука» вместо этого слушается ваш микрофон, после минуты разговора.",
+        lookbackSetting: "Хранить последние 5 минут звука",
+        lookbackCaption: "Пока обнаруженный звонок предлагается для записи, последние 5 минут звука приложения встречи и вашего микрофона хранятся в памяти этого Mac и не попадают на диск, пока вы не нажмёте «Записать». Запись тогда начинается с них, только звук: изображение начинается с нажатия. Удаляются, когда звонок заканчивается, при «Не сейчас» или «Никогда», при блокировке или сне Mac, при выходе из приложения и при выключении этой функции. Тем временем macOS показывает приложение среди использующих микрофон; оранжевая точка уже горит из-за звонка.",
         lookbackKeptFormat: "+%@ уже сохранено",
         lookbackMinutesFormat: "%d мин",
         lookbackSecondsFormat: "%d с",
-        lookbackSoundOnlyOne: "Первая минута: только звук",
-        lookbackSoundOnlyFormat: "Первые минуты (%d): только звук",
-        lookbackKeptBeforeOne: "Первая минута: сохранена до нажатия",
-        lookbackKeptBeforeFormat: "Первые минуты (%d): сохранены до нажатия",
-        nudgeOffersOff: "Предложения записать выключены в разделе «Уведомления и звуки»: предложение не вернётся, звук не сохраняется."
+        lookbackSoundOnlyFormat: "Только звук в первые %@",
+        lookbackKeptBeforeFormat: "Сохранено до нажатия: первые %@",
+        nudgeOffersOff: "Предложения записать выключены в разделе «Уведомления и звуки»: предложение не вернётся, звук не сохраняется.",
+        lookbackNothingToKeep: "Пока ничего нельзя сохранить: сначала разрешите «Запись системного звука» или микрофон."
     )
 }
 
@@ -3615,19 +3611,18 @@ extension ForkMeetingStrings {
         exportIncludeSummaryCaption: "El resumen escrito en este Mac, si lo hay, va en meeting.json como summary. Si no, se queda en este Mac.",
         // MARK: Finish D
         nudgeTitle: "Ha empezado · ¿Grabar?",
-        voiceNudgeFormat: "%@ ha empezado. ¿Quieres grabarla?",
+        voiceNudgeFormat: "La reunión ha empezado: %@. ¿Quieres grabarla?",
         nudgeSetting: "Ofrecer de nuevo cuando la reunión empiece de verdad",
-        nudgeCaption: "Cuando otras personas empiezan a hablar en una llamada detectada que no respondiste, la oferta vuelve una vez y una última vez después de 2 minutos. Solo se lee el nivel del sonido de la app de reunión: no se guarda ni se escribe nada. Sin el permiso de audio del sistema, se lee el micrófono en su lugar, tras un minuto de conversación.",
-        lookbackSetting: "Guardar los últimos 5 minutos",
-        lookbackCaption: "Durante una llamada detectada, guarda en memoria los últimos 5 minutos de sonido, nunca escritos mientras no empieces a grabar. La grabación empieza entonces con ellos, solo sonido. Se borran cuando la llamada termina, con Ahora no o Nunca, cuando el Mac se bloquea o duerme y cuando esto se desactiva.",
+        nudgeCaption: "Cuando otras personas empiezan a hablar en una llamada detectada que no respondiste, la oferta vuelve una vez y una última vez después de 2 minutos. Para ello, solo se mide el volumen del sonido de la app de reunión, y no se escribe nada. Sin la Grabación del audio del sistema, se escucha tu micrófono en su lugar, tras un minuto de conversación.",
+        lookbackSetting: "Guardar los últimos 5 minutos de sonido",
+        lookbackCaption: "Mientras se ofrece una llamada detectada, los últimos 5 minutos del sonido de la app de reunión y de tu micrófono se quedan en la memoria de este Mac, nunca en el disco hasta que hagas clic en Grabar. La grabación empieza entonces con ellos, solo sonido: la imagen empieza con el clic. Se borran cuando la llamada termina, con Ahora no o Nunca, cuando el Mac se bloquea o duerme, cuando la app se cierra y cuando esto se desactiva. Mientras tanto, macOS muestra la app entre las que usan el micrófono; el punto naranja ya lo enciende la llamada.",
         lookbackKeptFormat: "+%@ ya guardados",
         lookbackMinutesFormat: "%d\u{00A0}min",
         lookbackSecondsFormat: "%d\u{00A0}s",
-        lookbackSoundOnlyOne: "El primer minuto: solo sonido",
-        lookbackSoundOnlyFormat: "Los primeros %d minutos: solo sonido",
-        lookbackKeptBeforeOne: "El primer minuto: guardado antes del clic",
-        lookbackKeptBeforeFormat: "Los primeros %d minutos: guardados antes del clic",
-        nudgeOffersOff: "Las ofertas de grabar están desactivadas en Notificaciones y sonidos: la oferta no vuelve y no se guarda ningún sonido."
+        lookbackSoundOnlyFormat: "Solo sonido durante los primeros %@",
+        lookbackKeptBeforeFormat: "Guardado de antes del clic: los primeros %@",
+        nudgeOffersOff: "Las ofertas de grabar están desactivadas en Notificaciones y sonidos: la oferta no vuelve y no se guarda ningún sonido.",
+        lookbackNothingToKeep: "Aún no se puede guardar nada: permite primero la Grabación del audio del sistema o el micrófono."
     )
 }
 
@@ -4153,19 +4148,18 @@ extension ForkMeetingStrings {
         exportIncludeSummaryCaption: "Zhrnutie napísané na tomto Macu, ak existuje, ide do meeting.json ako summary. Inak zostane na tomto Macu.",
         // MARK: Finish D
         nudgeTitle: "Začalo sa · Nahrávať?",
-        voiceNudgeFormat: "%@ sa začalo. Chcete ho nahrať?",
+        voiceNudgeFormat: "Stretnutie sa začalo: %@. Chcete ho nahrať?",
         nudgeSetting: "Ponúknuť znova, keď sa stretnutie naozaj začne",
-        nudgeCaption: "Keď v rozpoznanom hovore, na ktorý ste neodpovedali, začnú hovoriť ostatní, ponuka sa vráti raz a naposledy po 2 minútach. Číta sa len úroveň zvuku aplikácie stretnutia: nič sa neuchováva ani nezapisuje. Bez povolenia systémového zvuku sa namiesto toho číta mikrofón, po minúte rozhovoru.",
-        lookbackSetting: "Uchovať posledných 5 minút",
-        lookbackCaption: "Počas rozpoznaného hovoru uchováva v pamäti posledných 5 minút zvuku, ktoré sa nikdy nezapíšu, kým nespustíte nahrávanie. Nahrávka sa potom nimi začne, len so zvukom. Vymažú sa, keď hovor skončí, pri Teraz nie alebo Nikdy, keď sa Mac uzamkne alebo uspí a keď sa toto vypne.",
+        nudgeCaption: "Keď v rozpoznanom hovore, na ktorý ste neodpovedali, začnú hovoriť ostatní, ponuka sa vráti raz a naposledy po 2 minútach. Meria sa pritom len hlasitosť zvuku aplikácie stretnutia a nič sa nezapisuje. Bez nahrávania systémového zvuku sa namiesto toho počúva váš mikrofón, po minúte rozhovoru.",
+        lookbackSetting: "Uchovať posledných 5 minút zvuku",
+        lookbackCaption: "Kým sa rozpoznaný hovor ponúka, posledných 5 minút zvuku aplikácie stretnutia a vášho mikrofónu zostáva v pamäti tohto Macu, nikdy nie na disku, kým nekliknete na Nahrávať. Nahrávka sa potom nimi začne, len so zvukom: obraz sa začne kliknutím. Vymažú sa, keď hovor skončí, pri Teraz nie alebo Nikdy, keď sa Mac uzamkne alebo uspí, keď sa aplikácia ukončí a keď sa toto vypne. Medzitým macOS zobrazuje aplikáciu medzi tými, ktoré používajú mikrofón; oranžovú bodku už rozsvietil hovor.",
         lookbackKeptFormat: "+%@ už uchované",
         lookbackMinutesFormat: "%d\u{00A0}min",
         lookbackSecondsFormat: "%d\u{00A0}s",
-        lookbackSoundOnlyOne: "Prvá minúta: len zvuk",
-        lookbackSoundOnlyFormat: "Prvé minúty (%d): len zvuk",
-        lookbackKeptBeforeOne: "Prvá minúta: uchovaná pred kliknutím",
-        lookbackKeptBeforeFormat: "Prvé minúty (%d): uchované pred kliknutím",
-        nudgeOffersOff: "Ponuky na nahrávanie sú vypnuté v časti Upozornenia a zvuky: ponuka sa nevráti a žiadny zvuk sa neuchová."
+        lookbackSoundOnlyFormat: "Len zvuk počas prvých %@",
+        lookbackKeptBeforeFormat: "Uchované pred kliknutím: prvých %@",
+        nudgeOffersOff: "Ponuky na nahrávanie sú vypnuté v časti Upozornenia a zvuky: ponuka sa nevráti a žiadny zvuk sa neuchová.",
+        lookbackNothingToKeep: "Zatiaľ nemožno nič uchovať: najprv povoľte nahrávanie systémového zvuku alebo mikrofón."
     )
 }
 
@@ -4691,19 +4685,18 @@ extension ForkMeetingStrings {
         exportIncludeSummaryCaption: "Die auf diesem Mac geschriebene Zusammenfassung geht, falls vorhanden, als summary in meeting.json. Sonst bleibt sie auf diesem Mac.",
         // MARK: Finish D
         nudgeTitle: "Es hat begonnen · Aufnehmen?",
-        voiceNudgeFormat: "%@ hat begonnen. Möchtest du sie aufnehmen?",
+        voiceNudgeFormat: "Die Besprechung hat begonnen: %@. Möchtest du sie aufnehmen?",
         nudgeSetting: "Erneut anbieten, wenn die Besprechung wirklich beginnt",
-        nudgeCaption: "Wenn in einem erkannten Anruf, den du nicht beantwortet hast, andere zu sprechen beginnen, kommt das Angebot einmal zurück und nach 2 Minuten ein letztes Mal. Gelesen wird nur der Pegel des Tons der Besprechungs-App: Nichts wird behalten oder geschrieben. Ohne die Berechtigung für Systemaudio wird stattdessen nach einer Minute Gespräch das Mikrofon gelesen.",
-        lookbackSetting: "Die letzten 5 Minuten behalten",
-        lookbackCaption: "Während eines erkannten Anrufs werden die letzten 5 Minuten Ton im Arbeitsspeicher behalten und nie geschrieben, solange du die Aufnahme nicht startest. Die Aufnahme beginnt dann mit ihnen, nur Ton. Gelöscht, wenn der Anruf endet, bei Diesmal nicht oder Nie, wenn der Mac gesperrt wird oder in den Ruhezustand geht und wenn dies ausgeschaltet wird.",
+        nudgeCaption: "Wenn in einem erkannten Anruf, den du nicht beantwortet hast, andere zu sprechen beginnen, kommt das Angebot einmal zurück und nach 2 Minuten ein letztes Mal. Dafür wird nur die Lautstärke des Tons der Besprechungs-App gemessen, und nichts wird geschrieben. Ohne Systemaudioaufnahme wird stattdessen nach einer Minute Gespräch dein Mikrofon abgehört.",
+        lookbackSetting: "Die letzten 5 Minuten Ton behalten",
+        lookbackCaption: "Solange ein erkannter Anruf angeboten wird, bleiben die letzten 5 Minuten Ton der Besprechungs-App und deines Mikrofons im Arbeitsspeicher dieses Macs, nie auf der Festplatte, bis du auf Aufnehmen klickst. Die Aufnahme beginnt dann mit ihnen, nur Ton: Das Bild beginnt mit dem Klick. Gelöscht, wenn der Anruf endet, bei Diesmal nicht oder Nie, wenn der Mac gesperrt wird oder in den Ruhezustand geht, wenn die App beendet wird und wenn dies ausgeschaltet wird. Währenddessen zeigt macOS die App unter denen, die das Mikrofon verwenden; der orangefarbene Punkt leuchtet wegen des Anrufs bereits.",
         lookbackKeptFormat: "+%@ schon behalten",
         lookbackMinutesFormat: "%d\u{00A0}Min.",
         lookbackSecondsFormat: "%d\u{00A0}s",
-        lookbackSoundOnlyOne: "Die erste Minute: nur Ton",
-        lookbackSoundOnlyFormat: "Die ersten %d Minuten: nur Ton",
-        lookbackKeptBeforeOne: "Die erste Minute: vor dem Klick behalten",
-        lookbackKeptBeforeFormat: "Die ersten %d Minuten: vor dem Klick behalten",
-        nudgeOffersOff: "Angebote zur Aufnahme sind unter „Mitteilungen und Töne“ aus: Das Angebot kommt nicht zurück, und kein Ton wird behalten."
+        lookbackSoundOnlyFormat: "Nur Ton in den ersten %@",
+        lookbackKeptBeforeFormat: "Vor dem Klick behalten: die ersten %@",
+        nudgeOffersOff: "Angebote zur Aufnahme sind unter „Mitteilungen und Töne“ aus: Das Angebot kommt nicht zurück, und kein Ton wird behalten.",
+        lookbackNothingToKeep: "Noch kann nichts behalten werden: Erlaube zuerst die Systemaudioaufnahme oder das Mikrofon."
     )
 }
 
@@ -5229,19 +5222,18 @@ extension ForkMeetingStrings {
         exportIncludeSummaryCaption: "Le résumé écrit sur ce Mac, s’il y en a un, part dans meeting.json sous summary. Sinon, il reste sur ce Mac.",
         // MARK: Finish D
         nudgeTitle: "Ça commence · Enregistrer\u{00A0}?",
-        voiceNudgeFormat: "%@ a commencé. Voulez-vous l’enregistrer\u{00A0}?",
+        voiceNudgeFormat: "La réunion a commencé\u{00A0}: %@. Voulez-vous l’enregistrer\u{00A0}?",
         nudgeSetting: "Proposer à nouveau quand la réunion commence vraiment",
-        nudgeCaption: "Quand d’autres personnes se mettent à parler dans un appel détecté auquel vous n’avez pas répondu, la proposition revient une fois, puis une dernière fois après 2\u{00A0}minutes. Seul le niveau du son de l’app de réunion est lu\u{00A0}: rien n’est gardé ni écrit. Sans l’autorisation audio système, c’est le micro qui est lu à la place, après une minute de parole.",
-        lookbackSetting: "Garder les 5 dernières minutes",
-        lookbackCaption: "Pendant un appel détecté, garder en mémoire les 5 dernières minutes de son, jamais écrites tant que vous ne lancez pas l’enregistrement. L’enregistrement commence alors avec elles, son seulement. Vidées quand l’appel se termine, à «\u{00A0}Pas cette fois\u{00A0}» ou «\u{00A0}Jamais\u{00A0}», au verrouillage, à la mise en veille et quand ce réglage est coupé.",
+        nudgeCaption: "Quand d’autres personnes se mettent à parler dans un appel détecté auquel vous n’avez pas répondu, la proposition revient une fois, puis une dernière fois après 2\u{00A0}minutes. Pour cela, seul le volume du son de l’app de réunion est mesuré, et rien n’est écrit. Sans l’enregistrement de l’audio système, c’est votre micro qui est écouté, après une minute de parole.",
+        lookbackSetting: "Garder les 5 dernières minutes de son",
+        lookbackCaption: "Pendant un appel détecté et proposé, les 5 dernières minutes du son de l’app de réunion et de votre micro restent dans la mémoire de ce Mac, jamais sur le disque tant que vous ne cliquez pas sur Enregistrer. L’enregistrement commence alors par elles, son seulement\u{00A0}: l’image démarre au clic. Vidées quand l’appel se termine, à «\u{00A0}Pas cette fois\u{00A0}» ou «\u{00A0}Jamais\u{00A0}», au verrouillage, à la mise en veille, quand l’app quitte et quand ce réglage est coupé. Pendant ce temps, macOS montre l’app parmi celles qui utilisent le micro\u{00A0}; le point orange est déjà allumé par l’appel.",
         lookbackKeptFormat: "+%@ déjà gardées",
         lookbackMinutesFormat: "%d\u{00A0}min",
         lookbackSecondsFormat: "%d\u{00A0}s",
-        lookbackSoundOnlyOne: "La première minute\u{00A0}: son seulement",
-        lookbackSoundOnlyFormat: "Les %d premières minutes\u{00A0}: son seulement",
-        lookbackKeptBeforeOne: "La première minute\u{00A0}: gardée avant le clic",
-        lookbackKeptBeforeFormat: "Les %d premières minutes\u{00A0}: gardées avant le clic",
-        nudgeOffersOff: "Les propositions d’enregistrement sont coupées dans Notifications et sons\u{00A0}: la proposition ne revient pas et aucun son n’est gardé."
+        lookbackSoundOnlyFormat: "Son seulement pendant les %@ du début",
+        lookbackKeptBeforeFormat: "Gardé d’avant le clic\u{00A0}: les %@ du début",
+        nudgeOffersOff: "Les propositions d’enregistrement sont coupées dans Notifications et sons\u{00A0}: la proposition ne revient pas et aucun son n’est gardé.",
+        lookbackNothingToKeep: "Rien ne peut encore être gardé\u{00A0}: autorisez d’abord l’enregistrement de l’audio système ou le micro."
     )
 }
 
@@ -5767,19 +5759,18 @@ extension ForkMeetingStrings {
         exportIncludeSummaryCaption: "Il riepilogo scritto su questo Mac, se c’è, va in meeting.json come summary. Altrimenti resta su questo Mac.",
         // MARK: Finish D
         nudgeTitle: "È iniziata · Registrare?",
-        voiceNudgeFormat: "%@ è iniziata. Vuoi registrarla?",
+        voiceNudgeFormat: "La riunione è iniziata: %@. Vuoi registrarla?",
         nudgeSetting: "Proponi di nuovo quando la riunione inizia davvero",
-        nudgeCaption: "Quando altre persone iniziano a parlare in una chiamata rilevata a cui non hai risposto, la proposta torna una volta e un’ultima volta dopo 2 minuti. Viene letto solo il livello del suono dell’app della riunione: nulla viene conservato né scritto. Senza il permesso per l’audio di sistema, viene letto invece il microfono, dopo un minuto di conversazione.",
-        lookbackSetting: "Conserva gli ultimi 5 minuti",
-        lookbackCaption: "Durante una chiamata rilevata, conserva in memoria gli ultimi 5 minuti di suono, mai scritti finché non avvii la registrazione. La registrazione inizia allora con essi, solo audio. Cancellati quando la chiamata finisce, con Non ora o Mai, quando il Mac si blocca o va in stop e quando questa opzione viene disattivata.",
+        nudgeCaption: "Quando altre persone iniziano a parlare in una chiamata rilevata a cui non hai risposto, la proposta torna una volta e un’ultima volta dopo 2 minuti. Per questo viene misurato solo il volume del suono dell’app della riunione, e nulla viene scritto. Senza la Registrazione dell’audio di sistema, viene ascoltato invece il tuo microfono, dopo un minuto di conversazione.",
+        lookbackSetting: "Conserva gli ultimi 5 minuti di suono",
+        lookbackCaption: "Mentre una chiamata rilevata viene proposta, gli ultimi 5 minuti del suono dell’app della riunione e del tuo microfono restano nella memoria di questo Mac, mai sul disco finché non fai clic su Registra. La registrazione inizia allora con essi, solo audio: l’immagine parte dal clic. Cancellati quando la chiamata finisce, con Non ora o Mai, quando il Mac si blocca o va in stop, quando l’app si chiude e quando questa opzione viene disattivata. Nel frattempo macOS mostra l’app tra quelle che usano il microfono; il punto arancione è già acceso dalla chiamata.",
         lookbackKeptFormat: "+%@ già conservati",
         lookbackMinutesFormat: "%d\u{00A0}min",
         lookbackSecondsFormat: "%d\u{00A0}s",
-        lookbackSoundOnlyOne: "Il primo minuto: solo audio",
-        lookbackSoundOnlyFormat: "I primi %d minuti: solo audio",
-        lookbackKeptBeforeOne: "Il primo minuto: tenuto da prima del clic",
-        lookbackKeptBeforeFormat: "I primi %d minuti: tenuti da prima del clic",
-        nudgeOffersOff: "Le proposte di registrare sono disattivate in Notifiche e suoni: la proposta non torna e nessun suono viene tenuto."
+        lookbackSoundOnlyFormat: "Solo audio per i primi %@",
+        lookbackKeptBeforeFormat: "Conservato da prima del clic: i primi %@",
+        nudgeOffersOff: "Le proposte di registrare sono disattivate in Notifiche e suoni: la proposta non torna e nessun suono viene conservato.",
+        lookbackNothingToKeep: "Per ora non si può conservare nulla: consenti prima la Registrazione dell’audio di sistema o il microfono."
     )
 }
 
@@ -6305,19 +6296,18 @@ extension ForkMeetingStrings {
         exportIncludeSummaryCaption: "このMacで書かれた要約がある場合は、meeting.jsonにsummaryとして含まれます。それ以外の場合はこのMacに残ります。",
         // MARK: Finish D
         nudgeTitle: "始まりました · 録画しますか？",
-        voiceNudgeFormat: "%@が始まりました。録画しますか？",
+        voiceNudgeFormat: "ミーティングが始まりました：%@。録画しますか？",
         nudgeSetting: "会議が本当に始まったら再度提案",
-        nudgeCaption: "応答しなかった検出済みの通話で他の人が話し始めると、提案が一度、さらに2分後に最後にもう一度表示されます。読み取るのは会議アプリの音のレベルだけで、何も保存・書き込みされません。システムオーディオの許可がない場合は、1分間の会話の後に代わりにマイクを読み取ります。",
-        lookbackSetting: "直前の5分間を保持",
-        lookbackCaption: "検出された通話中、直前5分間の音をメモリに保持し、録画を開始するまでは決して書き込みません。録画はその音から、音声のみで始まります。通話の終了時、「今回はしない」または「録画しない」を選んだとき、Macのロック時やスリープ時、この設定をオフにしたときに消去されます。",
+        nudgeCaption: "応答しなかった検出済みの通話で他の人が話し始めると、提案が一度、さらに2分後に最後にもう一度表示されます。そのために測るのは会議アプリの音の音量だけで、何も書き込みません。システムオーディオ収録がない場合は、1分間の会話の後に代わりにマイクを聞き取ります。",
+        lookbackSetting: "直前5分間の音を保持",
+        lookbackCaption: "検出された通話が提案されている間、会議アプリの音とマイクの直前5分間はこのMacのメモリに残り、「録画」をクリックするまでディスクには書き込まれません。録画はその音から音声のみで始まり、映像はクリックした時点から始まります。通話の終了時、「今回はしない」または「録画しない」を選んだとき、Macのロック時やスリープ時、アプリの終了時、この設定をオフにしたときに消去されます。その間、macOSはこのアプリをマイク使用中として表示しますが、オレンジ色の点は通話によってすでに点灯しています。",
         lookbackKeptFormat: "+%@ 保持済み",
         lookbackMinutesFormat: "%d分",
         lookbackSecondsFormat: "%d秒",
-        lookbackSoundOnlyOne: "最初の1分：音声のみ",
-        lookbackSoundOnlyFormat: "最初の%d分：音声のみ",
-        lookbackKeptBeforeOne: "最初の1分：クリック前から保持",
-        lookbackKeptBeforeFormat: "最初の%d分：クリック前から保持",
-        nudgeOffersOff: "「通知とサウンド」で録画の提案がオフになっています。提案は再表示されず、音声も保持されません。"
+        lookbackSoundOnlyFormat: "最初の%@は音声のみ",
+        lookbackKeptBeforeFormat: "クリック前から保持：最初の%@",
+        nudgeOffersOff: "「通知とサウンド」で録画の提案がオフになっています。提案は再表示されず、音声も保持されません。",
+        lookbackNothingToKeep: "まだ何も保持できません。先にシステムオーディオ収録またはマイクを許可してください。"
     )
 }
 
@@ -6843,19 +6833,18 @@ extension ForkMeetingStrings {
         exportIncludeSummaryCaption: "이 Mac에서 작성된 요약이 있으면 meeting.json에 summary로 포함됩니다. 그렇지 않으면 이 Mac에 남습니다.",
         // MARK: Finish D
         nudgeTitle: "시작됨 · 녹화할까요?",
-        voiceNudgeFormat: "%@이(가) 시작되었습니다. 녹화하시겠습니까?",
+        voiceNudgeFormat: "회의가 시작되었습니다: %@. 녹화할까요?",
         nudgeSetting: "회의가 실제로 시작되면 다시 제안",
-        nudgeCaption: "응답하지 않은 감지된 통화에서 다른 사람이 말하기 시작하면 제안이 한 번, 2분 뒤 마지막으로 한 번 더 다시 나타납니다. 회의 앱 소리의 레벨만 읽으며 아무것도 보관하거나 기록하지 않습니다. 시스템 오디오 권한이 없으면 1분간 대화한 뒤 대신 마이크를 읽습니다.",
-        lookbackSetting: "마지막 5분 보관",
-        lookbackCaption: "감지된 통화 중 마지막 5분의 소리를 메모리에 보관하며, 녹화를 시작하기 전에는 절대 기록하지 않습니다. 그러면 녹화가 그 소리로 시작되며 소리만 담깁니다. 통화가 끝날 때, 이번에는 안 함 또는 녹화 안 함을 선택할 때, Mac이 잠기거나 잠자기에 들어갈 때, 이 옵션을 끌 때 지워집니다.",
+        nudgeCaption: "응답하지 않은 감지된 통화에서 다른 사람이 말하기 시작하면 제안이 한 번, 2분 뒤 마지막으로 한 번 더 다시 나타납니다. 이를 위해 회의 앱 소리의 음량만 측정하며 아무것도 기록하지 않습니다. 시스템 오디오 녹음이 없으면 1분간 대화한 뒤 대신 마이크를 듣습니다.",
+        lookbackSetting: "마지막 5분의 소리 보관",
+        lookbackCaption: "감지된 통화가 제안되는 동안 회의 앱 소리와 마이크의 마지막 5분이 이 Mac의 메모리에 남으며, 녹화를 클릭하기 전에는 디스크에 기록되지 않습니다. 그러면 녹화가 그 소리로 시작되며 소리만 담기고, 화면은 클릭한 시점부터 시작됩니다. 통화가 끝날 때, 이번에는 안 함 또는 녹화 안 함을 선택할 때, Mac이 잠기거나 잠자기에 들어갈 때, 앱이 종료될 때, 이 옵션을 끌 때 지워집니다. 그동안 macOS는 이 앱을 마이크를 사용하는 앱으로 표시하며, 주황색 점은 이미 통화로 켜져 있습니다.",
         lookbackKeptFormat: "+%@ 보관됨",
         lookbackMinutesFormat: "%d분",
         lookbackSecondsFormat: "%d초",
-        lookbackSoundOnlyOne: "처음 1분: 소리만",
-        lookbackSoundOnlyFormat: "처음 %d분: 소리만",
-        lookbackKeptBeforeOne: "처음 1분: 클릭 전부터 보관",
-        lookbackKeptBeforeFormat: "처음 %d분: 클릭 전부터 보관",
-        nudgeOffersOff: "알림 및 사운드에서 녹화 제안이 꺼져 있습니다. 제안이 다시 나타나지 않고 소리도 보관되지 않습니다."
+        lookbackSoundOnlyFormat: "처음 %@ 동안 소리만",
+        lookbackKeptBeforeFormat: "클릭 전부터 보관: 처음 %@",
+        nudgeOffersOff: "알림 및 사운드에서 녹화 제안이 꺼져 있습니다. 제안이 다시 나타나지 않고 소리도 보관되지 않습니다.",
+        lookbackNothingToKeep: "아직 아무것도 보관할 수 없습니다. 먼저 시스템 오디오 녹음 또는 마이크를 허용하세요."
     )
 }
 
@@ -7381,19 +7370,18 @@ extension ForkMeetingStrings {
         exportIncludeSummaryCaption: "Підсумок, написаний на цьому Mac, якщо він є, іде в meeting.json як summary. Інакше він лишається на цьому Mac.",
         // MARK: Finish D
         nudgeTitle: "Почалося · Записати?",
-        voiceNudgeFormat: "%@ почалася. Записати її?",
+        voiceNudgeFormat: "Зустріч почалася: %@. Записати її?",
         nudgeSetting: "Пропонувати знову, коли зустріч справді почнеться",
-        nudgeCaption: "Коли у виявленому дзвінку, на який ви не відповіли, починають говорити інші, пропозиція повертається один раз, а потім востаннє через 2 хвилини. Читається лише рівень звуку застосунку зустрічі: нічого не зберігається і не записується. Без дозволу на системний звук натомість слухається мікрофон, після хвилини розмови.",
-        lookbackSetting: "Зберігати останні 5 хвилин",
-        lookbackCaption: "Під час виявленого дзвінка останні 5 хвилин звуку зберігаються в пам’яті й ніколи не записуються, доки ви не почнете запис. Запис тоді починається з них, лише звук. Видаляються, коли дзвінок закінчується, при «Не зараз» або «Ніколи», коли Mac блокується чи засинає, і коли цю функцію вимкнено.",
+        nudgeCaption: "Коли у виявленому дзвінку, на який ви не відповіли, починають говорити інші, пропозиція повертається один раз, а потім востаннє через 2 хвилини. Для цього вимірюється лише гучність звуку застосунку зустрічі, і нічого не записується. Без «Запису системного звуку» натомість слухається ваш мікрофон, після хвилини розмови.",
+        lookbackSetting: "Зберігати останні 5 хвилин звуку",
+        lookbackCaption: "Поки виявлений дзвінок пропонується для запису, останні 5 хвилин звуку застосунку зустрічі та вашого мікрофона зберігаються в пам’яті цього Mac і не потрапляють на диск, доки ви не натиснете «Записати». Запис тоді починається з них, лише звук: зображення починається з натискання. Видаляються, коли дзвінок закінчується, при «Не зараз» або «Ніколи», коли Mac блокується чи засинає, коли застосунок завершується і коли цю функцію вимкнено. Тим часом macOS показує застосунок серед тих, що використовують мікрофон; помаранчева крапка вже світиться через дзвінок.",
         lookbackKeptFormat: "+%@ уже збережено",
         lookbackMinutesFormat: "%d хв",
         lookbackSecondsFormat: "%d с",
-        lookbackSoundOnlyOne: "Перша хвилина: лише звук",
-        lookbackSoundOnlyFormat: "Перші хвилини (%d): лише звук",
-        lookbackKeptBeforeOne: "Перша хвилина: збережена до натискання",
-        lookbackKeptBeforeFormat: "Перші хвилини (%d): збережені до натискання",
-        nudgeOffersOff: "Пропозиції записати вимкнено в розділі «Сповіщення і звуки»: пропозиція не повернеться, звук не зберігається."
+        lookbackSoundOnlyFormat: "Лише звук у перші %@",
+        lookbackKeptBeforeFormat: "Збережено до натискання: перші %@",
+        nudgeOffersOff: "Пропозиції записати вимкнено в розділі «Сповіщення і звуки»: пропозиція не повернеться, звук не зберігається.",
+        lookbackNothingToKeep: "Поки нічого не можна зберегти: спершу дозвольте «Запис системного звуку» або мікрофон."
     )
 }
 
@@ -7919,19 +7907,18 @@ extension ForkMeetingStrings {
         exportIncludeSummaryCaption: "在这台 Mac 上写成的摘要（如有）会作为 summary 放入 meeting.json。否则会留在这台 Mac 上。",
         // MARK: Finish D
         nudgeTitle: "已开始 · 要录制吗？",
-        voiceNudgeFormat: "%@已开始。要录制吗？",
+        voiceNudgeFormat: "会议已开始：%@。要录制吗？",
         nudgeSetting: "会议真正开始时再次提议",
-        nudgeCaption: "在你未回应的已检测通话中，其他人开始说话时，提议会再出现一次，2 分钟后再最后出现一次。只读取会议 App 声音的音量：不保留也不写入任何内容。没有系统音频权限时，会在一分钟的对话后改为读取麦克风。",
-        lookbackSetting: "保留最近 5 分钟",
-        lookbackCaption: "在已检测的通话期间，将最近 5 分钟的声音保留在内存中，在你开始录制之前绝不写入。录制随后以这些声音开头，仅有声音。通话结束、选择“这次不要”或“永不录制”、Mac 锁定或睡眠以及关闭此选项时会被清空。",
+        nudgeCaption: "在你未回应的已检测通话中，其他人开始说话时，提议会再出现一次，2 分钟后再最后出现一次。为此只测量会议 App 声音的音量，不写入任何内容。没有“系统音频录制”时，会在一分钟的对话后改为聆听你的麦克风。",
+        lookbackSetting: "保留最近 5 分钟的声音",
+        lookbackCaption: "已检测的通话被提议期间，会议 App 声音和你麦克风的最近 5 分钟保留在这台 Mac 的内存中，在你点按“录制”之前绝不写入磁盘。录制随后以这些声音开头，仅有声音：画面从点按时开始。通话结束、选择“这次不要”或“永不录制”、Mac 锁定或睡眠、App 退出以及关闭此选项时会被清空。在此期间，macOS 会将此 App 列为正在使用麦克风；橙色圆点已因通话而亮起。",
         lookbackKeptFormat: "已保留 +%@",
         lookbackMinutesFormat: "%d 分钟",
         lookbackSecondsFormat: "%d 秒",
-        lookbackSoundOnlyOne: "前 1 分钟：仅声音",
-        lookbackSoundOnlyFormat: "前 %d 分钟：仅声音",
-        lookbackKeptBeforeOne: "前 1 分钟：点击前已保留",
-        lookbackKeptBeforeFormat: "前 %d 分钟：点击前已保留",
-        nudgeOffersOff: "“通知和声音”中已关闭录制提议：提议不会再次出现，也不会保留任何声音。"
+        lookbackSoundOnlyFormat: "前 %@ 仅有声音",
+        lookbackKeptBeforeFormat: "点击前已保留：前 %@",
+        nudgeOffersOff: "“通知和声音”中已关闭录制提议：提议不会再次出现，也不会保留任何声音。",
+        lookbackNothingToKeep: "暂时无法保留任何内容：请先允许“系统音频录制”或麦克风。"
     )
 }
 
@@ -8457,19 +8444,18 @@ extension ForkMeetingStrings {
         exportIncludeSummaryCaption: "在這台 Mac 上寫成的摘要（如有）會以 summary 放入 meeting.json。否則會留在這台 Mac 上。",
         // MARK: Finish D
         nudgeTitle: "已開始 · 要錄製嗎？",
-        voiceNudgeFormat: "%@已開始。要錄製嗎？",
+        voiceNudgeFormat: "會議已開始：%@。要錄製嗎？",
         nudgeSetting: "會議真正開始時再次提議",
-        nudgeCaption: "在你未回應的已偵測通話中，其他人開始說話時，提議會再出現一次，2 分鐘後再最後出現一次。只讀取會議 App 聲音的音量：不保留也不寫入任何內容。沒有系統音訊權限時，會在一分鐘的對話後改為讀取麥克風。",
-        lookbackSetting: "保留最近 5 分鐘",
-        lookbackCaption: "在已偵測的通話期間，將最近 5 分鐘的聲音保留在記憶體中，在你開始錄製之前絕不寫入。錄製隨後以這些聲音開頭，僅有聲音。通話結束、選擇「這次不要」或「永不錄製」、Mac 鎖定或睡眠以及關閉此選項時會被清空。",
+        nudgeCaption: "在你未回應的已偵測通話中，其他人開始說話時，提議會再出現一次，2 分鐘後再最後出現一次。為此只測量會議 App 聲音的音量，不寫入任何內容。沒有「系統音訊錄製」時，會在一分鐘的對話後改為聆聽你的麥克風。",
+        lookbackSetting: "保留最近 5 分鐘的聲音",
+        lookbackCaption: "已偵測的通話被提議期間，會議 App 聲音和你麥克風的最近 5 分鐘保留在這台 Mac 的記憶體中，在你點按「錄製」之前絕不寫入磁碟。錄製隨後以這些聲音開頭，僅有聲音：畫面從點按時開始。通話結束、選擇「這次不要」或「永不錄製」、Mac 鎖定或睡眠、App 結束以及關閉此選項時會被清空。在此期間，macOS 會將此 App 列為正在使用麥克風；橙色圓點已因通話而亮起。",
         lookbackKeptFormat: "已保留 +%@",
         lookbackMinutesFormat: "%d 分鐘",
         lookbackSecondsFormat: "%d 秒",
-        lookbackSoundOnlyOne: "前 1 分鐘：僅聲音",
-        lookbackSoundOnlyFormat: "前 %d 分鐘：僅聲音",
-        lookbackKeptBeforeOne: "前 1 分鐘：點按前已保留",
-        lookbackKeptBeforeFormat: "前 %d 分鐘：點按前已保留",
-        nudgeOffersOff: "「通知與聲音」中已關閉錄製提議：提議不會再次出現，也不會保留任何聲音。"
+        lookbackSoundOnlyFormat: "前 %@ 僅有聲音",
+        lookbackKeptBeforeFormat: "點按前已保留：前 %@",
+        nudgeOffersOff: "「通知與聲音」中已關閉錄製提議：提議不會再次出現，也不會保留任何聲音。",
+        lookbackNothingToKeep: "暫時無法保留任何內容：請先允許「系統音訊錄製」或麥克風。"
     )
 }
 
@@ -8995,18 +8981,17 @@ extension ForkMeetingStrings {
         exportIncludeSummaryCaption: "在這部 Mac 上寫成的摘要（如有）會以 summary 放入 meeting.json。否則會留在這部 Mac 上。",
         // MARK: Finish D
         nudgeTitle: "已開始 · 要錄製嗎？",
-        voiceNudgeFormat: "%@已開始。要錄製嗎？",
+        voiceNudgeFormat: "會議已開始：%@。要錄製嗎？",
         nudgeSetting: "會議真正開始時再次提議",
-        nudgeCaption: "喺你未回應嘅已偵測通話入面，其他人開始講嘢時，提議會再出現一次，2 分鐘後再最後出現一次。只讀取會議 App 聲音嘅音量：唔會保留或寫入任何內容。冇系統音訊權限時，會喺一分鐘對話之後改為讀取咪高峰。",
-        lookbackSetting: "保留最近 5 分鐘",
-        lookbackCaption: "喺已偵測嘅通話期間，將最近 5 分鐘嘅聲音保留喺記憶體入面，喺你開始錄製之前絕對唔會寫入。錄製之後會以呢啲聲音開頭，只有聲音。通話結束、揀「今次唔使」或「永不錄製」、Mac 鎖定或者睡眠，同埋關閉呢個選項時會清空。",
+        nudgeCaption: "喺你未回應嘅已偵測通話入面，其他人開始講嘢時，提議會再出現一次，2 分鐘後再最後出現一次。為此只量度會議 App 聲音嘅音量，唔會寫入任何內容。冇「系統音訊錄製」時，會喺一分鐘對話之後改為聽你嘅咪高風。",
+        lookbackSetting: "保留最近 5 分鐘嘅聲音",
+        lookbackCaption: "已偵測嘅通話被提議期間，會議 App 聲音同你咪高風嘅最近 5 分鐘會保留喺呢部 Mac 嘅記憶體入面，喺你撳「錄製」之前絕對唔會寫入磁碟。錄製之後會以呢啲聲音開頭，只有聲音：畫面由撳嗰刻開始。通話結束、揀「今次唔使」或「永不錄製」、Mac 鎖定或者睡眠、App 結束，同埋關閉呢個選項時會清空。期間 macOS 會將呢個 App 列為正在使用咪高風；橙色圓點已經因為通話亮咗。",
         lookbackKeptFormat: "已保留 +%@",
         lookbackMinutesFormat: "%d 分鐘",
         lookbackSecondsFormat: "%d 秒",
-        lookbackSoundOnlyOne: "頭 1 分鐘：只有聲音",
-        lookbackSoundOnlyFormat: "頭 %d 分鐘：只有聲音",
-        lookbackKeptBeforeOne: "頭 1 分鐘：按下前已保留",
-        lookbackKeptBeforeFormat: "頭 %d 分鐘：按下前已保留",
-        nudgeOffersOff: "「通知與聲音」中已關閉錄製提議：提議唔會再出現，亦唔會保留任何聲音。"
+        lookbackSoundOnlyFormat: "頭 %@ 只有聲音",
+        lookbackKeptBeforeFormat: "按下前已保留：頭 %@",
+        nudgeOffersOff: "「通知與聲音」中已關閉錄製提議：提議唔會再出現，亦唔會保留任何聲音。",
+        lookbackNothingToKeep: "暫時未能保留任何內容：請先允許「系統音訊錄製」或者咪高風。"
     )
 }
