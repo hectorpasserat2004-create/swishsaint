@@ -4696,7 +4696,7 @@ extension ForkMeetingStrings {
         nudgeCaption: "Wenn in einem erkannten Anruf, den du nicht beantwortet hast, andere zu sprechen beginnen, kommt das Angebot einmal zurück und nach 2 Minuten ein letztes Mal. Gelesen wird nur der Pegel des Tons der Besprechungs-App: Nichts wird behalten oder geschrieben. Ohne die Berechtigung für Systemaudio wird stattdessen nach einer Minute Gespräch das Mikrofon gelesen.",
         lookbackSetting: "Die letzten 5 Minuten behalten",
         lookbackCaption: "Während eines erkannten Anrufs werden die letzten 5 Minuten Ton im Arbeitsspeicher behalten und nie geschrieben, solange du die Aufnahme nicht startest. Die Aufnahme beginnt dann mit ihnen, nur Ton. Gelöscht, wenn der Anruf endet, bei Diesmal nicht oder Nie, wenn der Mac gesperrt wird oder in den Ruhezustand geht und wenn dies ausgeschaltet wird.",
-        lookbackKeptFormat: "+%@ bereits behalten",
+        lookbackKeptFormat: "+%@ schon behalten",
         lookbackMinutesFormat: "%d\u{00A0}Min.",
         lookbackSecondsFormat: "%d\u{00A0}s",
         lookbackSoundOnlyOne: "Die erste Minute: nur Ton",
@@ -5228,7 +5228,7 @@ extension ForkMeetingStrings {
         exportIncludeSummary: "Inclure le résumé",
         exportIncludeSummaryCaption: "Le résumé écrit sur ce Mac, s’il y en a un, part dans meeting.json sous summary. Sinon, il reste sur ce Mac.",
         // MARK: Finish D
-        nudgeTitle: "Ça a commencé · Enregistrer\u{00A0}?",
+        nudgeTitle: "Ça commence · Enregistrer\u{00A0}?",
         voiceNudgeFormat: "%@ a commencé. Voulez-vous l’enregistrer\u{00A0}?",
         nudgeSetting: "Proposer à nouveau quand la réunion commence vraiment",
         nudgeCaption: "Quand d’autres personnes se mettent à parler dans un appel détecté auquel vous n’avez pas répondu, la proposition revient une fois, puis une dernière fois après 2\u{00A0}minutes. Seul le niveau du son de l’app de réunion est lu\u{00A0}: rien n’est gardé ni écrit. Sans l’autorisation audio système, c’est le micro qui est lu à la place, après une minute de parole.",

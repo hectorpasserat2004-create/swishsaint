@@ -99,9 +99,10 @@ struct ForkMeetingKeptText: View {
     }
 }
 
-/// The Meetings page's two choices for a forgotten recording, under the
-/// detection's: the offer back when the meeting really starts, and the
-/// last 5 minutes kept in memory.
+/// The Meetings page's two choices for a forgotten recording, in the
+/// detection's section right after the apps offered (before the calendar
+/// naming and the automatic stop): the offer back when the meeting really
+/// starts, and the last 5 minutes kept in memory.
 struct ForkMeetingForgetRows: View {
     let text: ForkMeetingStrings
     @AppStorage(ForkDefaultsKey.meetingsNudge) private var nudge = true

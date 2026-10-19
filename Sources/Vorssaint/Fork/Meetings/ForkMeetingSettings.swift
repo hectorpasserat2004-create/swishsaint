@@ -407,6 +407,10 @@ private struct ForkMeetingDetectionSection: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
+            // MARK: Finish D
+            // What the offer does once shown, before how the meeting is
+            // named and how its recording ends.
+            ForkMeetingForgetRows(text: text)
 
             Toggle(isOn: $calendarNaming) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -436,8 +440,6 @@ private struct ForkMeetingDetectionSection: View {
                 }
             }
             .disabled(!autoStop)
-            // MARK: Finish D
-            ForkMeetingForgetRows(text: text)
         }
     }
 

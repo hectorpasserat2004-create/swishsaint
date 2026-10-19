@@ -340,7 +340,7 @@ enum ForkMeetingFinishDTests {
                         && ForkMeetingLookbackText.soundOnly(seconds: 40, strings: french)
                         == "La première minute\u{00A0}: son seulement",
                      "the detail says how the file begins, to the nearest minute")
-        suite.expect(french.nudgeTitle == "Ça a commencé · Enregistrer\u{00A0}?"
+        suite.expect(french.nudgeTitle == "Ça commence · Enregistrer\u{00A0}?" && french.nudgeTitle.count == 27
                         && ForkMeetingAnnouncement.nudged("Point hebdo").text(english)
                         == "Point hebdo has started. Do you want to record it?",
                      "the offer back says it started, and VoiceOver with its name")
@@ -348,7 +348,7 @@ enum ForkMeetingFinishDTests {
         for language in AppLanguage.allCases {
             let s = ForkMeetingStrings.strings(language)
             for short in [s.nudgeTitle, ForkMeetingLookbackText.kept(since: at(0), now: at(299), strings: s)]
-            where short.count > 30 { tooLong.append("\(language.rawValue): \(short)") }
+            where short.count > 28 { tooLong.append("\(language.rawValue): \(short)") }
         }
         suite.expect(tooLong.isEmpty, "the island's words stay short in every language: \(tooLong)")
     }
