@@ -126,6 +126,13 @@ enum ForkDefaultsKey {
     /// Intelligence (`ForkMeetingSummarizer`), when it can run here. Off by
     /// default (Finish E).
     static let meetingsSummarize = "fork.meetings.summarize"
+    // MARK: Finish D
+    /// The offer comes back when others start talking in a detected call
+    /// left unanswered (`ForkMeetingNudgePlan`). On by default.
+    static let meetingsNudge = "fork.meetings.nudge"
+    /// During a detected call, the last 5 minutes of sound are kept in
+    /// memory and open the recording if one starts. Off by default.
+    static let meetingsLookback = "fork.meetings.lookback"
     /// The meetings folder's path; empty: a folder in Movies, named in the
     /// person's language and saved here at the first recording. Machine
     /// state, like the official recorder's folder: kept out of the backup.
@@ -220,6 +227,8 @@ enum ForkDefaults {
         ForkDefaultsKey.meetingsPauseShortcut: "",
         ForkDefaultsKey.meetingsMarkerShortcut: "",
         ForkDefaultsKey.meetingsSummarize: false,
+        ForkDefaultsKey.meetingsNudge: true,
+        ForkDefaultsKey.meetingsLookback: false,
     ]
 
     /// Where each setting lived in the test builds made before the fork

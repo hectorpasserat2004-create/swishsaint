@@ -112,6 +112,10 @@ struct ForkMeetingLibraryEntry: Equatable {
     /// rename keeps it, a copy (the Finder's Duplicate, same `meeting.json`
     /// and same id) has its own.
     let folderFile: UInt64?
+    // MARK: Finish D
+    /// How long the file opens on sound only: the minutes kept in memory
+    /// before the click (`GapKind.lookback`); `nil` for none.
+    private(set) var soundOnlySeconds: Double?
 
     /// `nil` for a folder without `meeting.json`: what tells a meeting
     /// folder from any other folder in the same place is its sidecar.
@@ -177,6 +181,7 @@ struct ForkMeetingLibraryEntry: Equatable {
             transcriptRecord = ForkMeetingTranscriptRecord(json: meeting.transcript)
             markers = ForkMeetingMarkers.times(meeting.markers)
             summaryRecord = ForkMeetingSummaryRecord(json: meeting.summary)
+            soundOnlySeconds = meeting.gaps?.first { $0.kind == .lookback }?.seconds.flatMap { $0 > 0 ? $0 : nil }
         }
         if let startedAt {
             date = startedAt

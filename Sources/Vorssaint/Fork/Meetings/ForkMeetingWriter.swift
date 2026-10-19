@@ -233,12 +233,103 @@ final class ForkMeetingWriter: @unchecked Sendable {
     /// The recording's zero, in host seconds: the instant the stream is
     /// asked to start. Later sources (a stream rebuilt after a sleep) keep
     /// this origin.
-    func beginSession(atHostTime time: Double) {
+    ///
+    /// `lookback`, asked with that instant, gives the sound kept before it
+    /// ("the last 5 minutes"): the file then begins that much earlier, both
+    /// tracks open with it and the picture is black until the instant
+    /// itself. Answers how many seconds come before the picture (0 without).
+    @discardableResult
+    func beginSession(atHostTime time: Double, lookback: ((Double) -> Lookback?)? = nil) -> TimeInterval {
         queue.sync {
-            guard !started, writer.status == .writing, pauseClock.begin(at: time) else { return }
+            let kept = lookback?(time)
+            let seconds = kept?.plan.seconds ?? 0
+            guard !started, writer.status == .writing, pauseClock.begin(at: time - seconds) else {
+                kept?.release()
+                return 0
+            }
             writer.startSession(atSourceTime: .zero)
             started = true
             startTicker()
+            // On this queue before any live sample: those come after, and
+            // what they overlap of it is skipped by the tracks' timelines.
+            if let kept { queue.async { [self] in writeLookback(kept) } }
+            return seconds
+        }
+    }
+
+    // MARK: Finish D
+
+    /// The sound kept in memory before the click, handed over to the file
+    /// once: the rings are this file's own (`ForkMeetingLookbackRing.handOver`),
+    /// emptied as soon as they are written.
+    struct Lookback {
+        let plan: ForkMeetingLookbackPlan
+        /// The meeting's sound, then the microphone, as `Track` orders them.
+        let rings: [ForkMeetingLookbackRing]
+
+        func release() { rings.forEach { $0.clear() } }
+    }
+
+    /// Writer queue. Second by second, the black picture, then each track's
+    /// silence or kept sound, 16 kHz brought to 48 kHz by linear steps, so
+    /// every sample lands where its host time says. An input that is not
+    /// ready is waited for a little (nothing here is real time yet).
+    private func writeLookback(_ kept: Lookback) {
+        defer { kept.release() }
+        let plan = kept.plan
+        let total = Int64((plan.seconds * Self.sampleRate).rounded())
+        if placeholder == nil, let outputSize { placeholder = Self.blackFrame(outputSize) }
+        var second: Int64 = 0
+        while second * Int64(Self.sampleRate) < total, !failed {
+            if let placeholder, let videoInput {
+                waitUntilReady(videoInput)
+                writeVideo(placeholder, at: CMTime(value: second, timescale: 1))
+            }
+            let from = second * Int64(Self.sampleRate)
+            let count = min(Int64(Self.sampleRate), total - from)
+            for track in Track.allCases where track.rawValue < plan.tracks.count && track.rawValue < kept.rings.count {
+                let samples = Self.lookbackSamples(plan.tracks[track.rawValue], ring: kept.rings[track.rawValue],
+                                                   from: from, count: Int(count))
+                guard let placement = timelines[track.rawValue].place(start: from, count: count) else { continue }
+                waitUntilReady(audioInputs[track.rawValue])
+                writeSamples(Array(samples.dropFirst(Int(placement.skip))), at: placement.start, track: track)
+            }
+            second += 1
+        }
+        let now = Self.hostSeconds()
+        for track in Track.allCases { lastFed[track.rawValue] = now }
+    }
+
+    /// `count` samples at 48 kHz from file sample `from`: silence before the
+    /// track's kept sound and after it.
+    static func lookbackSamples(_ track: ForkMeetingLookbackPlan.Track, ring: ForkMeetingLookbackRing,
+                                from: Int64, count: Int) -> [Float] {
+        var out = [Float](repeating: 0, count: count)
+        let rate = sampleRate, kept = ForkMeetingLookbackRing.sampleRate
+        let start = Int64((track.silence * rate).rounded())
+        let end = start + Int64((track.seconds * rate).rounded())
+        let first = max(from, start), last = min(from + Int64(count), end)
+        guard first < last else { return out }
+        // The ring's samples covering [first, last), one more for the steps.
+        let offset = Double(first - start) / rate
+        let needed = Int((Double(last - first) / rate * kept).rounded(.up)) + 2
+        let source = ring.read(from: track.from + offset, count: needed)
+        let step = kept / rate
+        for index in first..<last {
+            let position = Double(index - first) * step
+            let below = Int(position)
+            guard below + 1 < source.count else { break }
+            let fraction = Float(position - Double(below))
+            out[Int(index - from)] = source[below] + (source[below + 1] - source[below]) * fraction
+        }
+        return out
+    }
+
+    private func waitUntilReady(_ input: AVAssetWriterInput) {
+        var waited = 0
+        while !input.isReadyForMoreMediaData, waited < 500 {
+            usleep(1_000)
+            waited += 1
         }
     }
 

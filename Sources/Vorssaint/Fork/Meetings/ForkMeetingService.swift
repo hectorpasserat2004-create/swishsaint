@@ -134,6 +134,11 @@ final class ForkMeetingService: ObservableObject {
     /// Each detection effect as it runs, for the recipe harness.
     var onDetectionEffect: ((ForkMeetingMachine.Effect) -> Void)?
 
+    // MARK: Finish D
+
+    /// What listens to an offered meeting left unanswered (`+Nudge`).
+    var listening = ForkMeetingListening()
+
     private lazy var hotKey = ForkMeetingHotKey { [weak self] in self?.shortcutPressed() }
     private lazy var pauseHotKey = ForkMeetingHotKey(identifier: 2) { [weak self] in self?.pauseShortcutPressed() }
     private lazy var markerHotKey = ForkMeetingHotKey(identifier: 3) { [weak self] in self?.markerShortcutPressed() }

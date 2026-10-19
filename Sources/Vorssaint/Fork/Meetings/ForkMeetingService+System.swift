@@ -21,6 +21,7 @@ extension ForkMeetingService {
     }
 
     func systemEvent(_ event: ForkMeetingSystemEvents.Event) {
+        listeningEvent(event)
         switch event {
         case .willSleep: send(.willSleep)
         case .didWake: send(.didWake)
