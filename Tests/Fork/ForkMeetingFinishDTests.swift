@@ -24,6 +24,7 @@ enum ForkMeetingFinishDTests {
         soundOnlyMeeting(suite)
         fileTime(suite)
         offersSilenced(suite)
+        island(suite)
     }
 
     private static let t0 = Date(timeIntervalSinceReferenceDate: 800_000_000)
@@ -371,6 +372,40 @@ enum ForkMeetingFinishDTests {
         let entry = ForkMeetingLibraryEntry(folderName: "2026-10-19 10h00 — Point hebdo", sidecar: .success(back),
                                             contents: contents)
         suite.expect(entry?.soundOnlySeconds == 252, "and the library's detail reads it")
+    }
+
+    // MARK: - The island (Finish A)
+
+    /// The nudge lives in the offer's card: no live activity is ever shown
+    /// beside it (nothing records while an offer waits), the island's own
+    /// spring brings it in, Reduce Motion stills it, VoiceOver reads it.
+    private static func island(_ suite: TestSuite) {
+        var machine = offering()
+        let effects = machine.handle(.nudge(meetA), now: at(90))
+        let pills = effects.filter { if case .showPill = $0 { return true }; return false }
+        suite.expect(pills.isEmpty && !ForkMeetingIslandRules.showsStrip(enabled: true, indicator: .both, state: .hidden),
+                     "a nudge shows no pill and no strip: the offer waits, nothing records")
+        suite.expect(ForkMeetingAttentionStyle.style(inIsland: true, reduceMotion: false)
+                        == .init(springs: false, pulses: true, arrowMoves: true)
+                        && ForkMeetingAttentionStyle.style(inIsland: false, reduceMotion: false)
+                        == .init(springs: true, pulses: true, arrowMoves: true),
+                     "in the island the card comes with the island's spring, its ring pulsing; in the bubble it springs itself")
+        suite.expect(ForkMeetingAttentionStyle.style(inIsland: true, reduceMotion: true) == .init()
+                        && ForkMeetingAttentionStyle.style(inIsland: false, reduceMotion: true) == .init(),
+                     "with Reduce Motion nothing moves: the ring is simply lit")
+        let english = ForkMeetingStrings.strings(.enUS)
+        let spoken = ForkMeetingLookbackText.spokenKept(since: at(0), now: at(252), strings: english, language: .enUS)
+        let drawn = ForkMeetingLookbackText.kept(since: at(0), now: at(252), strings: english)
+        suite.expect(spoken.hasPrefix("+") && spoken.hasSuffix("already kept") && spoken.contains("4")
+                        && spoken.contains("12") && spoken != drawn
+                        && ForkMeetingLookbackText.spokenKept(since: at(0), now: at(4_000), strings: english, language: .enUS)
+                        .contains("5"),
+                     "VoiceOver reads the kept time in its words (\(spoken)), never more than 5 minutes")
+        suite.expect(AppLanguage.allCases.allSatisfy { language in
+                        let s = ForkMeetingStrings.strings(language)
+                        return !ForkMeetingLookbackText.spokenKept(since: at(0), now: at(252), strings: s, language: language)
+                            .isEmpty
+                     }, "in every language")
     }
 
     // MARK: - The notification switches (Finish B)

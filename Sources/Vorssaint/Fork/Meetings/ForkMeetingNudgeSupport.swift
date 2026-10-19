@@ -455,11 +455,39 @@ struct ForkMeetingLookbackPlan: Equatable {
 }
 
 /// The words of the nudge and of the kept sound.
+/// How a nudged offer's card draws the eye (`ForkMeetingAttention`). In
+/// the island the card arrives with the island's own spring (`NotchMotion`):
+/// a second spring of the card inside it would bounce twice, so there only
+/// its ring pulses. Nothing moves with Reduce Motion: the ring is simply
+/// lit. Only an offer is ever raised, and an offer is never shown while a
+/// meeting records, so this never shares the island with the recording's
+/// live activity.
+struct ForkMeetingAttentionStyle: Equatable {
+    /// The card springs in from a little smaller.
+    var springs = false
+    /// Its red ring pulses a few times with a glow, then stays lit.
+    var pulses = false
+    /// The arrow before "● Record" nudges toward it.
+    var arrowMoves = false
+
+    static func style(inIsland: Bool, reduceMotion: Bool) -> ForkMeetingAttentionStyle {
+        guard !reduceMotion else { return ForkMeetingAttentionStyle() }
+        return ForkMeetingAttentionStyle(springs: !inIsland, pulses: true, arrowMoves: true)
+    }
+}
+
 enum ForkMeetingLookbackText {
     /// "+4 min 12 s already kept": the kept sound, at most 5 minutes.
     static func kept(since: Date, now: Date, strings s: ForkMeetingStrings) -> String {
         let seconds = Int(min(ForkMeetingLookbackRing.seconds, max(0, now.timeIntervalSince(since))))
         return String(format: s.lookbackKeptFormat, duration(seconds, strings: s))
+    }
+
+    /// What VoiceOver reads for `kept`: the duration in its words
+    /// ("+4 min, 12 sec already kept"), not the abbreviations drawn.
+    static func spokenKept(since: Date, now: Date, strings s: ForkMeetingStrings, language: AppLanguage) -> String {
+        let seconds = min(ForkMeetingLookbackRing.seconds, max(0, now.timeIntervalSince(since)))
+        return String(format: s.lookbackKeptFormat, ForkMeetingIslandRules.spokenDuration(seconds, language: language))
     }
 
     /// "4 min 12 s", "45 s", "5 min".

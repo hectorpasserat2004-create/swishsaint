@@ -67,6 +67,9 @@ struct ForkMeetingCard {
 
     /// Raised by a nudge: ringed, sprung, the Record button pointed at.
     var attention = false
+    /// Raised in the island, which springs it in itself
+    /// (`ForkMeetingAttentionStyle`).
+    var attentionInIsland = false
     /// "+4 min 12 s already kept" since then, counting.
     var keptSince: Date?
 }
@@ -123,7 +126,7 @@ struct ForkMeetingCardView: View {
                 }
             }
         }
-        .modifier(ForkMeetingAttention(on: card.attention))
+        .modifier(ForkMeetingAttention(on: card.attention, inIsland: card.attentionInIsland))
     }
 
     @ViewBuilder
@@ -239,7 +242,7 @@ struct ForkMeetingCardView: View {
         let button = Button(action: action.perform) {
             HStack(spacing: 5) {
                 if action.recordDot, card.attention {
-                    ForkMeetingNudgeArrow()
+                    ForkMeetingNudgeArrow(inIsland: card.attentionInIsland)
                 }
                 if action.recordDot {
                     Circle()

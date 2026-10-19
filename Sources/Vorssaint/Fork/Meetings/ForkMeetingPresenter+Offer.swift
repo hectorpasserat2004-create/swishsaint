@@ -288,7 +288,7 @@ extension ForkMeetingPresenter {
         var card = Self.offerCard(offer, facts: facts, actions: actions, text: text)
         // MARK: Finish D
         card.keptSince = service.lookbackSince(candidate.identity)
-        if offerUI.attention { Self.raise(&card, text: text) }
+        if offerUI.attention { Self.raise(&card, text: text, inIsland: inIsland) }
         return card
     }
 
@@ -326,11 +326,12 @@ extension ForkMeetingPresenter {
     }
 
     /// "It's started · Record?" above the meeting's name, the card ringed.
-    static func raise(_ card: inout ForkMeetingCard, text: ForkMeetingStrings) {
+    static func raise(_ card: inout ForkMeetingCard, text: ForkMeetingStrings, inIsland: Bool = false) {
         card.lines.insert(card.title, at: 0)
         card.spokenTitle = text.nudgeTitle + " " + (card.spokenTitle ?? card.title)
         card.title = text.nudgeTitle
         card.attention = true
+        card.attentionInIsland = inIsland
     }
 
     /// What an offer's card says that comes from the Mac and the settings.
