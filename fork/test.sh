@@ -44,7 +44,14 @@ FORK_SOURCES=(
     Sources/Vorssaint/Fork/Gestures/ForkTrackpadGestureSupport.swift
     Sources/Vorssaint/Fork/Gestures/ForkTrackpadModifierKeys.swift
     Sources/Vorssaint/Fork/Gestures/ForkTrackpadTuning.swift
+    Sources/Vorssaint/Fork/Meetings/Export/Castral/ForkCastralAudioPlan.swift
+    Sources/Vorssaint/Fork/Meetings/Export/Castral/ForkCastralContract.swift
+    Sources/Vorssaint/Fork/Meetings/Export/Castral/ForkCastralMatching.swift
+    Sources/Vorssaint/Fork/Meetings/Export/Castral/ForkCastralProfile.swift
+    Sources/Vorssaint/Fork/Meetings/Export/Castral/ForkCastralRecord.swift
     Sources/Vorssaint/Fork/Meetings/Export/ForkDropFolderExporter.swift
+    Sources/Vorssaint/Fork/Meetings/Export/ForkImmichStrings.swift
+    Sources/Vorssaint/Fork/Meetings/Export/ForkImmichSupport.swift
     Sources/Vorssaint/Fork/Meetings/Export/ForkMeetingExporter.swift
     Sources/Vorssaint/Fork/Meetings/Export/ForkMeetingOriginPolicy.swift
     Sources/Vorssaint/Fork/Meetings/Export/ForkWebhookSupport.swift

@@ -8,7 +8,8 @@ import CoreMedia
 
 /// "The last 5 minutes" of one offered meeting: its app's sound and the
 /// microphone, each in its own ring, in memory only. A recording of that
-/// meeting takes them once (`take`); anything else empties them (`clear`).
+/// meeting takes them over (`ForkMeetingLookbackHandOver`), which writes
+/// them beside its master; anything else empties them (`clear`).
 final class ForkMeetingLookback: @unchecked Sendable {
     let meeting: ForkMeetingIdentity
     let app = ForkMeetingLookbackRing()
@@ -21,19 +22,10 @@ final class ForkMeetingLookback: @unchecked Sendable {
         self.since = since
     }
 
-    /// The kept sound up to `zero` (host seconds), moved out for the
-    /// writer, the meeting's track first; `nil` when there is too little.
-    /// Whatever happens, these rings keep nothing afterwards.
-    func take(zero: Double) -> ForkMeetingWriter.Lookback? {
-        let rings = [app.handOver(), microphone.handOver()]
-        guard let plan = ForkMeetingLookbackPlan.plan(spans: rings.map(\.span), zero: zero) else {
-            rings.forEach { $0.clear() }
-            return nil
-        }
-        return ForkMeetingWriter.Lookback(plan: plan, rings: rings)
-    }
+    /// The meeting's track first, as the master orders them.
+    var rings: [ForkMeetingLookbackRing] { [app, microphone] }
 
-    /// What was kept is gone, zeros first.
+    /// What was kept is gone, zeros first, and nothing more is kept.
     func clear() {
         app.clear()
         microphone.clear()

@@ -213,7 +213,8 @@ struct ForkMeetingSpoken: Equatable {
 
     static func forgets(after effect: ForkMeetingMachine.Effect) -> Bool {
         switch effect {
-        case .hideOffer, .hideEndingSoon, .showPill(.hidden): return true
+        // A nudge says its words again, even the same ones as the last.
+        case .hideOffer, .hideEndingSoon, .showPill(.hidden), .nudgeOffer: return true
         default: return false
         }
     }
@@ -510,5 +511,19 @@ extension ForkMeetingOfferTiming {
 enum ForkMeetingOfferClick {
     static func collapses(offerShownInIsland: Bool, clickInsideIsland: Bool) -> Bool {
         offerShownInIsland && !clickInsideIsland
+    }
+}
+
+extension ForkMeetingOfferText {
+    /// The compact card's one line: the service and code, with a CRM's
+    /// appointment after them when the whole fits (`limit` characters, about
+    /// what the island leaves beside its buttons), else the service and code
+    /// alone and the appointment apart (`bookingApart`: first in ⋯, and said
+    /// with the name). Alone, the appointment is the line.
+    static func compactLine(subtitle: String?, booking: String?, limit: Int = 44) -> (line: String?, bookingApart: Bool) {
+        guard let booking, !booking.isEmpty else { return (subtitle, false) }
+        guard let subtitle, !subtitle.isEmpty else { return (booking, false) }
+        let joined = subtitle + " · " + booking
+        return joined.count <= limit ? (joined, false) : (subtitle, true)
     }
 }

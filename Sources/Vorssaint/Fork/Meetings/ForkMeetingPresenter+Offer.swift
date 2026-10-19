@@ -81,7 +81,19 @@ extension ForkMeetingPresenter {
         // countdown (W2 F).
         let planned = offer.startsAt != nil && ui.offer?.startsAt != offer.startsAt
         ui.offer = offer
+        // A CRM's appointment for this call, read now (B7): a line, later.
+        ForkCastralDirectory.shared.offered(meetCode: offer.candidate.meetCode)
         if planned, ui.open { return foldOffer() }
+        renderOffer()
+    }
+
+    /// The offer drawn again where it is: a line read after it opened.
+    func redrawOffer() {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { self.redrawOffer() }
+            return
+        }
+        guard offerUI.offer != nil else { return }
         renderOffer()
     }
 
@@ -109,6 +121,8 @@ extension ForkMeetingPresenter {
         ui.offer = nil
         ui.open = false
         ui.attention = false
+        // The offer's appointment never outlives it (B2).
+        ForkCastralDirectory.shared.forget()
         stopOfferWatches()
         ForkMeetingIslandModel.shared.showOffer(nil)
         // ✕: the card says, in place, where it can still be recorded from.
@@ -441,6 +455,8 @@ extension ForkMeetingPresenter {
             seenInShares: seenInShares, hasWindow: filmed != nil)
         facts.mainWindow = ForkMeetingAppsSupport.filmsMainWindow(candidate, found: filmed)
         facts.microphoneSignal = ForkMeetingMicWatcher.isSupported
+        // Like the name: not in an island seen in screen shares.
+        facts.booking = seenInShares ? nil : ForkCastralDirectory.shared.line(meetCode: candidate.meetCode, text: text)
         var actions = OfferActions(record: { service.acceptOffer() }, notNow: { [weak self] in
                                        // ✕: the card turns into its one line in place.
                                        self?.offerUI.dismissing = true
@@ -461,7 +477,14 @@ extension ForkMeetingPresenter {
         actions.cancelStart = { service.scheduleOffer(after: nil) }
         var card = Self.offerCard(offer, facts: facts, actions: actions, text: text)
         // MARK: Finish D
-        card.keptSince = service.lookbackSince(candidate.identity)
+        let words = text
+        let language = L10n.shared.language
+        card.kept = service.lookbackSince(candidate.identity).map { since in
+            ForkMeetingCard.Kept(since: since,
+                                 words: { ForkMeetingLookbackText.kept(since: since, now: $0, strings: words) },
+                                 spoken: { ForkMeetingLookbackText.spokenKept(since: since, now: $0, strings: words,
+                                                                              language: language) })
+        }
         if offerUI.attention { Self.raise(&card, text: text, inIsland: inIsland) }
         return card
     }
@@ -515,10 +538,12 @@ extension ForkMeetingPresenter {
         renderOffer()
     }
 
-    /// "It's started · Record?" above the meeting's name, the card ringed.
+    /// "It's started · Record?" above the meeting's name, the card ringed;
+    /// VoiceOver reads a sentence, not the dot: "Meeting started: Weekly
+    /// sync. Do you want to record it?".
     static func raise(_ card: inout ForkMeetingCard, text: ForkMeetingStrings, inIsland: Bool = false) {
         card.lines.insert(card.title, at: 0)
-        card.spokenTitle = text.nudgeTitle + " " + (card.spokenTitle ?? card.title)
+        card.spokenTitle = text.voiceNudge(card.spokenTitle ?? card.title)
         card.title = text.nudgeTitle
         card.attention = true
         card.attentionInIsland = inIsland
@@ -541,6 +566,8 @@ extension ForkMeetingPresenter {
         var mainWindow = false
         /// This Mac can say which app uses the microphone: "Always" can start.
         var microphoneSignal = true
+        /// A CRM's appointment for this call's code ("Appointment: ACME · 10:00").
+        var booking: String?
     }
 
     /// What the offer's buttons and menu do. `fix` runs a refusal's way out
@@ -582,12 +609,18 @@ extension ForkMeetingPresenter {
         var card = ForkMeetingCard(symbol: "video.fill", tint: .accentColor, title: heading.title)
         if heading.title != candidate.name { card.spokenTitle = candidate.name }
         card.icon = facts.icon
-        card.lines = [heading.subtitle].compactMap { $0 }
         let capture = ForkMeetingOfferText.capture(
             target: settings.target, windowApp: facts.windowApp, hasWindow: facts.hasWindow ?? (candidate.windowID != nil),
             mainWindow: facts.mainWindow,
             sound: ForkMeetingOfferText.sound(setting: settings.systemAudio, providerDefault: candidate.defaultSound),
             soundApp: facts.soundApp, microphone: facts.microphone, strings: text)
+        // The appointment joins the one line when it fits ("Google Meet ·
+        // abc-defg-hij · RDV : ACME · 10:00"), else heads the ⋯ menu and is
+        // said with the name (W2 F).
+        let compact = ForkMeetingOfferText.compactLine(subtitle: heading.subtitle, booking: facts.booking)
+        card.lines = [compact.line].compactMap { $0 }
+        let bookingApart = compact.bookingApart ? facts.booking : nil
+        if let bookingApart { card.spokenTitle = (card.spokenTitle ?? card.title) + ", " + bookingApart }
         if facts.consentReminder { card.info = text.consentRemind }
         var record = ForkMeetingCard.Action(title: offer.startsAt == nil ? text.offerRecord : text.offerStartNow,
                                             prominent: true, recordDot: true, perform: actions.record)
@@ -620,8 +653,9 @@ extension ForkMeetingPresenter {
             }
             card.actions = [record]
         }
-        // What it will record, first in ⋯: read there, never clicked.
-        card.menu = [NotchMenuItem(title: capture, enabled: false), .separator]
+        // What it will record, first in ⋯ (after the appointment that did
+        // not fit the line): read there, never clicked.
+        card.menu = [bookingApart, capture].compactMap { $0 }.map { NotchMenuItem(title: $0, enabled: false) } + [.separator]
         let provider = ForkMeetingOfferText.reminderTitle(candidate)
         if ForkMeetingOfferText.showsAlways(offer, microphoneSignal: facts.microphoneSignal) {
             card.menu.append(NotchMenuItem(title: text.offerAlways(provider), enabled: ForkMeetingOfferText.allowsAlways(offer),
@@ -632,7 +666,7 @@ extension ForkMeetingPresenter {
             card.menu.insert(NotchMenuItem(title: other.filmsPicture ? text.offerRecordWithPicture : text.offerRecordSoundOnly,
                                            symbol: other.filmsPicture ? "video" : "waveform",
                                            enabled: ForkMeetingOfferText.recordsOtherwise(offer, as: other),
-                                           action: recordOtherwise), at: 2)
+                                           action: recordOtherwise), at: bookingApart == nil ? 2 : 3)
         }
         card.menu += [
             NotchMenuItem(title: ForkMeetingOfferText.neverTitle(candidate, strings: text), action: actions.never),

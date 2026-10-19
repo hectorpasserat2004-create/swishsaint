@@ -73,8 +73,16 @@ struct ForkMeetingCard {
     /// Raised in the island, which springs it in itself
     /// (`ForkMeetingAttentionStyle`).
     var attentionInIsland = false
-    /// "+4 min 12 s already kept" since then, counting.
-    var keptSince: Date?
+    /// "+4 min 12 s already kept" since then, counting, in the card's own
+    /// words.
+    var kept: Kept?
+
+    struct Kept {
+        let since: Date
+        let words: (Date) -> String
+        /// What VoiceOver reads at that instant.
+        let spoken: (Date) -> String
+    }
 
     // MARK: W2 F
 
@@ -173,8 +181,8 @@ struct ForkMeetingCardView: View {
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityLabel(card.spokenTitle ?? card.title)
-                if let since = card.keptSince {
-                    ForkMeetingKeptText(since: since)
+                if let kept = card.kept {
+                    ForkMeetingKeptText(kept: kept)
                         .font(.system(size: 11, weight: .medium).monospacedDigit())
                         .foregroundStyle(Color(nsColor: .systemRed))
                 }

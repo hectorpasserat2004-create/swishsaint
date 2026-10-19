@@ -116,6 +116,13 @@ extension ForkMeetingService {
         presenter.showExportFailed(folder: folder)
     }
 
+    /// "Sent to <CRM>", or "Not sent to <CRM>": a send to a CRM ended, or
+    /// the CRM failed the meeting it took.
+    func castralNotice(folder: URL, name: String, sent: Bool) {
+        guard isWanted else { return }
+        presenter.showCastral(folder: folder, name: name, sent: sent)
+    }
+
     // MARK: - Launch
 
     /// What the last run left unfinished: final pass again, complete, or
@@ -125,6 +132,8 @@ extension ForkMeetingService {
     func recoverAtLaunch() {
         // What an export cut short by the last quit left behind.
         ForkMeetingExports.shared.removeLeftovers()
+        // A send to a CRM cut short goes on; a deposit at work is followed.
+        ForkMeetingExports.shared.castralTracker.resumeAtLaunch()
         store.recoverAtLaunch(using: finalizer, extractAudio: defaults.bool(forKey: ForkDefaultsKey.meetingsExtractAudio),
                               titles: trackTitles) { [weak self] recoveries in
             self?.recovered(recoveries)

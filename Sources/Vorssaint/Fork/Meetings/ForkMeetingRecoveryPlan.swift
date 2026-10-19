@@ -80,7 +80,7 @@ enum ForkMeetingRecoveryPlan {
                                 contents: ForkMeetingFolder.Contents) -> Bool {
         guard case let .success(meeting) = sidecar, meeting.isRewritable else { return false }
         if meeting.stopReason == .cancelled { return true }
-        let leftovers = contents.hasMaster || contents.hasVideoDraft || contents.hasAudioDraft
+        let leftovers = contents.hasMaster || contents.hasVideoDraft || contents.hasAudioDraft || contents.hasLookback
         switch meeting.state {
         case .recording?, .finalizing?: return true
         case .interrupted?, .complete?: return leftovers
@@ -136,9 +136,11 @@ enum ForkMeetingRecoveryPlan {
             if case let .success(meeting) = facts.sidecar { lastTry = meeting.finalPass == .failed }
             var patch = ForkMeetingSidecarPatch(state: lastTry ? .interrupted : .finalizing, stopReason: stopReason)
             if recovered { patch.recovered = true }
+            // The meeting's time: the master's, after the minutes kept
+            // before the click (Finish D), which it does not hold.
             if case let .success(meeting) = facts.sidecar, let seconds = facts.master?.duration,
-               seconds > (meeting.recordedSeconds ?? 0) {
-                patch.recordedSeconds = seconds
+               seconds + (meeting.lookbackSeconds ?? 0) > (meeting.recordedSeconds ?? 0) {
+                patch.recordedSeconds = seconds + (meeting.lookbackSeconds ?? 0)
             }
             return patch
         case .complete:

@@ -38,8 +38,9 @@ struct ForkMeetingRecorderStart: Equatable {
 
     // MARK: Finish D
 
-    /// Seconds of sound kept before the click that open the file, the
-    /// picture black meanwhile; 0 without. `startedAt` is that much earlier.
+    /// Seconds of sound kept before the click that open the meeting (in
+    /// their own file until the final pass); 0 without. `startedAt` is that
+    /// much earlier, and every time noted counts them.
     var lookbackSeconds: TimeInterval = 0
 }
 
@@ -172,6 +173,11 @@ final class ForkMeetingRecorder: @unchecked Sendable {
     /// new one when it loses its reader, and how many were tried.
     private var tapHears: pid_t?
     private var tapRepair = ForkMeetingTapRepair()
+    // MARK: Finish D
+    /// The offered meeting's kept sound, and how many seconds of it come
+    /// before the click.
+    private var handOver: ForkMeetingLookbackHandOver?
+    private var keptSeconds: TimeInterval = 0
 
     /// Makes a tap of one app (a pid) or of the whole Mac but this app
     /// (`nil`); `nil` when the audio system refuses.
@@ -208,14 +214,17 @@ final class ForkMeetingRecorder: @unchecked Sendable {
     func start(config: ForkMeetingCaptureConfig, folder: URL, meetingWindow: CGWindowID? = nil,
                meetingMicrophone: String? = nil, excludingWindows: [CGWindowID] = [],
                titles: ForkMeetingFinalizer.TrackTitles = .standard, meetingSound: MeetingSound? = nil,
-               lookback: ForkMeetingLookback? = nil,
+               lookback: ForkMeetingLookbackHandOver? = nil,
                completion: @escaping (Result<ForkMeetingRecorderStart, ForkMeetingFailure>) -> Void) {
         let request = Request(config: config, folder: folder, window: meetingWindow,
                               microphone: meetingMicrophone, excluded: Set(excludingWindows), titles: titles,
                               meeting: meetingSound, lookback: lookback)
+        lock.withLock { handOver = lookback }
         let finish = MainOnce(completion)
         Task { [self] in
             let result = await launch(request)
+            // A start that failed keeps nothing of what was heard before.
+            if case .failure = result { lookback?.discard() }
             finish.call(result)
         }
         // Never a start that does not answer: the machine would wait in
@@ -233,8 +242,9 @@ final class ForkMeetingRecorder: @unchecked Sendable {
         let excluded: Set<CGWindowID>
         let titles: ForkMeetingFinalizer.TrackTitles
         let meeting: MeetingSound?
-        /// The offered meeting's kept sound, taken at the file's zero.
-        let lookback: ForkMeetingLookback?
+        /// The offered meeting's kept sound, written beside the master from
+        /// the file's zero.
+        let lookback: ForkMeetingLookbackHandOver?
     }
 
     // MARK: Apps
@@ -361,9 +371,17 @@ final class ForkMeetingRecorder: @unchecked Sendable {
         // The picture, and the stream's sound; without picture, the file's
         // zero is now.
         let zero = ZeroBox()
-        // Finish D: the sound kept before the click, if any, opens the file.
-        let keptSound: ((Double) -> ForkMeetingWriter.Lookback?)? = request.lookback.map { lookback in
-            { zero in lookback.take(zero: zero) }
+        // Finish D: the sound kept before the click, if any, goes on until
+        // each track's own first sound, then into its own file.
+        if let handOver = request.lookback {
+            writer.onFirstSound = { track, seconds in handOver.cut(track: track.rawValue, masterSeconds: seconds) }
+        }
+        let folder = request.folder
+        let begin: @Sendable (Double) -> Void = { [weak self] time in
+            let kept = request.lookback?.begin(zero: time, folder: folder) ?? 0
+            self?.lock.withLock { self?.keptSeconds = kept }
+            zero.set(time, lookback: kept)
+            writer.beginSession(atHostTime: time)
         }
         if let target, let aim {
             let stream = ForkMeetingCaptureStream(outputSize: outputSize ?? target.displayPixels,
@@ -372,10 +390,7 @@ final class ForkMeetingRecorder: @unchecked Sendable {
                                                   callbacks: streamCallbacks())
             lock.withLock { self.stream = stream }
             let failure = await withCheckedContinuation { (continuation: CheckedContinuation<ForkMeetingCaptureSupport.StreamStop?, Never>) in
-                stream.start(target, aim: aim, willStart: { time in
-                    let kept = writer.beginSession(atHostTime: time, lookback: keptSound)
-                    zero.set(time, lookback: kept)
-                }) {
+                stream.start(target, aim: aim, willStart: { time in begin(time) }) {
                     continuation.resume(returning: $0)
                 }
             }
@@ -386,9 +401,7 @@ final class ForkMeetingRecorder: @unchecked Sendable {
                 return .failure(ForkMeetingCaptureSupport.startFailure(failure))
             }
         } else {
-            let time = ForkMeetingWriter.hostSeconds()
-            let kept = writer.beginSession(atHostTime: time, lookback: keptSound)
-            zero.set(time, lookback: kept)
+            begin(ForkMeetingWriter.hostSeconds())
         }
         guard gate.isAuthorized else { return cancelled() }
 
@@ -575,9 +588,11 @@ final class ForkMeetingRecorder: @unchecked Sendable {
         lock.withLock { writer }?.levels ?? .silent
     }
 
-    /// Seconds recorded so far, pauses left out. Any thread.
+    /// Seconds recorded so far, pauses left out, the minutes kept before
+    /// the click included: the meeting's time, as `meeting.json` counts it.
+    /// Any thread.
     var recordedSeconds: TimeInterval {
-        pauseClock.elapsed(at: ForkMeetingWriter.hostSeconds())
+        pauseClock.elapsed(at: ForkMeetingWriter.hostSeconds()) + lock.withLock { keptSeconds }
     }
 
     var isPictureFrozen: Bool {
@@ -657,14 +672,21 @@ final class ForkMeetingRecorder: @unchecked Sendable {
             return .failed(.captureFailed)
         }
         guard wasRunning else {
+            lock.withLock { self.handOver }?.discard()
             // Stopped before the start finished: nothing was recorded, and
             // nothing stays on the disk.
             await withCheckedContinuation { continuation in writer.cancel { continuation.resume() } }
             return .failed(.captureFailed)
         }
-        return await withCheckedContinuation { continuation in
+        let (keptSound, kept) = lock.withLock { (self.handOver, keptSeconds) }
+        // The sources are stopped: whatever track is not cut yet is cut here.
+        keptSound?.finish()
+        let result = await withCheckedContinuation { continuation in
             writer.finish(atHostTime: end) { continuation.resume(returning: $0) }
         }
+        // The meeting's time counts the kept minutes, as every time noted.
+        if case let .finished(seconds?) = result { return .finished(recordedSeconds: seconds + kept) }
+        return result
     }
 
     // MARK: - Sources

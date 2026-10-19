@@ -34,7 +34,8 @@ struct ForkMeetingListening {
 /// ```
 /// refreshState ─► syncListening ─► plan (ForkMeetingListenPlan) ─► listener on / off, kept sound kept / emptied
 /// listener (1 s) ─► listeningSecond ─► ForkMeetingNudgePlan ─► send(.nudge)
-/// startCapture ─► lookback(for:) ─► recorder ─► writer takes it at the file's zero
+/// recorder.start ─► takeLookback(for:) ─► hand-over: rings and listener go on past the click, then
+///                                          `.lookback.m4a` beside the master, `lookbackJoins` in meeting.json
 /// ```
 /// The kept sound is emptied whenever the plan stops keeping it: the call
 /// over, "Not now" or "Never", the screen locked, the Mac asleep, the
@@ -60,10 +61,16 @@ extension ForkMeetingService {
         let plan = ForkMeetingListenPlan.plan(facts)
         listening.facts = facts
 
-        if ForkMeetingListenPlan.clears(from: old, to: facts) || (!plan.keeps && listening.lookback != nil) {
-            listening.lookback?.clear()
+        if let kept = listening.lookback,
+           ForkMeetingListenPlan.clears(from: old, to: facts) || !plan.keeps {
+            kept.clear()
             listening.lookback = nil
             log.notice("kept sound emptied")
+        } else if let kept = listening.lookback, ForkMeetingListenPlan.clearsMicrophone(from: old, to: facts) {
+            // The microphone turned off, or its permission gone: its kept
+            // sound goes now, and is never handed to a recording.
+            kept.microphone.clear()
+            log.notice("kept microphone sound emptied")
         }
         if facts.meeting == nil { listening.nudges.forget() }
         var keptNew = false
@@ -138,10 +145,23 @@ extension ForkMeetingService {
     }
 
     /// The kept sound of the meeting a recording starts for, handed to its
-    /// engine; `nil` for any other start.
-    func lookback(for config: ForkMeetingCaptureConfig) -> ForkMeetingLookback? {
+    /// engine with the listener that keeps filling it until the recording's
+    /// own sound comes; `nil` for any other start. A recording without the
+    /// microphone never gets the microphone's kept sound: it goes here.
+    /// Main thread.
+    func takeLookback(for config: ForkMeetingCaptureConfig) -> ForkMeetingLookbackHandOver? {
         guard let lookback = listening.lookback, config.meeting?.identity == lookback.meeting else { return nil }
-        return lookback
+        if !config.recordsMicrophone { lookback.microphone.clear() }
+        let handOver = ForkMeetingLookbackHandOver(lookback: lookback, listener: listening.listener)
+        listening.lookback = nil
+        listening.listener = nil
+        listening.plan = ForkMeetingListenPlan()
+        listening.appPID = nil
+        handOver.onWritten = { [weak self] folder, joins in
+            guard let joins else { return }
+            self?.store.update(folder, with: ForkMeetingSidecarPatch(lookbackJoins: joins))
+        }
+        return handOver
     }
 
     /// "+4 min 12 s already kept" on the offer, from when.

@@ -19,6 +19,7 @@ enum ForkMeetingW2FTests {
         later(suite)
         folded(suite)
         timing(suite)
+        booking(suite)
         island(suite)
         texts(suite)
     }
@@ -232,6 +233,23 @@ enum ForkMeetingW2FTests {
                         && ForkMeetingOfferTiming.progress(from: at(0), until: at(300), now: at(400)) == 1
                         && ForkMeetingOfferTiming.progress(from: at(0), until: at(0), now: at(0)) == 1,
                      "the island's gauge fills from the choice to the start, bounded")
+    }
+
+    /// A CRM's appointment ("RDV : ACME · 10:00", its time written out here:
+    /// nothing reads the Mac's 12- or 24-hour setting) joins the compact
+    /// card's one line when the whole fits, else stands apart.
+    private static func booking(_ suite: TestSuite) {
+        let line = ForkMeetingOfferText.compactLine(subtitle: "Meet · abc-defg-hij", booking: "RDV : ACME · 10:00")
+        suite.expect(line.line == "Meet · abc-defg-hij · RDV : ACME · 10:00" && !line.bookingApart,
+                     "short enough, the appointment follows the service and the code on the one line")
+        let long = ForkMeetingOfferText.compactLine(subtitle: "Google Meet · abc-defg-hij",
+                                                    booking: "RDV : Laboratoires Pierre Fabre · 10:00")
+        suite.expect(long.line == "Google Meet · abc-defg-hij" && long.bookingApart,
+                     "too long, the line keeps the service and code; the appointment goes first in ⋯ and to VoiceOver")
+        suite.expect(ForkMeetingOfferText.compactLine(subtitle: nil, booking: "RDV : ACME") == ("RDV : ACME", false)
+                        && ForkMeetingOfferText.compactLine(subtitle: "Meet", booking: nil) == ("Meet", false)
+                        && ForkMeetingOfferText.compactLine(subtitle: nil, booking: nil) == (nil, false),
+                     "alone, the appointment is the line; without one, nothing changes")
     }
 
     private static func island(_ suite: TestSuite) {
