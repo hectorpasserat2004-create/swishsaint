@@ -26,8 +26,9 @@ final class ForkMeetingReminder {
     var isVisible: Bool { panel?.isVisible == true && model.title != nil }
 
     /// `title` is the service's short name ("Meet"), `label` what VoiceOver
-    /// and the tooltip say ("Offer to record Weekly sync").
-    func show(title: String, label: String, on screen: NSScreen?, open: @escaping () -> Void) {
+    /// and the tooltip say ("Offer to record Weekly sync"); `startsAt`, a
+    /// start planned, counted down after the name ("Meet · 4:12").
+    func show(title: String, label: String, startsAt: Date? = nil, on screen: NSScreen?, open: @escaping () -> Void) {
         guard let screen = screen ?? ForkDictationHUD.activeScreen() ?? NSScreen.main else { return }
         generation += 1
         self.open = open
@@ -36,6 +37,7 @@ final class ForkMeetingReminder {
         let appearing = !panel.isVisible || panel.alphaValue < 1
         model.title = title
         model.label = label
+        model.startsAt = startsAt
         place(panel, on: screen)
         guard appearing else { return }
         panel.alphaValue = 0
@@ -112,6 +114,8 @@ final class ForkMeetingReminder {
 final class ForkMeetingReminderModel: ObservableObject {
     @Published var title: String?
     @Published var label = ""
+    // MARK: W2 F
+    @Published var startsAt: Date?
 }
 
 /// Grey through and through, its dot an empty ring: anything red near the
@@ -119,15 +123,32 @@ final class ForkMeetingReminderModel: ObservableObject {
 struct ForkMeetingReminderView: View {
     @ObservedObject var model: ForkMeetingReminderModel
     let open: () -> Void
+    @ObservedObject private var l10n = L10n.shared
 
     var body: some View {
+        if let startsAt = model.startsAt {
+            // Measured as it is shown, at its widest: counting down, it only
+            // gets shorter. VoiceOver hears the time left as a duration.
+            TimelineView(.periodic(from: ForkMeetingOfferTiming.tickStart(until: startsAt, now: Date()), by: 1)) { context in
+                pill(model.title.map { $0 + " · " + ForkMeetingOfferTiming.countdown(until: startsAt, now: context.date) } ?? "")
+                    .accessibilityValue(ForkMeetingIslandRules.offerStartsSpoken(
+                        until: startsAt, now: context.date, language: l10n.language,
+                        strings: ForkMeetingStrings.strings(l10n.language)))
+            }
+        } else {
+            pill(model.title ?? "")
+        }
+    }
+
+    /// "○ Meet", or "○ Meet · 4:12": one text, the time in even digits.
+    private func pill(_ title: String) -> some View {
         Button(action: open) {
             HStack(spacing: 6) {
                 Circle()
                     .strokeBorder(Color.white.opacity(0.7), lineWidth: 1.5)
                     .frame(width: 8, height: 8)
-                Text(model.title ?? "")
-                    .font(.system(size: 12, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold).monospacedDigit())
                     .foregroundStyle(Color.white.opacity(0.88))
                     .lineLimit(1)
                     .fixedSize()

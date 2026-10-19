@@ -2268,6 +2268,7 @@ final class NotchService: ObservableObject {
     func activateNotice(_ selectedNotice: NotchNotice) {
         guard notice == selectedNotice else { return }
         if ForkDictationIsland.activate(selectedNotice) { return } // FORK(notch-dictation4)
+        if ForkMeetingIsland.activate(selectedNotice) { return } // FORK(notch-meetings9)
         if let id = selectedNotice.notificationID {
             guard NotchNotificationService.shared.openingID == nil else { return }
             // The pointer stays where the banner was; like a click on the

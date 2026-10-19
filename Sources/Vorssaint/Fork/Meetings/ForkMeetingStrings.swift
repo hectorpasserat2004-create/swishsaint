@@ -331,7 +331,6 @@ struct ForkMeetingStrings {
 
     /// The offer's buttons and menu. %@ is the provider's short name ("Meet").
     let offerRecord: String
-    let offerNotNow: String
     let offerAlwaysFormat: String
     let offerNeverFormat: String
     /// The ⋯ button, for VoiceOver and as its tooltip.
@@ -1054,6 +1053,43 @@ struct ForkMeetingStrings {
     let lookbackNothingToKeep: String
 
     func voiceNudge(_ meeting: String) -> String { String(format: voiceNudgeFormat, meeting) }
+
+    // MARK: W2 F
+
+    /// The offer's "Later ▾" and its menu; %d is minutes (5, 15).
+    let offerLater: String
+    let offerStartInFormat: String
+    let offerWhenever: String
+    /// The offer's ✕: no more offers for this meeting, its name for
+    /// VoiceOver and its tooltip.
+    let offerDismiss: String
+    /// "Starts in 4:12" on the card of a start planned; VoiceOver hears a
+    /// spoken duration in its place.
+    let offerStartsInFormat: String
+    /// That card's buttons: start now, or call the start planned off.
+    let offerStartNow: String
+    let offerCancelStart: String
+    /// That Cancel, for VoiceOver: what it calls off.
+    let offerCancelStartSpoken: String
+    /// Later ▾'s tooltip.
+    let offerLaterHelp: String
+    /// The closed island's activity for VoiceOver; %@ is the provider
+    /// ("Meet").
+    let islandOfferLabelFormat: String
+    let islandOfferHint: String
+    /// After ✕: the card's title, and its one line on where the meeting can
+    /// still be recorded from; the shortcut is named only when one is set.
+    let noticeNotOffered: String
+    let noticeNotOfferedDetail: String
+    let noticeNotOfferedShortcutDetail: String
+    /// Said to VoiceOver; %d is minutes.
+    let voiceScheduledFormat: String
+    let voiceScheduleCancelled: String
+
+    func offerStartIn(minutes: Int) -> String { String(format: offerStartInFormat, minutes) }
+    func offerStartsIn(_ time: String) -> String { String(format: offerStartsInFormat, time) }
+    func islandOfferLabel(_ provider: String) -> String { String(format: islandOfferLabelFormat, provider) }
+    func voiceScheduled(minutes: Int) -> String { String(format: voiceScheduledFormat, minutes) }
 }
 
 extension ForkMeetingStrings {
@@ -1266,7 +1302,6 @@ extension ForkMeetingStrings {
         pictureMeetingWindowCaption: "The detected meeting’s window; for a recording started by hand with no meeting detected, the window in front.",
         // MARK: Detection
         offerRecord: "Record",
-        offerNotNow: "Not Now",
         offerAlwaysFormat: "Always for %@",
         offerNeverFormat: "Never for %@",
         offerMore: "More options",
@@ -1652,14 +1687,31 @@ extension ForkMeetingStrings {
         nudgeSetting: "Offer again when the meeting really starts",
         nudgeCaption: "When others start talking in a detected call you left unanswered, the offer comes back once, then a last time after 2 minutes. For this, only the level of the meeting app’s sound is measured, and nothing is written. Without System audio recording, your microphone is listened to instead, after a minute of talk.",
         lookbackSetting: "Keep the last 5 minutes of sound",
-        lookbackCaption: "While a detected call is offered, the last 5 minutes of the meeting app’s sound and of your microphone stay in this Mac’s memory, never on disk until you click Record. The recording then opens with them, sound only: the picture starts at the click. Emptied when the call ends, on Not Now or Never, when the Mac locks or sleeps, when the app quits and when this is turned off. Meanwhile macOS lists the app as using the microphone; the orange dot is already lit by the call.",
+        lookbackCaption: "While a detected call is offered, the last 5 minutes of the meeting app’s sound and of your microphone stay in this Mac’s memory, never on disk until you click Record. The recording then opens with them, sound only: the picture starts at the click. Emptied when the call ends, on ✕ or Never, when the Mac locks or sleeps, when the app quits and when this is turned off. Meanwhile macOS lists the app as using the microphone; the orange dot is already lit by the call.",
         lookbackKeptFormat: "+%@ already kept",
         lookbackMinutesFormat: "%d min",
         lookbackSecondsFormat: "%d s",
         lookbackSoundOnlyFormat: "Sound only for the first %@",
         lookbackKeptBeforeFormat: "Kept from before the click: the first %@",
         nudgeOffersOff: "Offers to record are turned off in Notifications and sounds: the offer does not come back, and no sound is kept.",
-        lookbackNothingToKeep: "Nothing can be kept yet: allow System audio recording or the microphone first."
+        lookbackNothingToKeep: "Nothing can be kept yet: allow System audio recording or the microphone first.",
+        // MARK: W2 F
+        offerLater: "Later",
+        offerStartInFormat: "Start in %d Minutes",
+        offerWhenever: "Whenever I Want",
+        offerDismiss: "Don’t offer for this meeting",
+        offerStartsInFormat: "Starts in %@",
+        offerStartNow: "Now",
+        offerCancelStart: "Cancel",
+        offerCancelStartSpoken: "Cancel the planned start",
+        offerLaterHelp: "Start later, or whenever you want",
+        islandOfferLabelFormat: "Meeting detected, %@",
+        islandOfferHint: "Opens the offer to record",
+        noticeNotOffered: "No more offers for this call",
+        noticeNotOfferedDetail: "You can still record it from the island or the Command Bar.",
+        noticeNotOfferedShortcutDetail: "Record it anytime from the island, your shortcut or the Command Bar.",
+        voiceScheduledFormat: "Recording starts in %d minutes.",
+        voiceScheduleCancelled: "Planned start cancelled."
     )
 }
 
@@ -1873,7 +1925,6 @@ extension ForkMeetingStrings {
         pictureMeetingWindowCaption: "A janela da reunião detectada; numa gravação iniciada manualmente sem reunião detectada, a janela da frente.",
         // MARK: Detection
         offerRecord: "Gravar",
-        offerNotNow: "Agora não",
         offerAlwaysFormat: "Sempre para %@",
         offerNeverFormat: "Nunca para %@",
         offerMore: "Mais opções",
@@ -2259,14 +2310,31 @@ extension ForkMeetingStrings {
         nudgeSetting: "Oferecer de novo quando a reunião começar de verdade",
         nudgeCaption: "Quando outras pessoas começam a falar numa chamada detectada que você não respondeu, a oferta volta uma vez e uma última vez depois de 2 minutos. Para isso, só o volume do som do app de reunião é medido, e nada é gravado. Sem a Gravação do áudio do sistema, é o seu microfone que é escutado, após um minuto de conversa.",
         lookbackSetting: "Guardar os últimos 5 minutos de som",
-        lookbackCaption: "Enquanto uma chamada detectada é oferecida, os últimos 5 minutos do som do app de reunião e do seu microfone ficam na memória deste Mac, nunca no disco até você clicar em Gravar. A gravação então começa com eles, só com som: a imagem começa no clique. Apagados quando a chamada termina, em Agora não ou Nunca, quando o Mac bloqueia ou dorme, quando o app é encerrado e quando isto é desativado. Enquanto isso, o macOS mostra o app entre os que usam o microfone; o ponto laranja já está aceso pela chamada.",
+        lookbackCaption: "Enquanto uma chamada detectada é oferecida, os últimos 5 minutos do som do app de reunião e do seu microfone ficam na memória deste Mac, nunca no disco até você clicar em Gravar. A gravação então começa com eles, só com som: a imagem começa no clique. Apagados quando a chamada termina, em ✕ ou Nunca, quando o Mac bloqueia ou dorme, quando o app é encerrado e quando isto é desativado. Enquanto isso, o macOS mostra o app entre os que usam o microfone; o ponto laranja já está aceso pela chamada.",
         lookbackKeptFormat: "+%@ já guardados",
         lookbackMinutesFormat: "%d\u{00A0}min",
         lookbackSecondsFormat: "%d\u{00A0}s",
         lookbackSoundOnlyFormat: "Só som nos primeiros %@",
         lookbackKeptBeforeFormat: "Guardado de antes do clique: os primeiros %@",
         nudgeOffersOff: "As propostas de gravação estão desativadas em Notificações e sons: a proposta não volta e nenhum som é guardado.",
-        lookbackNothingToKeep: "Ainda nada pode ser guardado: permita primeiro a Gravação do áudio do sistema ou o microfone."
+        lookbackNothingToKeep: "Ainda nada pode ser guardado: permita primeiro a Gravação do áudio do sistema ou o microfone.",
+        // MARK: W2 F
+        offerLater: "Mais tarde",
+        offerStartInFormat: "Iniciar em %d min",
+        offerWhenever: "Quando eu quiser",
+        offerDismiss: "Não oferecer para esta reunião",
+        offerStartsInFormat: "Começa em %@",
+        offerStartNow: "Agora",
+        offerCancelStart: "Cancelar",
+        offerCancelStartSpoken: "Cancelar o início programado",
+        offerLaterHelp: "Iniciar mais tarde ou quando quiser",
+        islandOfferLabelFormat: "Reunião detectada, %@",
+        islandOfferHint: "Abre a oferta de gravar",
+        noticeNotOffered: "Não oferecido nesta chamada",
+        noticeNotOfferedDetail: "Você ainda pode gravá-la pela ilha ou pela Barra de Comandos.",
+        noticeNotOfferedShortcutDetail: "Grave quando quiser pela ilha, pelo atalho ou pela Barra de Comandos.",
+        voiceScheduledFormat: "A gravação começa em %d minutos.",
+        voiceScheduleCancelled: "Início programado cancelado."
     )
 }
 
@@ -2480,7 +2548,6 @@ extension ForkMeetingStrings {
         pictureMeetingWindowCaption: "Algılanan toplantının penceresi; toplantı algılanmadan elle başlatılan bir kayıtta öndeki pencere.",
         // MARK: Detection
         offerRecord: "Kaydet",
-        offerNotNow: "Bu sefer değil",
         offerAlwaysFormat: "%@ için her zaman",
         offerNeverFormat: "%@ için asla",
         offerMore: "Diğer seçenekler",
@@ -2866,14 +2933,31 @@ extension ForkMeetingStrings {
         nudgeSetting: "Toplantı gerçekten başlayınca yeniden öner",
         nudgeCaption: "Yanıtlamadığınız algılanan bir görüşmede başkaları konuşmaya başlayınca öneri bir kez, 2 dakika sonra da son kez geri gelir. Bunun için yalnızca toplantı uygulamasının ses düzeyi ölçülür ve hiçbir şey yazılmaz. Sistem sesi kaydı yoksa bir dakikalık konuşmadan sonra onun yerine mikrofonunuz dinlenir.",
         lookbackSetting: "Sesin son 5 dakikasını sakla",
-        lookbackCaption: "Algılanan bir görüşme önerilirken toplantı uygulamasının sesinin ve mikrofonunuzun son 5 dakikası bu Mac’in belleğinde kalır, Kaydet’e tıklayana kadar asla diske yazılmaz. Kayıt bu dakikalarla, yalnızca sesle başlar: görüntü tıklamayla başlar. Görüşme bitince, Bu sefer değil ya da Asla seçilince, Mac kilitlenince ya da uyuyunca, uygulama kapanınca ve bu ayar kapatılınca silinir. Bu sırada macOS uygulamayı mikrofonu kullananlar arasında gösterir; turuncu nokta zaten görüşme yüzünden yanıyor.",
+        lookbackCaption: "Algılanan bir görüşme önerilirken toplantı uygulamasının sesinin ve mikrofonunuzun son 5 dakikası bu Mac’in belleğinde kalır, Kaydet’e tıklayana kadar asla diske yazılmaz. Kayıt bu dakikalarla, yalnızca sesle başlar: görüntü tıklamayla başlar. Görüşme bitince, ✕ ya da Asla seçilince, Mac kilitlenince ya da uyuyunca, uygulama kapanınca ve bu ayar kapatılınca silinir. Bu sırada macOS uygulamayı mikrofonu kullananlar arasında gösterir; turuncu nokta zaten görüşme yüzünden yanıyor.",
         lookbackKeptFormat: "+%@ saklandı",
         lookbackMinutesFormat: "%d dk",
         lookbackSecondsFormat: "%d sn",
         lookbackSoundOnlyFormat: "İlk %@ yalnızca ses",
         lookbackKeptBeforeFormat: "Tıklamadan önce tutuldu: ilk %@",
         nudgeOffersOff: "Kaydetme önerileri Bildirimler ve seslerde kapalı: öneri geri gelmez ve hiçbir ses tutulmaz.",
-        lookbackNothingToKeep: "Henüz hiçbir şey saklanamaz: önce Sistem sesi kaydına ya da mikrofona izin verin."
+        lookbackNothingToKeep: "Henüz hiçbir şey saklanamaz: önce Sistem sesi kaydına ya da mikrofona izin verin.",
+        // MARK: W2 F
+        offerLater: "Sonra",
+        offerStartInFormat: "%d dk sonra başlat",
+        offerWhenever: "İstediğimde",
+        offerDismiss: "Bu toplantı için önerme",
+        offerStartsInFormat: "%@ sonra başlıyor",
+        offerStartNow: "Şimdi",
+        offerCancelStart: "Vazgeç",
+        offerCancelStartSpoken: "Planlanan başlangıçtan vazgeç",
+        offerLaterHelp: "Daha sonra veya istediğiniz zaman başlatın",
+        islandOfferLabelFormat: "Toplantı algılandı, %@",
+        islandOfferHint: "Kaydetme önerisini açar",
+        noticeNotOffered: "Bu görüşme için önerilmez",
+        noticeNotOfferedDetail: "Yine de adadan veya Komut Çubuğundan kaydedebilirsiniz.",
+        noticeNotOfferedShortcutDetail: "İstediğiniz zaman adadan, kısayolla veya Komut Çubuğuyla kaydedin.",
+        voiceScheduledFormat: "Kayıt %d dakika sonra başlayacak.",
+        voiceScheduleCancelled: "Planlanan başlangıç iptal edildi."
     )
 }
 
@@ -3087,7 +3171,6 @@ extension ForkMeetingStrings {
         pictureMeetingWindowCaption: "Окно обнаруженной встречи; для записи, начатой вручную без обнаруженной встречи, — окно на переднем плане.",
         // MARK: Detection
         offerRecord: "Записать",
-        offerNotNow: "Не сейчас",
         offerAlwaysFormat: "Всегда для %@",
         offerNeverFormat: "Никогда для %@",
         offerMore: "Другие действия",
@@ -3473,14 +3556,31 @@ extension ForkMeetingStrings {
         nudgeSetting: "Предлагать снова, когда встреча действительно начнётся",
         nudgeCaption: "Когда в обнаруженном звонке, на который вы не ответили, начинают говорить другие, предложение возвращается один раз, а затем последний раз через 2 минуты. Для этого измеряется только громкость звука приложения встречи, и ничего не записывается. Без «Записи системного звука» вместо этого слушается ваш микрофон, после минуты разговора.",
         lookbackSetting: "Хранить последние 5 минут звука",
-        lookbackCaption: "Пока обнаруженный звонок предлагается для записи, последние 5 минут звука приложения встречи и вашего микрофона хранятся в памяти этого Mac и не попадают на диск, пока вы не нажмёте «Записать». Запись тогда начинается с них, только звук: изображение начинается с нажатия. Удаляются, когда звонок заканчивается, при «Не сейчас» или «Никогда», при блокировке или сне Mac, при выходе из приложения и при выключении этой функции. Тем временем macOS показывает приложение среди использующих микрофон; оранжевая точка уже горит из-за звонка.",
+        lookbackCaption: "Пока обнаруженный звонок предлагается для записи, последние 5 минут звука приложения встречи и вашего микрофона хранятся в памяти этого Mac и не попадают на диск, пока вы не нажмёте «Записать». Запись тогда начинается с них, только звук: изображение начинается с нажатия. Удаляются, когда звонок заканчивается, при ✕ или «Никогда», при блокировке или сне Mac, при выходе из приложения и при выключении этой функции. Тем временем macOS показывает приложение среди использующих микрофон; оранжевая точка уже горит из-за звонка.",
         lookbackKeptFormat: "+%@ уже сохранено",
         lookbackMinutesFormat: "%d мин",
         lookbackSecondsFormat: "%d с",
         lookbackSoundOnlyFormat: "Только звук в первые %@",
         lookbackKeptBeforeFormat: "Сохранено до нажатия: первые %@",
         nudgeOffersOff: "Предложения записать выключены в разделе «Уведомления и звуки»: предложение не вернётся, звук не сохраняется.",
-        lookbackNothingToKeep: "Пока ничего нельзя сохранить: сначала разрешите «Запись системного звука» или микрофон."
+        lookbackNothingToKeep: "Пока ничего нельзя сохранить: сначала разрешите «Запись системного звука» или микрофон.",
+        // MARK: W2 F
+        offerLater: "Позже",
+        offerStartInFormat: "Начать через %d мин",
+        offerWhenever: "Когда захочу",
+        offerDismiss: "Не предлагать для этой встречи",
+        offerStartsInFormat: "Начало через %@",
+        offerStartNow: "Сейчас",
+        offerCancelStart: "Отменить",
+        offerCancelStartSpoken: "Отменить запланированный старт",
+        offerLaterHelp: "Начать позже или когда захотите",
+        islandOfferLabelFormat: "Обнаружена встреча, %@",
+        islandOfferHint: "Открывает предложение записать",
+        noticeNotOffered: "Больше не предлагается",
+        noticeNotOfferedDetail: "Записать её всё ещё можно из острова или через командную панель.",
+        noticeNotOfferedShortcutDetail: "Записать можно в любой момент из острова, сочетанием клавиш или через командную панель.",
+        voiceScheduledFormat: "Запись начнётся через %d минут.",
+        voiceScheduleCancelled: "Запланированный старт отменён."
     )
 }
 
@@ -3694,7 +3794,6 @@ extension ForkMeetingStrings {
         pictureMeetingWindowCaption: "La ventana de la reunión detectada; en una grabación iniciada a mano sin reunión detectada, la ventana en primer plano.",
         // MARK: Detection
         offerRecord: "Grabar",
-        offerNotNow: "Ahora no",
         offerAlwaysFormat: "Siempre para %@",
         offerNeverFormat: "Nunca para %@",
         offerMore: "Más opciones",
@@ -4080,14 +4179,31 @@ extension ForkMeetingStrings {
         nudgeSetting: "Ofrecer de nuevo cuando la reunión empiece de verdad",
         nudgeCaption: "Cuando otras personas empiezan a hablar en una llamada detectada que no respondiste, la oferta vuelve una vez y una última vez después de 2 minutos. Para ello, solo se mide el volumen del sonido de la app de reunión, y no se escribe nada. Sin la Grabación del audio del sistema, se escucha tu micrófono en su lugar, tras un minuto de conversación.",
         lookbackSetting: "Guardar los últimos 5 minutos de sonido",
-        lookbackCaption: "Mientras se ofrece una llamada detectada, los últimos 5 minutos del sonido de la app de reunión y de tu micrófono se quedan en la memoria de este Mac, nunca en el disco hasta que hagas clic en Grabar. La grabación empieza entonces con ellos, solo sonido: la imagen empieza con el clic. Se borran cuando la llamada termina, con Ahora no o Nunca, cuando el Mac se bloquea o duerme, cuando la app se cierra y cuando esto se desactiva. Mientras tanto, macOS muestra la app entre las que usan el micrófono; el punto naranja ya lo enciende la llamada.",
+        lookbackCaption: "Mientras se ofrece una llamada detectada, los últimos 5 minutos del sonido de la app de reunión y de tu micrófono se quedan en la memoria de este Mac, nunca en el disco hasta que hagas clic en Grabar. La grabación empieza entonces con ellos, solo sonido: la imagen empieza con el clic. Se borran cuando la llamada termina, con ✕ o Nunca, cuando el Mac se bloquea o duerme, cuando la app se cierra y cuando esto se desactiva. Mientras tanto, macOS muestra la app entre las que usan el micrófono; el punto naranja ya lo enciende la llamada.",
         lookbackKeptFormat: "+%@ ya guardados",
         lookbackMinutesFormat: "%d\u{00A0}min",
         lookbackSecondsFormat: "%d\u{00A0}s",
         lookbackSoundOnlyFormat: "Solo sonido durante los primeros %@",
         lookbackKeptBeforeFormat: "Guardado de antes del clic: los primeros %@",
         nudgeOffersOff: "Las ofertas de grabar están desactivadas en Notificaciones y sonidos: la oferta no vuelve y no se guarda ningún sonido.",
-        lookbackNothingToKeep: "Aún no se puede guardar nada: permite primero la Grabación del audio del sistema o el micrófono."
+        lookbackNothingToKeep: "Aún no se puede guardar nada: permite primero la Grabación del audio del sistema o el micrófono.",
+        // MARK: W2 F
+        offerLater: "Más tarde",
+        offerStartInFormat: "Empezar en %d min",
+        offerWhenever: "Cuando quiera",
+        offerDismiss: "No ofrecer para esta reunión",
+        offerStartsInFormat: "Empieza en %@",
+        offerStartNow: "Ahora",
+        offerCancelStart: "Cancelar",
+        offerCancelStartSpoken: "Cancelar el inicio programado",
+        offerLaterHelp: "Empezar más tarde o cuando quieras",
+        islandOfferLabelFormat: "Reunión detectada, %@",
+        islandOfferHint: "Abre la oferta de grabar",
+        noticeNotOffered: "No se ofrece en esta llamada",
+        noticeNotOfferedDetail: "Aún puedes grabarla desde la isla o la Barra de Comandos.",
+        noticeNotOfferedShortcutDetail: "Grábala cuando quieras desde la isla, el atajo o la Barra de Comandos.",
+        voiceScheduledFormat: "La grabación empieza en %d minutos.",
+        voiceScheduleCancelled: "Inicio programado cancelado."
     )
 }
 
@@ -4301,7 +4417,6 @@ extension ForkMeetingStrings {
         pictureMeetingWindowCaption: "Okno rozpoznaného stretnutia; pri ručne spustenom nahrávaní bez rozpoznaného stretnutia okno v popredí.",
         // MARK: Detection
         offerRecord: "Nahrávať",
-        offerNotNow: "Teraz nie",
         offerAlwaysFormat: "Vždy pre %@",
         offerNeverFormat: "Nikdy pre %@",
         offerMore: "Ďalšie možnosti",
@@ -4687,14 +4802,31 @@ extension ForkMeetingStrings {
         nudgeSetting: "Ponúknuť znova, keď sa stretnutie naozaj začne",
         nudgeCaption: "Keď v rozpoznanom hovore, na ktorý ste neodpovedali, začnú hovoriť ostatní, ponuka sa vráti raz a naposledy po 2 minútach. Meria sa pritom len hlasitosť zvuku aplikácie stretnutia a nič sa nezapisuje. Bez nahrávania systémového zvuku sa namiesto toho počúva váš mikrofón, po minúte rozhovoru.",
         lookbackSetting: "Uchovať posledných 5 minút zvuku",
-        lookbackCaption: "Kým sa rozpoznaný hovor ponúka, posledných 5 minút zvuku aplikácie stretnutia a vášho mikrofónu zostáva v pamäti tohto Macu, nikdy nie na disku, kým nekliknete na Nahrávať. Nahrávka sa potom nimi začne, len so zvukom: obraz sa začne kliknutím. Vymažú sa, keď hovor skončí, pri Teraz nie alebo Nikdy, keď sa Mac uzamkne alebo uspí, keď sa aplikácia ukončí a keď sa toto vypne. Medzitým macOS zobrazuje aplikáciu medzi tými, ktoré používajú mikrofón; oranžovú bodku už rozsvietil hovor.",
+        lookbackCaption: "Kým sa rozpoznaný hovor ponúka, posledných 5 minút zvuku aplikácie stretnutia a vášho mikrofónu zostáva v pamäti tohto Macu, nikdy nie na disku, kým nekliknete na Nahrávať. Nahrávka sa potom nimi začne, len so zvukom: obraz sa začne kliknutím. Vymažú sa, keď hovor skončí, pri ✕ alebo Nikdy, keď sa Mac uzamkne alebo uspí, keď sa aplikácia ukončí a keď sa toto vypne. Medzitým macOS zobrazuje aplikáciu medzi tými, ktoré používajú mikrofón; oranžovú bodku už rozsvietil hovor.",
         lookbackKeptFormat: "+%@ už uchované",
         lookbackMinutesFormat: "%d\u{00A0}min",
         lookbackSecondsFormat: "%d\u{00A0}s",
         lookbackSoundOnlyFormat: "Len zvuk počas prvých %@",
         lookbackKeptBeforeFormat: "Uchované pred kliknutím: prvých %@",
         nudgeOffersOff: "Ponuky na nahrávanie sú vypnuté v časti Upozornenia a zvuky: ponuka sa nevráti a žiadny zvuk sa neuchová.",
-        lookbackNothingToKeep: "Zatiaľ nemožno nič uchovať: najprv povoľte nahrávanie systémového zvuku alebo mikrofón."
+        lookbackNothingToKeep: "Zatiaľ nemožno nič uchovať: najprv povoľte nahrávanie systémového zvuku alebo mikrofón.",
+        // MARK: W2 F
+        offerLater: "Neskôr",
+        offerStartInFormat: "Spustiť o %d min",
+        offerWhenever: "Keď budem chcieť",
+        offerDismiss: "Neponúkať pre toto stretnutie",
+        offerStartsInFormat: "Začne o %@",
+        offerStartNow: "Teraz",
+        offerCancelStart: "Zrušiť",
+        offerCancelStartSpoken: "Zrušiť plánované spustenie",
+        offerLaterHelp: "Spustiť neskôr alebo kedykoľvek chcete",
+        islandOfferLabelFormat: "Rozpoznané stretnutie, %@",
+        islandOfferHint: "Otvorí ponuku nahrávania",
+        noticeNotOffered: "Pre tento hovor sa neponúka",
+        noticeNotOfferedDetail: "Stále ho môžete nahrať z Dynamic Island alebo cez príkazovú lištu.",
+        noticeNotOfferedShortcutDetail: "Nahrávať môžete kedykoľvek z Dynamic Island, skratkou alebo cez príkazovú lištu.",
+        voiceScheduledFormat: "Nahrávanie sa spustí o %d minút.",
+        voiceScheduleCancelled: "Plánované spustenie je zrušené."
     )
 }
 
@@ -4908,7 +5040,6 @@ extension ForkMeetingStrings {
         pictureMeetingWindowCaption: "Das Fenster der erkannten Besprechung; bei einer von Hand gestarteten Aufnahme ohne erkannte Besprechung das vorderste Fenster.",
         // MARK: Detection
         offerRecord: "Aufnehmen",
-        offerNotNow: "Diesmal nicht",
         offerAlwaysFormat: "Immer für %@",
         offerNeverFormat: "Nie für %@",
         offerMore: "Weitere Optionen",
@@ -5294,14 +5425,31 @@ extension ForkMeetingStrings {
         nudgeSetting: "Erneut anbieten, wenn die Besprechung wirklich beginnt",
         nudgeCaption: "Wenn in einem erkannten Anruf, den du nicht beantwortet hast, andere zu sprechen beginnen, kommt das Angebot einmal zurück und nach 2 Minuten ein letztes Mal. Dafür wird nur die Lautstärke des Tons der Besprechungs-App gemessen, und nichts wird geschrieben. Ohne Systemaudioaufnahme wird stattdessen nach einer Minute Gespräch dein Mikrofon abgehört.",
         lookbackSetting: "Die letzten 5 Minuten Ton behalten",
-        lookbackCaption: "Solange ein erkannter Anruf angeboten wird, bleiben die letzten 5 Minuten Ton der Besprechungs-App und deines Mikrofons im Arbeitsspeicher dieses Macs, nie auf der Festplatte, bis du auf Aufnehmen klickst. Die Aufnahme beginnt dann mit ihnen, nur Ton: Das Bild beginnt mit dem Klick. Gelöscht, wenn der Anruf endet, bei Diesmal nicht oder Nie, wenn der Mac gesperrt wird oder in den Ruhezustand geht, wenn die App beendet wird und wenn dies ausgeschaltet wird. Währenddessen zeigt macOS die App unter denen, die das Mikrofon verwenden; der orangefarbene Punkt leuchtet wegen des Anrufs bereits.",
+        lookbackCaption: "Solange ein erkannter Anruf angeboten wird, bleiben die letzten 5 Minuten Ton der Besprechungs-App und deines Mikrofons im Arbeitsspeicher dieses Macs, nie auf der Festplatte, bis du auf Aufnehmen klickst. Die Aufnahme beginnt dann mit ihnen, nur Ton: Das Bild beginnt mit dem Klick. Gelöscht, wenn der Anruf endet, bei ✕ oder Nie, wenn der Mac gesperrt wird oder in den Ruhezustand geht, wenn die App beendet wird und wenn dies ausgeschaltet wird. Währenddessen zeigt macOS die App unter denen, die das Mikrofon verwenden; der orangefarbene Punkt leuchtet wegen des Anrufs bereits.",
         lookbackKeptFormat: "+%@ schon behalten",
         lookbackMinutesFormat: "%d\u{00A0}Min.",
         lookbackSecondsFormat: "%d\u{00A0}s",
         lookbackSoundOnlyFormat: "Nur Ton in den ersten %@",
         lookbackKeptBeforeFormat: "Vor dem Klick behalten: die ersten %@",
         nudgeOffersOff: "Angebote zur Aufnahme sind unter „Mitteilungen und Töne“ aus: Das Angebot kommt nicht zurück, und kein Ton wird behalten.",
-        lookbackNothingToKeep: "Noch kann nichts behalten werden: Erlaube zuerst die Systemaudioaufnahme oder das Mikrofon."
+        lookbackNothingToKeep: "Noch kann nichts behalten werden: Erlaube zuerst die Systemaudioaufnahme oder das Mikrofon.",
+        // MARK: W2 F
+        offerLater: "Später",
+        offerStartInFormat: "In %d Min. starten",
+        offerWhenever: "Wenn ich so weit bin",
+        offerDismiss: "Für diese Besprechung nicht anbieten",
+        offerStartsInFormat: "Start in %@",
+        offerStartNow: "Jetzt",
+        offerCancelStart: "Abbrechen",
+        offerCancelStartSpoken: "Geplanten Start abbrechen",
+        offerLaterHelp: "Später starten oder wann du willst",
+        islandOfferLabelFormat: "Besprechung erkannt, %@",
+        islandOfferHint: "Öffnet das Angebot zur Aufnahme",
+        noticeNotOffered: "Nicht mehr angeboten",
+        noticeNotOfferedDetail: "Du kannst sie weiter über die Insel oder die Befehlsleiste aufnehmen.",
+        noticeNotOfferedShortcutDetail: "Jederzeit aufnehmbar über die Insel, per Kurzbefehl oder über die Befehlsleiste.",
+        voiceScheduledFormat: "Die Aufnahme startet in %d Minuten.",
+        voiceScheduleCancelled: "Geplanter Start abgebrochen."
     )
 }
 
@@ -5515,7 +5663,6 @@ extension ForkMeetingStrings {
         pictureMeetingWindowCaption: "La fenêtre de la réunion détectée\u{00A0}; pour un enregistrement lancé à la main sans réunion détectée, la fenêtre au premier plan.",
         // MARK: Detection
         offerRecord: "Enregistrer",
-        offerNotNow: "Pas cette fois",
         offerAlwaysFormat: "Toujours pour %@",
         offerNeverFormat: "Jamais pour %@",
         offerMore: "Plus d’options",
@@ -5901,14 +6048,31 @@ extension ForkMeetingStrings {
         nudgeSetting: "Proposer à nouveau quand la réunion commence vraiment",
         nudgeCaption: "Quand d’autres personnes se mettent à parler dans un appel détecté auquel vous n’avez pas répondu, la proposition revient une fois, puis une dernière fois après 2\u{00A0}minutes. Pour cela, seul le volume du son de l’app de réunion est mesuré, et rien n’est écrit. Sans l’enregistrement de l’audio système, c’est votre micro qui est écouté, après une minute de parole.",
         lookbackSetting: "Garder les 5 dernières minutes de son",
-        lookbackCaption: "Pendant un appel détecté et proposé, les 5 dernières minutes du son de l’app de réunion et de votre micro restent dans la mémoire de ce Mac, jamais sur le disque tant que vous ne cliquez pas sur Enregistrer. L’enregistrement commence alors par elles, son seulement\u{00A0}: l’image démarre au clic. Vidées quand l’appel se termine, à «\u{00A0}Pas cette fois\u{00A0}» ou «\u{00A0}Jamais\u{00A0}», au verrouillage, à la mise en veille, quand l’app quitte et quand ce réglage est coupé. Pendant ce temps, macOS montre l’app parmi celles qui utilisent le micro\u{00A0}; le point orange est déjà allumé par l’appel.",
+        lookbackCaption: "Pendant un appel détecté et proposé, les 5 dernières minutes du son de l’app de réunion et de votre micro restent dans la mémoire de ce Mac, jamais sur le disque tant que vous ne cliquez pas sur Enregistrer. L’enregistrement commence alors par elles, son seulement\u{00A0}: l’image démarre au clic. Vidées quand l’appel se termine, à ✕ ou «\u{00A0}Jamais\u{00A0}», au verrouillage, à la mise en veille, quand l’app quitte et quand ce réglage est coupé. Pendant ce temps, macOS montre l’app parmi celles qui utilisent le micro\u{00A0}; le point orange est déjà allumé par l’appel.",
         lookbackKeptFormat: "+%@ déjà gardées",
         lookbackMinutesFormat: "%d\u{00A0}min",
         lookbackSecondsFormat: "%d\u{00A0}s",
         lookbackSoundOnlyFormat: "Son seulement pendant les %@ du début",
         lookbackKeptBeforeFormat: "Gardé d’avant le clic\u{00A0}: les %@ du début",
         nudgeOffersOff: "Les propositions d’enregistrement sont coupées dans Notifications et sons\u{00A0}: la proposition ne revient pas et aucun son n’est gardé.",
-        lookbackNothingToKeep: "Rien ne peut encore être gardé\u{00A0}: autorisez d’abord l’enregistrement de l’audio système ou le micro."
+        lookbackNothingToKeep: "Rien ne peut encore être gardé\u{00A0}: autorisez d’abord l’enregistrement de l’audio système ou le micro.",
+        // MARK: W2 F
+        offerLater: "Plus tard",
+        offerStartInFormat: "Démarrer dans %d\u{00A0}min",
+        offerWhenever: "Quand je veux",
+        offerDismiss: "Ne plus proposer pour cette réunion",
+        offerStartsInFormat: "Démarre dans %@",
+        offerStartNow: "Maintenant",
+        offerCancelStart: "Annuler",
+        offerCancelStartSpoken: "Annuler le démarrage prévu",
+        offerLaterHelp: "Démarrer plus tard ou quand vous voulez",
+        islandOfferLabelFormat: "Réunion détectée, %@",
+        islandOfferHint: "Ouvre la proposition d’enregistrer",
+        noticeNotOffered: "Plus proposé pour cet appel",
+        noticeNotOfferedDetail: "Vous pouvez encore l’enregistrer depuis l’île ou la barre de commandes.",
+        noticeNotOfferedShortcutDetail: "Toujours possible depuis l’île, votre raccourci ou la barre de commandes.",
+        voiceScheduledFormat: "L’enregistrement démarrera dans %d\u{00A0}minutes.",
+        voiceScheduleCancelled: "Démarrage prévu annulé."
     )
 }
 
@@ -6122,7 +6286,6 @@ extension ForkMeetingStrings {
         pictureMeetingWindowCaption: "La finestra della riunione rilevata; per una registrazione avviata a mano senza riunione rilevata, la finestra in primo piano.",
         // MARK: Detection
         offerRecord: "Registra",
-        offerNotNow: "Non ora",
         offerAlwaysFormat: "Sempre per %@",
         offerNeverFormat: "Mai per %@",
         offerMore: "Altre opzioni",
@@ -6508,14 +6671,31 @@ extension ForkMeetingStrings {
         nudgeSetting: "Proponi di nuovo quando la riunione inizia davvero",
         nudgeCaption: "Quando altre persone iniziano a parlare in una chiamata rilevata a cui non hai risposto, la proposta torna una volta e un’ultima volta dopo 2 minuti. Per questo viene misurato solo il volume del suono dell’app della riunione, e nulla viene scritto. Senza la Registrazione dell’audio di sistema, viene ascoltato invece il tuo microfono, dopo un minuto di conversazione.",
         lookbackSetting: "Conserva gli ultimi 5 minuti di suono",
-        lookbackCaption: "Mentre una chiamata rilevata viene proposta, gli ultimi 5 minuti del suono dell’app della riunione e del tuo microfono restano nella memoria di questo Mac, mai sul disco finché non fai clic su Registra. La registrazione inizia allora con essi, solo audio: l’immagine parte dal clic. Cancellati quando la chiamata finisce, con Non ora o Mai, quando il Mac si blocca o va in stop, quando l’app si chiude e quando questa opzione viene disattivata. Nel frattempo macOS mostra l’app tra quelle che usano il microfono; il punto arancione è già acceso dalla chiamata.",
+        lookbackCaption: "Mentre una chiamata rilevata viene proposta, gli ultimi 5 minuti del suono dell’app della riunione e del tuo microfono restano nella memoria di questo Mac, mai sul disco finché non fai clic su Registra. La registrazione inizia allora con essi, solo audio: l’immagine parte dal clic. Cancellati quando la chiamata finisce, con ✕ o Mai, quando il Mac si blocca o va in stop, quando l’app si chiude e quando questa opzione viene disattivata. Nel frattempo macOS mostra l’app tra quelle che usano il microfono; il punto arancione è già acceso dalla chiamata.",
         lookbackKeptFormat: "+%@ già conservati",
         lookbackMinutesFormat: "%d\u{00A0}min",
         lookbackSecondsFormat: "%d\u{00A0}s",
         lookbackSoundOnlyFormat: "Solo audio per i primi %@",
         lookbackKeptBeforeFormat: "Conservato da prima del clic: i primi %@",
         nudgeOffersOff: "Le proposte di registrare sono disattivate in Notifiche e suoni: la proposta non torna e nessun suono viene conservato.",
-        lookbackNothingToKeep: "Per ora non si può conservare nulla: consenti prima la Registrazione dell’audio di sistema o il microfono."
+        lookbackNothingToKeep: "Per ora non si può conservare nulla: consenti prima la Registrazione dell’audio di sistema o il microfono.",
+        // MARK: W2 F
+        offerLater: "Più tardi",
+        offerStartInFormat: "Avvia tra %d min",
+        offerWhenever: "Quando voglio",
+        offerDismiss: "Non proporre per questa riunione",
+        offerStartsInFormat: "Inizia tra %@",
+        offerStartNow: "Ora",
+        offerCancelStart: "Annulla",
+        offerCancelStartSpoken: "Annulla l’avvio programmato",
+        offerLaterHelp: "Avvia più tardi o quando vuoi",
+        islandOfferLabelFormat: "Riunione rilevata, %@",
+        islandOfferHint: "Apre la proposta di registrare",
+        noticeNotOffered: "Non più proposto",
+        noticeNotOfferedDetail: "Puoi ancora registrarla dall’isola o dalla Barra dei Comandi.",
+        noticeNotOfferedShortcutDetail: "Registrala quando vuoi dall’isola, con la scorciatoia o dalla Barra dei Comandi.",
+        voiceScheduledFormat: "La registrazione inizia tra %d minuti.",
+        voiceScheduleCancelled: "Avvio programmato annullato."
     )
 }
 
@@ -6729,7 +6909,6 @@ extension ForkMeetingStrings {
         pictureMeetingWindowCaption: "検出したミーティングのウインドウ。ミーティングを検出せずに手動で始めた録画では最前面のウインドウ。",
         // MARK: Detection
         offerRecord: "録画",
-        offerNotNow: "今回はしない",
         offerAlwaysFormat: "%@ では常に録画",
         offerNeverFormat: "%@ では録画しない",
         offerMore: "その他のオプション",
@@ -6960,13 +7139,13 @@ extension ForkMeetingStrings {
         cardMarkHelp: "この瞬間をマーク",
         cardMarked: "マークしました",
         indicatorTitle: "録画インジケータ",
-        islandActivity: "閉じた島に録画を表示",
+        islandActivity: "閉じたアイランドに録画を表示",
         islandActivityCaption: "録画時間と音量レベルがカメラの横に表示されます。クリックすると録画のコントロールが開きます。",
         indicatorPill: "フローティング表示",
         indicatorAuto: "自動",
         indicatorBoth: "常に表示",
-        indicatorAutoCaption: "閉じた島が撮影中の画面で録画を表示している間は隠れ、島が非表示、フルスクリーン、または別のアクティビティを表示しているときに戻ります。",
-        indicatorBothCaption: "島の横に表示されたままになります。",
+        indicatorAutoCaption: "閉じたアイランドが撮影中の画面で録画を表示している間は隠れ、アイランドが非表示、フルスクリーン、または別のアクティビティを表示しているときに戻ります。",
+        indicatorBothCaption: "アイランドの横に表示されたままになります。",
         // MARK: Finish C
         soundOnly: "音声のみ",
         soundOnlyCaption: "映像なし：ミーティングの音声とマイクを .m4a ファイルに保存します。画面収録は不要で、画質は映像にのみ関係します。",
@@ -6975,9 +7154,9 @@ extension ForkMeetingStrings {
         offerRecordWithPicture: "映像付きで録画",
         offerCaptureSoundOnlyFormat: "映像なし · 音声：%1$@ · マイク：%2$@",
         // MARK: Finish B
-        notificationsCaption: "任意：島と吹き出しのどちらにも通知を表示できないとき（画面のロック中など）にだけ使われます。",
+        notificationsCaption: "任意：アイランドと吹き出しのどちらにも通知を表示できないとき（画面のロック中など）にだけ使われます。",
         notifyTitle: "通知とサウンド",
-        notifyCaption: "各スイッチは、その出来事を島、吹き出し、システム通知のすべてで消音します。VoiceOver はすべての段階を引き続き読み上げます。",
+        notifyCaption: "各スイッチは、その出来事をアイランド、吹き出し、システム通知のすべてで消音します。VoiceOver はすべての段階を引き続き読み上げます。",
         notifyOffers: "録画の提案",
         notifyOffersCaption: "通話を検出したとき。オフにしても通話は認識され、「常に録画」に設定したものは録画されます。それ以外はショートカット、コマンドバー、またはこのページから開始してください。",
         notifyStart: "録画の開始・再開",
@@ -7115,14 +7294,31 @@ extension ForkMeetingStrings {
         nudgeSetting: "会議が本当に始まったら再度提案",
         nudgeCaption: "応答しなかった検出済みの通話で他の人が話し始めると、提案が一度、さらに2分後に最後にもう一度表示されます。そのために測るのは会議アプリの音の音量だけで、何も書き込みません。システムオーディオ収録がない場合は、1分間の会話の後に代わりにマイクを聞き取ります。",
         lookbackSetting: "直前5分間の音を保持",
-        lookbackCaption: "検出された通話が提案されている間、会議アプリの音とマイクの直前5分間はこのMacのメモリに残り、「録画」をクリックするまでディスクには書き込まれません。録画はその音から音声のみで始まり、映像はクリックした時点から始まります。通話の終了時、「今回はしない」または「録画しない」を選んだとき、Macのロック時やスリープ時、アプリの終了時、この設定をオフにしたときに消去されます。その間、macOSはこのアプリをマイク使用中として表示しますが、オレンジ色の点は通話によってすでに点灯しています。",
+        lookbackCaption: "検出された通話が提案されている間、会議アプリの音とマイクの直前5分間はこのMacのメモリに残り、「録画」をクリックするまでディスクには書き込まれません。録画はその音から音声のみで始まり、映像はクリックした時点から始まります。通話の終了時、✕または「録画しない」を選んだとき、Macのロック時やスリープ時、アプリの終了時、この設定をオフにしたときに消去されます。その間、macOSはこのアプリをマイク使用中として表示しますが、オレンジ色の点は通話によってすでに点灯しています。",
         lookbackKeptFormat: "+%@ 保持済み",
         lookbackMinutesFormat: "%d分",
         lookbackSecondsFormat: "%d秒",
         lookbackSoundOnlyFormat: "最初の%@は音声のみ",
         lookbackKeptBeforeFormat: "クリック前から保持：最初の%@",
         nudgeOffersOff: "「通知とサウンド」で録画の提案がオフになっています。提案は再表示されず、音声も保持されません。",
-        lookbackNothingToKeep: "まだ何も保持できません。先にシステムオーディオ収録またはマイクを許可してください。"
+        lookbackNothingToKeep: "まだ何も保持できません。先にシステムオーディオ収録またはマイクを許可してください。",
+        // MARK: W2 F
+        offerLater: "あとで",
+        offerStartInFormat: "%d 分後に開始",
+        offerWhenever: "好きなときに",
+        offerDismiss: "このミーティングでは提案しない",
+        offerStartsInFormat: "%@ 後に開始",
+        offerStartNow: "今すぐ",
+        offerCancelStart: "キャンセル",
+        offerCancelStartSpoken: "予定した開始をキャンセル",
+        offerLaterHelp: "あとで、または好きなときに開始",
+        islandOfferLabelFormat: "ミーティングを検出、%@",
+        islandOfferHint: "録画の提案を開きます",
+        noticeNotOffered: "この通話では提案しません",
+        noticeNotOfferedDetail: "アイランドまたはコマンドバーから引き続き録画できます。",
+        noticeNotOfferedShortcutDetail: "アイランド、ショートカット、コマンドバーからいつでも録画できます。",
+        voiceScheduledFormat: "%d 分後に録画を開始します。",
+        voiceScheduleCancelled: "予定した開始を取り消しました。"
     )
 }
 
@@ -7336,7 +7532,6 @@ extension ForkMeetingStrings {
         pictureMeetingWindowCaption: "감지된 회의의 윈도우. 회의가 감지되지 않은 상태에서 직접 시작한 녹화는 맨 앞 윈도우.",
         // MARK: Detection
         offerRecord: "녹화",
-        offerNotNow: "이번에는 안 함",
         offerAlwaysFormat: "%@에서 항상 녹화",
         offerNeverFormat: "%@에서 녹화 안 함",
         offerMore: "기타 옵션",
@@ -7567,13 +7762,13 @@ extension ForkMeetingStrings {
         cardMarkHelp: "이 순간 표시",
         cardMarked: "표시됨",
         indicatorTitle: "녹화 표시기",
-        islandActivity: "닫힌 섬에 녹화 표시",
+        islandActivity: "닫힌 아일랜드에 녹화 표시",
         islandActivityCaption: "녹화된 시간과 소리 레벨이 카메라 옆에 나타납니다. 클릭하면 녹화 제어가 열립니다.",
         indicatorPill: "플로팅 표시기",
         indicatorAuto: "자동",
         indicatorBoth: "항상",
-        indicatorAutoCaption: "닫힌 섬이 촬영 중인 화면에서 녹화를 표시하는 동안 숨겨지고, 섬이 숨겨지거나 전체 화면이거나 다른 활동을 표시하면 다시 나타납니다.",
-        indicatorBothCaption: "섬 옆 화면에 계속 표시됩니다.",
+        indicatorAutoCaption: "닫힌 아일랜드가 촬영 중인 화면에서 녹화를 표시하는 동안 숨겨지고, 아일랜드가 숨겨지거나 전체 화면이거나 다른 활동을 표시하면 다시 나타납니다.",
+        indicatorBothCaption: "아일랜드 옆 화면에 계속 표시됩니다.",
         // MARK: Finish C
         soundOnly: "소리만",
         soundOnlyCaption: "화면 없음: 회의 소리와 마이크를 .m4a 파일로 저장합니다. 화면 녹화 권한이 필요 없으며, 화질은 화면에만 적용됩니다.",
@@ -7582,9 +7777,9 @@ extension ForkMeetingStrings {
         offerRecordWithPicture: "화면과 함께 녹화",
         offerCaptureSoundOnlyFormat: "화면 없음 · 사운드: %1$@ · 마이크: %2$@",
         // MARK: Finish B
-        notificationsCaption: "선택 사항: 섬과 말풍선 모두 알림을 표시할 수 없을 때(예: 화면 잠금 중)에만 사용됩니다.",
+        notificationsCaption: "선택 사항: 아일랜드와 말풍선 모두 알림을 표시할 수 없을 때(예: 화면 잠금 중)에만 사용됩니다.",
         notifyTitle: "알림 및 사운드",
-        notifyCaption: "각 스위치는 해당 이벤트를 섬, 말풍선, 시스템 알림 모두에서 끕니다. VoiceOver는 계속 모든 단계를 읽어 줍니다.",
+        notifyCaption: "각 스위치는 해당 이벤트를 아일랜드, 말풍선, 시스템 알림 모두에서 끕니다. VoiceOver는 계속 모든 단계를 읽어 줍니다.",
         notifyOffers: "녹화 제안",
         notifyOffersCaption: "통화가 감지될 때. 꺼도 통화는 계속 인식되고 항상으로 설정한 앱은 계속 녹화됩니다. 나머지는 단축키, 명령 막대 또는 이 페이지에서 시작하세요.",
         notifyStart: "녹화 시작 또는 재개",
@@ -7722,14 +7917,31 @@ extension ForkMeetingStrings {
         nudgeSetting: "회의가 실제로 시작되면 다시 제안",
         nudgeCaption: "응답하지 않은 감지된 통화에서 다른 사람이 말하기 시작하면 제안이 한 번, 2분 뒤 마지막으로 한 번 더 다시 나타납니다. 이를 위해 회의 앱 소리의 음량만 측정하며 아무것도 기록하지 않습니다. 시스템 오디오 녹음이 없으면 1분간 대화한 뒤 대신 마이크를 듣습니다.",
         lookbackSetting: "마지막 5분의 소리 보관",
-        lookbackCaption: "감지된 통화가 제안되는 동안 회의 앱 소리와 마이크의 마지막 5분이 이 Mac의 메모리에 남으며, 녹화를 클릭하기 전에는 디스크에 기록되지 않습니다. 그러면 녹화가 그 소리로 시작되며 소리만 담기고, 화면은 클릭한 시점부터 시작됩니다. 통화가 끝날 때, 이번에는 안 함 또는 녹화 안 함을 선택할 때, Mac이 잠기거나 잠자기에 들어갈 때, 앱이 종료될 때, 이 옵션을 끌 때 지워집니다. 그동안 macOS는 이 앱을 마이크를 사용하는 앱으로 표시하며, 주황색 점은 이미 통화로 켜져 있습니다.",
+        lookbackCaption: "감지된 통화가 제안되는 동안 회의 앱 소리와 마이크의 마지막 5분이 이 Mac의 메모리에 남으며, 녹화를 클릭하기 전에는 디스크에 기록되지 않습니다. 그러면 녹화가 그 소리로 시작되며 소리만 담기고, 화면은 클릭한 시점부터 시작됩니다. 통화가 끝날 때, ✕ 또는 녹화 안 함을 선택할 때, Mac이 잠기거나 잠자기에 들어갈 때, 앱이 종료될 때, 이 옵션을 끌 때 지워집니다. 그동안 macOS는 이 앱을 마이크를 사용하는 앱으로 표시하며, 주황색 점은 이미 통화로 켜져 있습니다.",
         lookbackKeptFormat: "+%@ 보관됨",
         lookbackMinutesFormat: "%d분",
         lookbackSecondsFormat: "%d초",
         lookbackSoundOnlyFormat: "처음 %@ 동안 소리만",
         lookbackKeptBeforeFormat: "클릭 전부터 보관: 처음 %@",
         nudgeOffersOff: "알림 및 사운드에서 녹화 제안이 꺼져 있습니다. 제안이 다시 나타나지 않고 소리도 보관되지 않습니다.",
-        lookbackNothingToKeep: "아직 아무것도 보관할 수 없습니다. 먼저 시스템 오디오 녹음 또는 마이크를 허용하세요."
+        lookbackNothingToKeep: "아직 아무것도 보관할 수 없습니다. 먼저 시스템 오디오 녹음 또는 마이크를 허용하세요.",
+        // MARK: W2 F
+        offerLater: "나중에",
+        offerStartInFormat: "%d분 후 시작",
+        offerWhenever: "원할 때",
+        offerDismiss: "이 회의에는 제안 안 함",
+        offerStartsInFormat: "%@ 후 시작",
+        offerStartNow: "지금",
+        offerCancelStart: "취소",
+        offerCancelStartSpoken: "예정된 시작 취소",
+        offerLaterHelp: "나중에 또는 원할 때 시작",
+        islandOfferLabelFormat: "회의 감지됨, %@",
+        islandOfferHint: "녹화 제안을 엽니다",
+        noticeNotOffered: "이 통화에는 제안 안 함",
+        noticeNotOfferedDetail: "아일랜드 또는 명령 바에서 계속 녹화할 수 있습니다.",
+        noticeNotOfferedShortcutDetail: "아일랜드, 단축키 또는 명령 바에서 언제든 녹화할 수 있습니다.",
+        voiceScheduledFormat: "%d분 후에 녹화가 시작됩니다.",
+        voiceScheduleCancelled: "예정된 시작을 취소했습니다."
     )
 }
 
@@ -7943,7 +8155,6 @@ extension ForkMeetingStrings {
         pictureMeetingWindowCaption: "Вікно виявленої зустрічі; для запису, розпочатого вручну без виявленої зустрічі, — вікно на передньому плані.",
         // MARK: Detection
         offerRecord: "Записати",
-        offerNotNow: "Не зараз",
         offerAlwaysFormat: "Завжди для %@",
         offerNeverFormat: "Ніколи для %@",
         offerMore: "Інші дії",
@@ -8329,14 +8540,31 @@ extension ForkMeetingStrings {
         nudgeSetting: "Пропонувати знову, коли зустріч справді почнеться",
         nudgeCaption: "Коли у виявленому дзвінку, на який ви не відповіли, починають говорити інші, пропозиція повертається один раз, а потім востаннє через 2 хвилини. Для цього вимірюється лише гучність звуку застосунку зустрічі, і нічого не записується. Без «Запису системного звуку» натомість слухається ваш мікрофон, після хвилини розмови.",
         lookbackSetting: "Зберігати останні 5 хвилин звуку",
-        lookbackCaption: "Поки виявлений дзвінок пропонується для запису, останні 5 хвилин звуку застосунку зустрічі та вашого мікрофона зберігаються в пам’яті цього Mac і не потрапляють на диск, доки ви не натиснете «Записати». Запис тоді починається з них, лише звук: зображення починається з натискання. Видаляються, коли дзвінок закінчується, при «Не зараз» або «Ніколи», коли Mac блокується чи засинає, коли застосунок завершується і коли цю функцію вимкнено. Тим часом macOS показує застосунок серед тих, що використовують мікрофон; помаранчева крапка вже світиться через дзвінок.",
+        lookbackCaption: "Поки виявлений дзвінок пропонується для запису, останні 5 хвилин звуку застосунку зустрічі та вашого мікрофона зберігаються в пам’яті цього Mac і не потрапляють на диск, доки ви не натиснете «Записати». Запис тоді починається з них, лише звук: зображення починається з натискання. Видаляються, коли дзвінок закінчується, при ✕ або «Ніколи», коли Mac блокується чи засинає, коли застосунок завершується і коли цю функцію вимкнено. Тим часом macOS показує застосунок серед тих, що використовують мікрофон; помаранчева крапка вже світиться через дзвінок.",
         lookbackKeptFormat: "+%@ уже збережено",
         lookbackMinutesFormat: "%d хв",
         lookbackSecondsFormat: "%d с",
         lookbackSoundOnlyFormat: "Лише звук у перші %@",
         lookbackKeptBeforeFormat: "Збережено до натискання: перші %@",
         nudgeOffersOff: "Пропозиції записати вимкнено в розділі «Сповіщення і звуки»: пропозиція не повернеться, звук не зберігається.",
-        lookbackNothingToKeep: "Поки нічого не можна зберегти: спершу дозвольте «Запис системного звуку» або мікрофон."
+        lookbackNothingToKeep: "Поки нічого не можна зберегти: спершу дозвольте «Запис системного звуку» або мікрофон.",
+        // MARK: W2 F
+        offerLater: "Пізніше",
+        offerStartInFormat: "Почати за %d хв",
+        offerWhenever: "Коли захочу",
+        offerDismiss: "Не пропонувати для цієї зустрічі",
+        offerStartsInFormat: "Початок за %@",
+        offerStartNow: "Зараз",
+        offerCancelStart: "Скасувати",
+        offerCancelStartSpoken: "Скасувати запланований старт",
+        offerLaterHelp: "Почати пізніше або коли захочете",
+        islandOfferLabelFormat: "Виявлено зустріч, %@",
+        islandOfferHint: "Відкриває пропозицію записати",
+        noticeNotOffered: "Більше не пропонується",
+        noticeNotOfferedDetail: "Записати її ще можна з острівця або через Панель команд.",
+        noticeNotOfferedShortcutDetail: "Записати можна будь-коли з острівця, поєднанням клавіш або через Панель команд.",
+        voiceScheduledFormat: "Запис почнеться за %d хвилин.",
+        voiceScheduleCancelled: "Запланований старт скасовано."
     )
 }
 
@@ -8550,7 +8778,6 @@ extension ForkMeetingStrings {
         pictureMeetingWindowCaption: "检测到的会议窗口；未检测到会议而手动开始录制时，为最前面的窗口。",
         // MARK: Detection
         offerRecord: "录制",
-        offerNotNow: "这次不要",
         offerAlwaysFormat: "%@ 总是录制",
         offerNeverFormat: "%@ 永不录制",
         offerMore: "更多选项",
@@ -8781,13 +9008,13 @@ extension ForkMeetingStrings {
         cardMarkHelp: "标记此刻",
         cardMarked: "已标记",
         indicatorTitle: "录制指示器",
-        islandActivity: "在收起的岛中显示录制",
+        islandActivity: "在收起的灵动岛中显示录制",
         islandActivityCaption: "已录制的时间和声音电平显示在摄像头旁。点按一下即可打开录制控制。",
         indicatorPill: "浮动指示器",
         indicatorAuto: "自动",
         indicatorBoth: "始终",
-        indicatorAutoCaption: "收起的岛在被录制的屏幕上显示录制时，它会隐藏；岛被隐藏、处于全屏或显示其他活动时，它会回来。",
-        indicatorBothCaption: "它会一直显示在岛旁边。",
+        indicatorAutoCaption: "收起的灵动岛在被录制的屏幕上显示录制时，它会隐藏；灵动岛被隐藏、处于全屏或显示其他活动时，它会回来。",
+        indicatorBothCaption: "它会一直显示在灵动岛旁边。",
         // MARK: Finish C
         soundOnly: "仅声音",
         soundOnlyCaption: "没有画面：会议的声音和你的麦克风，保存为 .m4a 文件。不需要屏幕录制权限，画质只影响画面。",
@@ -8796,9 +9023,9 @@ extension ForkMeetingStrings {
         offerRecordWithPicture: "连同画面录制",
         offerCaptureSoundOnlyFormat: "无画面 · 声音：%1$@ · 麦克风：%2$@",
         // MARK: Finish B
-        notificationsCaption: "可选：仅在岛和气泡都无法显示提示时使用，例如屏幕锁定时。",
+        notificationsCaption: "可选：仅在灵动岛和气泡都无法显示提示时使用，例如屏幕锁定时。",
         notifyTitle: "通知和声音",
-        notifyCaption: "每个开关都会在所有地方静音其事件：岛、气泡和系统通知。VoiceOver 仍会播报每一步。",
+        notifyCaption: "每个开关都会在所有地方静音其事件：灵动岛、气泡和系统通知。VoiceOver 仍会播报每一步。",
         notifyOffers: "录制提议",
         notifyOffersCaption: "检测到通话时。关闭后，通话仍会被识别，设为“总是”的仍会录制；其他的请用快捷键、命令栏或此页面开始。",
         notifyStart: "录制开始或继续",
@@ -8936,14 +9163,31 @@ extension ForkMeetingStrings {
         nudgeSetting: "会议真正开始时再次提议",
         nudgeCaption: "在你未回应的已检测通话中，其他人开始说话时，提议会再出现一次，2 分钟后再最后出现一次。为此只测量会议 App 声音的音量，不写入任何内容。没有“系统音频录制”时，会在一分钟的对话后改为聆听你的麦克风。",
         lookbackSetting: "保留最近 5 分钟的声音",
-        lookbackCaption: "已检测的通话被提议期间，会议 App 声音和你麦克风的最近 5 分钟保留在这台 Mac 的内存中，在你点按“录制”之前绝不写入磁盘。录制随后以这些声音开头，仅有声音：画面从点按时开始。通话结束、选择“这次不要”或“永不录制”、Mac 锁定或睡眠、App 退出以及关闭此选项时会被清空。在此期间，macOS 会将此 App 列为正在使用麦克风；橙色圆点已因通话而亮起。",
+        lookbackCaption: "已检测的通话被提议期间，会议 App 声音和你麦克风的最近 5 分钟保留在这台 Mac 的内存中，在你点按“录制”之前绝不写入磁盘。录制随后以这些声音开头，仅有声音：画面从点按时开始。通话结束、选择✕或“永不录制”、Mac 锁定或睡眠、App 退出以及关闭此选项时会被清空。在此期间，macOS 会将此 App 列为正在使用麦克风；橙色圆点已因通话而亮起。",
         lookbackKeptFormat: "已保留 +%@",
         lookbackMinutesFormat: "%d 分钟",
         lookbackSecondsFormat: "%d 秒",
         lookbackSoundOnlyFormat: "前 %@ 仅有声音",
         lookbackKeptBeforeFormat: "点击前已保留：前 %@",
         nudgeOffersOff: "“通知和声音”中已关闭录制提议：提议不会再次出现，也不会保留任何声音。",
-        lookbackNothingToKeep: "暂时无法保留任何内容：请先允许“系统音频录制”或麦克风。"
+        lookbackNothingToKeep: "暂时无法保留任何内容：请先允许“系统音频录制”或麦克风。",
+        // MARK: W2 F
+        offerLater: "稍后",
+        offerStartInFormat: "%d 分钟后开始",
+        offerWhenever: "我自己开始",
+        offerDismiss: "不再为此会议提议",
+        offerStartsInFormat: "%@ 后开始",
+        offerStartNow: "现在",
+        offerCancelStart: "取消",
+        offerCancelStartSpoken: "取消预定的开始",
+        offerLaterHelp: "稍后或在你想要时开始",
+        islandOfferLabelFormat: "检测到会议，%@",
+        islandOfferHint: "打开录制提议",
+        noticeNotOffered: "此通话不再提议",
+        noticeNotOfferedDetail: "仍可从灵动岛或命令栏开始录制。",
+        noticeNotOfferedShortcutDetail: "随时可从灵动岛、快捷键或命令栏开始录制。",
+        voiceScheduledFormat: "录制将在 %d 分钟后开始。",
+        voiceScheduleCancelled: "已取消预定的开始。"
     )
 }
 
@@ -9157,7 +9401,6 @@ extension ForkMeetingStrings {
         pictureMeetingWindowCaption: "偵測到的會議視窗；未偵測到會議而手動開始錄製時，為最前面的視窗。",
         // MARK: Detection
         offerRecord: "錄製",
-        offerNotNow: "這次不要",
         offerAlwaysFormat: "%@ 一律錄製",
         offerNeverFormat: "%@ 永不錄製",
         offerMore: "更多選項",
@@ -9388,13 +9631,13 @@ extension ForkMeetingStrings {
         cardMarkHelp: "標記此刻",
         cardMarked: "已標記",
         indicatorTitle: "錄製指示器",
-        islandActivity: "在收合的島中顯示錄製",
+        islandActivity: "在收合的動態島中顯示錄製",
         islandActivityCaption: "已錄製的時間和聲音電平會顯示在相機旁。按一下即可開啟錄製控制項目。",
         indicatorPill: "浮動指示器",
         indicatorAuto: "自動",
         indicatorBoth: "永遠",
-        indicatorAutoCaption: "收合的島在被錄製的螢幕上顯示錄製時，它會隱藏；島被隱藏、處於全螢幕或顯示其他活動時，它會回來。",
-        indicatorBothCaption: "它會一直顯示在島旁邊。",
+        indicatorAutoCaption: "收合的動態島在被錄製的螢幕上顯示錄製時，它會隱藏；動態島被隱藏、處於全螢幕或顯示其他活動時，它會回來。",
+        indicatorBothCaption: "它會一直顯示在動態島旁邊。",
         // MARK: Finish C
         soundOnly: "僅聲音",
         soundOnlyCaption: "沒有畫面：會議的聲音和你的麥克風，儲存為 .m4a 檔案。不需要螢幕錄製權限，畫質只影響畫面。",
@@ -9403,9 +9646,9 @@ extension ForkMeetingStrings {
         offerRecordWithPicture: "連同畫面錄製",
         offerCaptureSoundOnlyFormat: "無畫面 · 聲音：%1$@ · 麥克風：%2$@",
         // MARK: Finish B
-        notificationsCaption: "選用：僅在島和氣泡都無法顯示提示時使用，例如螢幕鎖定時。",
+        notificationsCaption: "選用：僅在動態島和氣泡都無法顯示提示時使用，例如螢幕鎖定時。",
         notifyTitle: "通知與聲音",
-        notifyCaption: "每個開關都會在所有地方將其事件靜音：島、氣泡和系統通知。VoiceOver 仍會朗讀每個步驟。",
+        notifyCaption: "每個開關都會在所有地方將其事件靜音：動態島、氣泡和系統通知。VoiceOver 仍會朗讀每個步驟。",
         notifyOffers: "錄製提議",
         notifyOffersCaption: "偵測到通話時。關閉後，通話仍會被辨識，設為「一律」的仍會錄製；其他的請用快速鍵、指令列或此頁面開始。",
         notifyStart: "錄製開始或繼續",
@@ -9543,14 +9786,31 @@ extension ForkMeetingStrings {
         nudgeSetting: "會議真正開始時再次提議",
         nudgeCaption: "在你未回應的已偵測通話中，其他人開始說話時，提議會再出現一次，2 分鐘後再最後出現一次。為此只測量會議 App 聲音的音量，不寫入任何內容。沒有「系統音訊錄製」時，會在一分鐘的對話後改為聆聽你的麥克風。",
         lookbackSetting: "保留最近 5 分鐘的聲音",
-        lookbackCaption: "已偵測的通話被提議期間，會議 App 聲音和你麥克風的最近 5 分鐘保留在這台 Mac 的記憶體中，在你點按「錄製」之前絕不寫入磁碟。錄製隨後以這些聲音開頭，僅有聲音：畫面從點按時開始。通話結束、選擇「這次不要」或「永不錄製」、Mac 鎖定或睡眠、App 結束以及關閉此選項時會被清空。在此期間，macOS 會將此 App 列為正在使用麥克風；橙色圓點已因通話而亮起。",
+        lookbackCaption: "已偵測的通話被提議期間，會議 App 聲音和你麥克風的最近 5 分鐘保留在這台 Mac 的記憶體中，在你點按「錄製」之前絕不寫入磁碟。錄製隨後以這些聲音開頭，僅有聲音：畫面從點按時開始。通話結束、選擇✕或「永不錄製」、Mac 鎖定或睡眠、App 結束以及關閉此選項時會被清空。在此期間，macOS 會將此 App 列為正在使用麥克風；橙色圓點已因通話而亮起。",
         lookbackKeptFormat: "已保留 +%@",
         lookbackMinutesFormat: "%d 分鐘",
         lookbackSecondsFormat: "%d 秒",
         lookbackSoundOnlyFormat: "前 %@ 僅有聲音",
         lookbackKeptBeforeFormat: "點按前已保留：前 %@",
         nudgeOffersOff: "「通知與聲音」中已關閉錄製提議：提議不會再次出現，也不會保留任何聲音。",
-        lookbackNothingToKeep: "暫時無法保留任何內容：請先允許「系統音訊錄製」或麥克風。"
+        lookbackNothingToKeep: "暫時無法保留任何內容：請先允許「系統音訊錄製」或麥克風。",
+        // MARK: W2 F
+        offerLater: "稍後",
+        offerStartInFormat: "%d 分鐘後開始",
+        offerWhenever: "我自己開始",
+        offerDismiss: "不再為此會議提議",
+        offerStartsInFormat: "%@ 後開始",
+        offerStartNow: "現在",
+        offerCancelStart: "取消",
+        offerCancelStartSpoken: "取消預定的開始",
+        offerLaterHelp: "稍後或在你想要時開始",
+        islandOfferLabelFormat: "偵測到會議，%@",
+        islandOfferHint: "打開錄製提議",
+        noticeNotOffered: "此通話不再提議",
+        noticeNotOfferedDetail: "仍可從動態島或指令列開始錄製。",
+        noticeNotOfferedShortcutDetail: "隨時可從動態島、快速鍵或指令列開始錄製。",
+        voiceScheduledFormat: "錄製將在 %d 分鐘後開始。",
+        voiceScheduleCancelled: "已取消預定的開始。"
     )
 }
 
@@ -9764,7 +10024,6 @@ extension ForkMeetingStrings {
         pictureMeetingWindowCaption: "偵測到的會議視窗；未偵測到會議而手動開始錄製時，為最前面的視窗。",
         // MARK: Detection
         offerRecord: "錄製",
-        offerNotNow: "今次唔使",
         offerAlwaysFormat: "%@ 一律錄製",
         offerNeverFormat: "%@ 永不錄製",
         offerMore: "更多選項",
@@ -9995,13 +10254,13 @@ extension ForkMeetingStrings {
         cardMarkHelp: "標記這一刻",
         cardMarked: "已標記",
         indicatorTitle: "錄製指示器",
-        islandActivity: "在收合的島中顯示錄製",
+        islandActivity: "在收合的動態島中顯示錄製",
         islandActivityCaption: "已錄製的時間和聲音電平會顯示在相機旁。按一下即可打開錄製控制項。",
         indicatorPill: "浮動指示器",
         indicatorAuto: "自動",
         indicatorBoth: "總是",
-        indicatorAutoCaption: "收合的島在被錄製的螢幕上顯示錄製時，它會隱藏；島被隱藏、處於全螢幕或顯示其他活動時，它會回來。",
-        indicatorBothCaption: "它會一直顯示在島旁邊。",
+        indicatorAutoCaption: "收合的動態島在被錄製的螢幕上顯示錄製時，它會隱藏；動態島被隱藏、處於全螢幕或顯示其他活動時，它會回來。",
+        indicatorBothCaption: "它會一直顯示在動態島旁邊。",
         // MARK: Finish C
         soundOnly: "只有聲音",
         soundOnlyCaption: "沒有畫面：會議的聲音和你的咪高風，儲存為 .m4a 檔案。不需要螢幕錄影權限，畫質只影響畫面。",
@@ -10010,9 +10269,9 @@ extension ForkMeetingStrings {
         offerRecordWithPicture: "連同畫面錄製",
         offerCaptureSoundOnlyFormat: "無畫面 · 聲音：%1$@ · 咪高風：%2$@",
         // MARK: Finish B
-        notificationsCaption: "選用：只在島和氣泡都無法顯示提示時使用，例如螢幕鎖定時。",
+        notificationsCaption: "選用：只在動態島和氣泡都無法顯示提示時使用，例如螢幕鎖定時。",
         notifyTitle: "通知與聲音",
-        notifyCaption: "每個開關都會在所有地方將其事件靜音：島、氣泡和系統通知。VoiceOver 仍會讀出每個步驟。",
+        notifyCaption: "每個開關都會在所有地方將其事件靜音：動態島、氣泡和系統通知。VoiceOver 仍會讀出每個步驟。",
         notifyOffers: "錄製提議",
         notifyOffersCaption: "偵測到通話時。關閉後，通話仍會被辨識，設為「一律」的仍會錄製；其他的請用快速鍵、指令列或此頁面開始。",
         notifyStart: "錄製開始或繼續",
@@ -10150,13 +10409,30 @@ extension ForkMeetingStrings {
         nudgeSetting: "會議真正開始時再次提議",
         nudgeCaption: "喺你未回應嘅已偵測通話入面，其他人開始講嘢時，提議會再出現一次，2 分鐘後再最後出現一次。為此只量度會議 App 聲音嘅音量，唔會寫入任何內容。冇「系統音訊錄製」時，會喺一分鐘對話之後改為聽你嘅咪高風。",
         lookbackSetting: "保留最近 5 分鐘嘅聲音",
-        lookbackCaption: "已偵測嘅通話被提議期間，會議 App 聲音同你咪高風嘅最近 5 分鐘會保留喺呢部 Mac 嘅記憶體入面，喺你撳「錄製」之前絕對唔會寫入磁碟。錄製之後會以呢啲聲音開頭，只有聲音：畫面由撳嗰刻開始。通話結束、揀「今次唔使」或「永不錄製」、Mac 鎖定或者睡眠、App 結束，同埋關閉呢個選項時會清空。期間 macOS 會將呢個 App 列為正在使用咪高風；橙色圓點已經因為通話亮咗。",
+        lookbackCaption: "已偵測嘅通話被提議期間，會議 App 聲音同你咪高風嘅最近 5 分鐘會保留喺呢部 Mac 嘅記憶體入面，喺你撳「錄製」之前絕對唔會寫入磁碟。錄製之後會以呢啲聲音開頭，只有聲音：畫面由撳嗰刻開始。通話結束、揀✕或「永不錄製」、Mac 鎖定或者睡眠、App 結束，同埋關閉呢個選項時會清空。期間 macOS 會將呢個 App 列為正在使用咪高風；橙色圓點已經因為通話亮咗。",
         lookbackKeptFormat: "已保留 +%@",
         lookbackMinutesFormat: "%d 分鐘",
         lookbackSecondsFormat: "%d 秒",
         lookbackSoundOnlyFormat: "頭 %@ 只有聲音",
         lookbackKeptBeforeFormat: "按下前已保留：頭 %@",
         nudgeOffersOff: "「通知與聲音」中已關閉錄製提議：提議唔會再出現，亦唔會保留任何聲音。",
-        lookbackNothingToKeep: "暫時未能保留任何內容：請先允許「系統音訊錄製」或者咪高風。"
+        lookbackNothingToKeep: "暫時未能保留任何內容：請先允許「系統音訊錄製」或者咪高風。",
+        // MARK: W2 F
+        offerLater: "稍後",
+        offerStartInFormat: "%d 分鐘後開始",
+        offerWhenever: "我自己開始",
+        offerDismiss: "唔再為呢個會議提議",
+        offerStartsInFormat: "%@ 後開始",
+        offerStartNow: "而家",
+        offerCancelStart: "取消",
+        offerCancelStartSpoken: "取消預定嘅開始",
+        offerLaterHelp: "稍後或者喺你想嘅時候開始",
+        islandOfferLabelFormat: "偵測到會議，%@",
+        islandOfferHint: "打開錄製提議",
+        noticeNotOffered: "呢個通話唔再提議",
+        noticeNotOfferedDetail: "仍然可以喺動態島或指令列開始錄製。",
+        noticeNotOfferedShortcutDetail: "隨時可以喺動態島、快速鍵或指令列開始錄製。",
+        voiceScheduledFormat: "錄製會喺 %d 分鐘後開始。",
+        voiceScheduleCancelled: "已取消預定嘅開始。"
     )
 }

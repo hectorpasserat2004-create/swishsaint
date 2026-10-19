@@ -270,6 +270,33 @@ extension ForkMeetingService {
         send(.dismiss(scope))
     }
 
+    // MARK: W2 F
+
+    /// The offers' switch on the page: what listens follows it, and so does
+    /// the offer up now, its card and the island's activity gone at once,
+    /// or back, folded where it was. Turned off, a start planned is called
+    /// off too: nothing would show it coming.
+    func offersSwitched() {
+        syncListening()
+        guard case let .offering(offer) = machine.phase else { return }
+        if offer.startsAt != nil, !ForkMeetingNotifyEvent.isOn(.offers, defaults: defaults) {
+            return send(.schedule(nil))
+        }
+        prepareSurfaces()
+        presenter.apply(.showOffer(offer), context: context)
+    }
+
+    /// "Later ▾ · Start in 5 min" (`delay`), or "Cancel" on the card of a
+    /// start planned (`nil`). The microphone is asked now, while the person
+    /// is there, if it never was: the start may come with nobody to answer.
+    func scheduleOffer(after delay: TimeInterval?) {
+        guard case .offering = machine.phase, isWanted, !terminating else { return }
+        if delay != nil {
+            Self.microphoneAnswer(asking: captureSettings().microphone != ForkMeetingCaptureSettings.microphoneOff) { _ in }
+        }
+        send(.schedule(delay))
+    }
+
     /// "Cancel" within 5 s of a start "Always" made: the file is thrown away.
     func cancelAutoStart() {
         send(.cancelAutoStart)
@@ -347,7 +374,8 @@ extension ForkMeetingService {
     func runDetection(_ effect: ForkMeetingMachine.Effect) {
         onDetectionEffect?(effect)
         switch effect {
-        case .showOffer, .collapseOffer, .hideOffer, .showUndo, .hideUndo, .showEndingSoon, .hideEndingSoon, .nudgeOffer:
+        case .showOffer, .collapseOffer, .hideOffer, .showUndo, .hideUndo, .showEndingSoon, .hideEndingSoon, .nudgeOffer,
+             .reopenOffer:
             // The presenter draws them (`ForkMeetingPresenter+Offer`), its
             // buttons configured with the others: "Settings" in the offer's
             // menu goes through `onFailureAction(.openMeetingsPage)`.
@@ -362,6 +390,9 @@ extension ForkMeetingService {
             detection.resolver.policies = policies
         case let .discard(folder, askedAgain):
             discardCancelled(folder, askedAgain: askedAgain)
+        case .startScheduled:
+            // As a click on Record, once this run of the machine is over.
+            DispatchQueue.main.async { [weak self] in self?.acceptOffer() }
         case .startCapture, .pauseCapture, .resumeCapture, .restartStream, .switchTarget, .stopCapture, .showPill,
              .notice, .announce, .notify, .writeSidecar, .beginFinalize:
             break

@@ -22,6 +22,7 @@ Les règles de `CONTRIBUTING.md` et de `docs/AI-CONTRIBUTIONS.md` (celles de l'o
 | Interrupteur on/off | Catalogue `ForkFeature` du fork (page « Extras » des Réglages). **Jamais** de nouveau cas dans `AppFeature` : il faudrait modifier une quinzaine de fichiers officiels. |
 | Tests | `Tests/Fork/` |
 | Scripts et CI du fork | `fork/`, `.github/workflows/fork-*.yml` |
+| Intégration visuelle à la Dynamic Island (section, activité, tuile, notice, réglages) | Toute intégration visuelle à l'île suit `Sources/Vorssaint/Fork/Notch/README.md`. |
 
 Si `ForkDefaults`, `ForkFeature` ou la page « Extras » n'existent pas encore, crée-les dans `Sources/Vorssaint/Fork/Core/`.
 

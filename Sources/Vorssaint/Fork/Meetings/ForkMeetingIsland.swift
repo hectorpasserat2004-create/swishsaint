@@ -39,7 +39,24 @@ enum ForkMeetingIsland {
     @discardableResult
     static func show(_ notice: ForkMeetingNotice, detail: String?, text: ForkMeetingStrings) -> Bool {
         guard isAvailable else { return false }
-        return NotchService.shared.show(notchNotice(for: notice, detail: detail, text: text))
+        let shown = notchNotice(for: notice, detail: detail, text: text)
+        guard NotchService.shared.show(shown) else { return false }
+        lastShown = shown
+        return true
+    }
+
+    /// The last notice the island took from a meeting: a click on it opens
+    /// the island's Meetings section (seam `notch-meetings9`).
+    private static var lastShown: NotchNotice?
+
+    /// A click on a meeting's notice in the closed island opens the
+    /// Meetings section, as a timer's opens Timer; with that section hidden,
+    /// the island's own choice stands.
+    static func activate(_ notice: NotchNotice) -> Bool {
+        let island = NotchService.shared
+        guard notice.event == .capture, notice == lastShown, island.modules.contains(.meetings) else { return false }
+        island.open(.meetings)
+        return true
     }
 
     static func notchNotice(for notice: ForkMeetingNotice, detail: String?, text: ForkMeetingStrings) -> NotchNotice {
@@ -67,6 +84,7 @@ enum ForkMeetingIsland {
         case .announcementCopied: return "doc.on.doc"
         case .askedAgain: return "arrow.uturn.backward.circle"
         case .marked: return "star.fill"
+        case .notOffered: return "bell.slash"
         }
     }
 
@@ -82,7 +100,7 @@ enum ForkMeetingIsland {
     @discardableResult
     static func present(_ card: ForkMeetingCard, id: UUID, height: CGFloat, fallback: @escaping () -> Void,
                         close: @escaping () -> Void, hover: @escaping (Bool) -> Void) -> Bool {
-        let actions = card.menu.isEmpty ? nil : AnyView(ForkMeetingCardMenu(card: card))
+        let actions = card.menu.isEmpty && card.dismiss == nil ? nil : AnyView(ForkMeetingCardTopActions(card: card))
         return present(AnyView(ForkMeetingCardView(card: card)), actions: actions, id: id, height: height,
                        fallback: fallback, close: close, hover: hover)
     }
@@ -146,6 +164,47 @@ enum ForkMeetingIsland {
         let geometry = island.geometry
         guard island.presentationWindow != nil, geometry.screen == screen.frame else { return nil }
         return geometry.frame(for: geometry.restingSize(showsContent: false))
+    }
+
+    // MARK: W2 F
+
+    /// Whether the closed island shows the offer's activity where the
+    /// meeting is: up, not hidden (in full screen, until hovered), meetings
+    /// its activity shown, on the meeting's display (`nil`: the one worked
+    /// on).
+    static func showsOfferActivity(on screen: NSScreen?) -> Bool {
+        let island = NotchService.shared
+        // A recording's strip, finishing another meeting, would stand in
+        // the offer's place: the offer is then shown nowhere in the island.
+        let shown = island.presentationWindow != nil && island.showsSystemFeedback && !island.hiddenInFullscreen
+            && NotchSupport.routes(.capture) && island.compactActivity == .meeting
+            && ForkMeetingIslandModel.shared.snapshot == nil
+        return ForkMeetingIslandRules.islandShowsRecording(activityShown: shown, islandScreen: island.geometry.screen,
+                                                          filmedScreen: screen?.frame, workedScreen: NSScreen.main?.frame)
+    }
+
+    /// Calls `outside` for each click in another app, anywhere outside the
+    /// island's surface, until the returned monitor is removed
+    /// (`NSEvent.removeMonitor`). Our own windows (the pill, the bubble,
+    /// the reminder) never report here: their clicks are theirs.
+    static func watchClicks(outside: @escaping () -> Void) -> Any? {
+        NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { _ in
+            let island = NotchService.shared
+            let point = NSEvent.mouseLocation
+            // The island's own exclusions: the menu bar's item, the
+            // accessibility keyboard.
+            guard (NSApp.delegate as? AppDelegate)?.isOverStatusItem(point) != true,
+                  !AssistiveKeyboard.ownsCocoaPoint(point) else { return }
+            let inside = island.geometry.contains(point, in: island.surfaceSize)
+            guard ForkMeetingOfferClick.collapses(offerShownInIsland: true, clickInsideIsland: inside) else { return }
+            outside()
+        }
+    }
+
+    /// Closes the island as a click away from it would, whatever its page
+    /// keeps: its card's `close` runs.
+    static func collapse() {
+        NotchService.shared.collapse()
     }
 
     /// Calls `change` on the main thread after the island moved or changed

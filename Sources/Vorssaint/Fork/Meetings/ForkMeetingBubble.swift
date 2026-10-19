@@ -15,6 +15,9 @@ struct ForkMeetingCard {
     struct Countdown {
         let until: Date
         let words: (Date) -> String
+        /// What VoiceOver reads at that instant, when the words are a
+        /// clock ("4:12"): a spoken duration (W2 F).
+        var spoken: ((Date) -> String)? = nil
     }
 
     struct Action {
@@ -27,6 +30,12 @@ struct ForkMeetingCard {
         /// Its title counts down instead, and its VoiceOver name with it
         /// (`title` is the first second's).
         var countdown: Countdown?
+        // MARK: W2 F
+        /// Its tooltip and VoiceOver hint: what Record will record.
+        var help: String?
+        /// Its name for VoiceOver when the title alone says too little
+        /// ("Now": "Record Now").
+        var label: String?
         let perform: () -> Void
     }
 
@@ -80,6 +89,21 @@ struct ForkMeetingCard {
         /// What VoiceOver reads at that instant.
         let spoken: (Date) -> String
     }
+
+    // MARK: W2 F
+
+    /// "Later ▾": a button that opens this menu, before the actions.
+    var later: [NotchMenuItem] = []
+    var laterTitle = ""
+    var laterHelp = ""
+    /// The words' tooltip: what a line cut short says in full.
+    var wordsHelp: String?
+    /// ✕: the offer's own way to say no for this meeting, in the island's
+    /// top row and in the bubble's corner: "Not Now" for VoiceOver, what it
+    /// does as its hint and tooltip.
+    var dismiss: (() -> Void)?
+    var dismissLabel = ""
+    var dismissHelp = ""
 }
 
 struct ForkMeetingCardView: View {
@@ -88,6 +112,13 @@ struct ForkMeetingCardView: View {
     var close: (() -> Void)?
     var closeLabel = ""
     @Environment(\.notchPresentation) private var inIsland
+    @Environment(\.colorScheme) private var colorScheme
+
+    /// Orange on the island's black; darker on a light bubble, where the
+    /// island's orange is too pale to read (W2 F).
+    private var alertTint: Color {
+        inIsland || colorScheme == .dark ? .orange : Color(red: 0.72, green: 0.33, blue: 0)
+    }
 
     /// The island is wide and short: one row, the buttons at its end. The
     /// bubble is narrow: the text wraps, the buttons go under it, at the
@@ -122,7 +153,7 @@ struct ForkMeetingCardView: View {
                         Spacer(minLength: 4)
                         if card.closable { closeButton }
                     }
-                    if !card.actions.isEmpty || !card.menu.isEmpty {
+                    if !card.actions.isEmpty || !card.menu.isEmpty || !card.later.isEmpty {
                         HStack(spacing: 8) {
                             if !card.menu.isEmpty {
                                 ForkMeetingCardMenu(card: card)
@@ -174,7 +205,7 @@ struct ForkMeetingCardView: View {
                 if let countdown = card.countdownLine {
                     ForkMeetingCountdownText(countdown: countdown)
                         .font(.system(size: 11, weight: .medium).monospacedDigit())
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(alertTint)
                 }
                 ForEach(Array(card.lines.enumerated()), id: \.offset) { _, line in
                     Text(line)
@@ -203,21 +234,28 @@ struct ForkMeetingCardView: View {
                 }
                 .labelStyle(ForkMeetingCardLineLabelStyle())
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.orange)
+                .foregroundStyle(alertTint)
             }
         }
         .accessibilityElement(children: .combine)
+        .modifier(ForkMeetingActionHelp(help: card.wordsHelp, hints: false))
     }
 
+    @ViewBuilder
     private var buttons: some View {
+        if !card.later.isEmpty {
+            ForkMeetingLaterButton(title: card.laterTitle, items: card.later, help: card.laterHelp)
+        }
         ForEach(Array(card.actions.enumerated()), id: \.offset) { _, action in
             actionButton(action)
         }
     }
 
+    /// The bubble's ×: the offer's ✕ when it has one, else the bubble's own.
     @ViewBuilder
     private var closeButton: some View {
-        if let close {
+        if let close = card.dismiss ?? close {
+            let label = card.dismiss == nil ? closeLabel : card.dismissLabel
             Button(action: close) {
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .bold))
@@ -226,8 +264,9 @@ struct ForkMeetingCardView: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
-            .help(closeLabel)
-            .accessibilityLabel(closeLabel)
+            .help(label)
+            .accessibilityLabel(label)
+            .accessibilityHint(card.dismiss == nil ? "" : card.dismissHelp)
         }
     }
 
@@ -268,7 +307,8 @@ struct ForkMeetingCardView: View {
             .frame(minHeight: inIsland ? 28 : 0)
         }
         .disabled(!action.enabled)
-        .accessibilityLabel(title)
+        .accessibilityLabel(action.label ?? title)
+        .modifier(ForkMeetingActionHelp(help: action.help))
         if inIsland {
             button
                 .buttonStyle(NotchButtonStyle(cornerRadius: 8))
@@ -290,6 +330,7 @@ struct ForkMeetingCountdownText: View {
         TimelineView(.periodic(from: ForkMeetingOfferTiming.tickStart(until: countdown.until, now: Date()), by: 1)) {
             context in
             Text(countdown.words(context.date))
+                .accessibilityLabel(countdown.spoken?(context.date) ?? countdown.words(context.date))
         }
     }
 }
@@ -301,6 +342,70 @@ private struct ForkMeetingCardLineLabelStyle: LabelStyle {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
             configuration.icon.font(.system(size: 10, weight: .semibold))
             configuration.title
+        }
+    }
+}
+
+// MARK: W2 F
+
+/// What a button records, as its tooltip and VoiceOver hint, when it says;
+/// or a tooltip alone (`hints: false`).
+private struct ForkMeetingActionHelp: ViewModifier {
+    let help: String?
+    var hints = true
+
+    func body(content: Content) -> some View {
+        if let help {
+            if hints { content.help(help).accessibilityHint(help) } else { content.help(help) }
+        } else {
+            content
+        }
+    }
+}
+
+/// "Later ▾", drawn as the card's other buttons are, opening a native menu
+/// (start in 5 or 15 minutes, or whenever the person wants) without taking
+/// the keyboard from the call.
+struct ForkMeetingLaterButton: View {
+    let title: String
+    let items: [NotchMenuItem]
+    /// Its tooltip: what it offers.
+    var help = ""
+    @Environment(\.notchPresentation) private var inIsland
+
+    var body: some View {
+        NotchMenuButton(title: title, items: items, cornerRadius: 8) {
+            HStack(spacing: 4) {
+                Text(title)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+                    .accessibilityHidden(true)
+            }
+            .font(.system(size: 12, weight: .semibold))
+            .lineLimit(1)
+            .fixedSize()
+            .foregroundStyle(inIsland ? AnyShapeStyle(Color.white) : AnyShapeStyle(.primary))
+            .padding(.horizontal, 10)
+            .frame(minHeight: inIsland ? 28 : 22)
+            .background(inIsland ? Color.white.opacity(0.08) : Color.primary.opacity(0.08),
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .help(help.isEmpty ? title : help)
+    }
+}
+
+/// The island's top row for a card: its ⋯, then its ✕ when it has one.
+struct ForkMeetingCardTopActions: View {
+    let card: ForkMeetingCard
+
+    var body: some View {
+        HStack(spacing: 2) {
+            if !card.menu.isEmpty { ForkMeetingCardMenu(card: card) }
+            if let dismiss = card.dismiss {
+                NotchIconButton(symbol: "xmark", title: card.dismissLabel, action: dismiss)
+                    .accessibilityHint(card.dismissHelp)
+            }
         }
     }
 }

@@ -217,7 +217,7 @@ private struct ForkMeetingNotifyToggle: View {
         // The offers' switch also starts or stops what listens for the
         // nudge and keeps the last minutes (`ForkMeetingListenPlan`).
         .onChange(of: isOn) { _, _ in
-            if event == .offers { ForkMeetingService.shared.syncListening() }
+            if event == .offers { ForkMeetingService.shared.offersSwitched() }
         }
     }
 }

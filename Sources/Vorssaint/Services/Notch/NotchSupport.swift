@@ -8,6 +8,8 @@ import CoreGraphics
 
 enum NotchModule: String, CaseIterable, Identifiable {
     case controls, mixer, music, clipboard, captures, files, system, tools, calendar, notifications, timer, camera, downloads, scratchpad, agents, watch
+    case meetings // FORK(notch-meetings)
+    static var meetingsHooks: (title: (AppLanguage) -> String, summary: () -> String, isAvailable: (UserDefaults) -> Bool) = ({ _ in "" }, { "" }, { _ in false }) // FORK(notch-meetings)
     var id: String { rawValue }
 
     var symbol: String {
@@ -31,6 +33,7 @@ enum NotchModule: String, CaseIterable, Identifiable {
         case .scratchpad: return "note.text"
         case .agents: return "sparkles"
         case .watch: return "eye"
+        case .meetings: return "person.2.wave.2" // FORK(notch-meetings2)
         }
     }
 
@@ -53,6 +56,7 @@ enum NotchModule: String, CaseIterable, Identifiable {
         case .scratchpad: return "p"
         case .agents: return "g"
         case .watch: return "o"
+        case .meetings: return "e" // FORK(notch-meetings2)
         }
     }
 
@@ -76,6 +80,7 @@ enum NotchModule: String, CaseIterable, Identifiable {
         case .scratchpad: return AppFeature.scratchpad.isAvailable(in: defaults)
         case .agents: return AppFeature.notchAgents.isAvailable(in: defaults)
         case .watch: return AppFeature.notchWatch.isAvailable(in: defaults)
+        case .meetings: return Self.meetingsHooks.isAvailable(defaults) // FORK(notch-meetings2)
         case .system:
             return [.monitorCPU, .monitorGPU, .monitorMemory, .monitorNetwork,
                     .monitorDisk, .monitorPower, .fanControl, .connectedDevices].contains { (feature: AppFeature) in
@@ -852,7 +857,7 @@ enum NotchCompactActivity: String, Identifiable {
         case .calendar: return .calendar
         case .music: return .music
         case .keepAwake: return .controls
-        case .meeting: return .controls // FORK(notch-meeting2)
+        case .meeting: return .meetings // FORK(notch-meeting2)
         }
     }
 
@@ -2755,6 +2760,7 @@ struct NotchGeometry: Equatable {
             // Lists and previews fill the chosen content budget.
             case .mixer, .calendar, .clipboard, .captures, .files, .notifications, .downloads, .camera, .scratchpad, .watch:
                 contentHeight = budget
+            case .meetings: contentHeight = budget // FORK(notch-meetings3)
             }
         }
         var preferredHeight = headerTopInset + headerChromeHeight + contentHeight

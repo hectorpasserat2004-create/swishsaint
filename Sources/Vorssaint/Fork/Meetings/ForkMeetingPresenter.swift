@@ -112,8 +112,13 @@ final class ForkMeetingPresenter {
         switch effect {
         case let .showPill(state):
             showPill(state)
+        case .notice(.notOffered):
+            showNotOffered()
         case let .notice(notice):
             lastShown = (notice, show(notice, detail: nil))
+        case .announce(.notOffered):
+            // With a shortcut set, the line names it too.
+            announce(ForkMeetingLiveText.sentences(text.noticeNotOffered, notOfferedDetail))
         case let .announce(announcement):
             announce(announcement.text(text))
         case let .notify(notice):
@@ -145,6 +150,12 @@ final class ForkMeetingPresenter {
             nudgeOffer(offer)
         case .nudgeOffer:
             break
+        case .startScheduled:
+            break
+        case let .reopenOffer(offer) where ForkMeetingNotifyEvent.isOn(.offers):
+            reopenOffer(offer)
+        case .reopenOffer:
+            hideOffer()
         }
         // What was said of a card gone is said again for the next one.
         if ForkMeetingSpoken.forgets(after: effect) { spoken.forget() }
@@ -625,7 +636,7 @@ final class ForkMeetingPresenter {
                 })
             }
         case .resumed, .microphone, .displayChanged, .neverOffered, .neverOfferedWebCalls, .alwaysChosen,
-             .announcementCopied, .askedAgain:
+             .announcementCopied, .askedAgain, .notOffered:
             tint = .accentColor
         case .marked:
             tint = .yellow

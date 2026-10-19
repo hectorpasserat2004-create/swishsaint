@@ -13,6 +13,7 @@ enum ForkBootstrap {
         ForkDefaults.register()
         ForkNotchDictations.start()
         ForkMeetingIslandStrip.start()
+        ForkMeetingIslandSection.start()
         // Once the official launch is done: the official Window Layout only
         // syncs while its feature is available, and is only told of an
         // Accessibility change while one of its own inputs is on. The

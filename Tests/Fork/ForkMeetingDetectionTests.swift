@@ -175,9 +175,10 @@ enum ForkMeetingDetectionTests {
                      "and records it as offered")
 
         var notNow = offered()
-        suite.expect(notNow.handle(.dismiss(.thisTime), now: at(2)) == [.hideOffer, .silence(meetA)]
+        suite.expect(notNow.handle(.dismiss(.thisTime), now: at(2))
+                        == [.hideOffer, .silence(meetA), .notice(.notOffered), .announce(.notOffered)]
                         && notNow.phase == .idle,
-                     "Not now closes the offer and sets this meeting aside")
+                     "Not now (✕) closes the offer, sets this meeting aside and says where it can still be recorded from")
         suite.expect(notNow.handle(.candidates([candidate(silenced: true)], request()), now: at(5)).isEmpty,
                      "so the same meeting, read again, is not offered again")
 
@@ -575,7 +576,7 @@ enum ForkMeetingDetectionTests {
         var tooLong: [String] = []
         for language in languages {
             let s = ForkMeetingStrings.strings(language)
-            let short = [s.offerRecord, s.offerNotNow, s.offerAlways("FaceTime"), s.offerNever("FaceTime"), s.offerMore,
+            let short = [s.offerRecord, s.offerAlways("FaceTime"), s.offerNever("FaceTime"), s.offerMore,
                          s.endingSoonTitle, s.endingSoon(seconds: 120), s.endingSoonContinue, s.undo(seconds: 5),
                          ForkMeetingNotice.neverOffered("FaceTime").title(s), s.noticeNeverDetail]
             tooLong += short.filter { $0.count > 28 }.map { "\(language.rawValue): \($0)" }
@@ -592,7 +593,7 @@ enum ForkMeetingDetectionTests {
                      },
                      "every language names the app, the meeting, the microphone and the seconds")
         let french = ForkMeetingStrings.strings(.fr)
-        suite.expect(french.offerRecord == "Enregistrer" && french.offerNotNow == "Pas cette fois"
+        suite.expect(french.offerRecord == "Enregistrer" && french.offerDismiss == "Ne plus proposer pour cette réunion"
                         && french.offerAlways("Meet") == "Toujours pour Meet"
                         && french.offerCapture(window: "Chrome", sound: "Chrome", microphone: "AirPods")
                             == "Fenêtre\u{00A0}: Chrome · son\u{00A0}: Chrome · micro\u{00A0}: AirPods"

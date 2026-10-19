@@ -106,9 +106,40 @@ final class ForkMeetingIslandModel: ObservableObject {
         markedWork = nil
         levels = { .silent }
         actions = ForkMeetingPill.Actions()
+        ForkMeetingLivePreview.shared.reset()
         context = ForkMeetingLiveContext()
+        showOffer(nil)
         show(.hidden)
     }
+
+    // MARK: W2 F
+
+    /// A call offered and not refused, as the closed island shows it while
+    /// nothing records (`ForkMeetingIslandRules.showsStrip`).
+    @Published private(set) var offer: ForkMeetingIslandOffer?
+
+    /// What the strip draws: the recording, else the offer.
+    var shown: ForkMeetingIslandShown? {
+        if let snapshot { return .recording(snapshot) }
+        return offer.map(ForkMeetingIslandShown.offer)
+    }
+
+    /// The presenter's offer, or `nil` once it is answered, refused or
+    /// gone. The island lays itself out again when that brings the strip in
+    /// or out, or changes what it reads.
+    func showOffer(_ offer: ForkMeetingIslandOffer?) {
+        guard offer != self.offer else { return }
+        let relayout = (offer == nil) != (self.offer == nil) || offer?.provider != self.offer?.provider
+            || offer?.phase.isScheduled != self.offer?.phase.isScheduled
+        self.offer = offer
+        if relayout { ForkMeetingIslandStrip.refreshIsland() }
+    }
+}
+
+/// What the meetings' strip draws in the closed island.
+enum ForkMeetingIslandShown: Equatable {
+    case recording(ForkMeetingIslandSnapshot)
+    case offer(ForkMeetingIslandOffer)
 }
 
 /// What a strip draws of a recording, as the island last showed it.
@@ -165,9 +196,14 @@ struct ForkMeetingIslandStrip: View {
     }
 
     var body: some View {
-        // Ending a recording clears its state before the strip has left.
-        NotchStripHold(model.snapshot, shows: model.state != .hidden) { snapshot in
-            if let snapshot { ticking(snapshot) }
+        // Ending a recording, or answering the offer, clears its state
+        // before the strip has left.
+        NotchStripHold(model.shown, shows: model.shown != nil) { shown in
+            switch shown {
+            case let .recording(snapshot): ticking(snapshot)
+            case let .offer(offer): offerTicking(offer)
+            case nil: EmptyView()
+            }
         }
     }
 
@@ -185,7 +221,7 @@ struct ForkMeetingIslandStrip: View {
 
     @ViewBuilder private func strip(_ snapshot: ForkMeetingIslandSnapshot, now: Date) -> some View {
         let reading = ForkMeetingIslandRules.clock(snapshot.elapsed(at: now))
-        Button { ForkMeetingLiveCard.shared.present() } label: {
+        Button { Self.open(from: service) } label: {
             if let size {
                 capsule(snapshot, reading: reading, size: size)
             } else {
@@ -325,6 +361,113 @@ struct ForkMeetingIslandStrip: View {
         return now.addingTimeInterval(-(elapsed - elapsed.rounded(.down)))
     }
 
+    // MARK: The offer (W2 F)
+
+    /// A start planned counts down once a second, at the second its
+    /// reading changes; "Meet · ⏺" never wakes.
+    @ViewBuilder private func offerTicking(_ offer: ForkMeetingIslandOffer) -> some View {
+        if case let .scheduled(startsAt, _) = offer.phase {
+            TimelineView(.periodic(from: ForkMeetingOfferTiming.tickStart(until: startsAt, now: Date()), by: 1)) { context in
+                offerStrip(offer, now: context.date)
+            }
+        } else {
+            offerStrip(offer, now: Date())
+        }
+    }
+
+    /// A click opens the offer again, in the island.
+    @ViewBuilder private func offerStrip(_ offer: ForkMeetingIslandOffer, now: Date) -> some View {
+        // The service's name beside the countdown where the wing has room
+        // (the capsule always has).
+        let named = size != nil || Self.offerNameFits(offer, in: displayGeometry ?? service.compactActivityGeometry)
+        let reading = ForkMeetingIslandRules.offerReading(offer, now: now, named: named)
+        Button { ForkMeetingPresenter.shared.openOfferFromIsland() } label: {
+            if let size {
+                offerCapsule(offer, reading: reading, now: now, size: size)
+            } else {
+                offerWings(offer, reading: reading, now: now)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(ForkMeetingIslandRules.offerLabel(offer, strings: text))
+        .accessibilityValue(ForkMeetingIslandRules.offerValue(offer, now: now, language: l10n.language, strings: text))
+        .accessibilityHint(text.islandOfferHint)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("notch.meeting.offer")
+        .onChange(of: NotchAgentSupport.readingShape(reading)) { _, _ in
+            DispatchQueue.main.async { service.refreshPresentation() }
+        }
+    }
+
+    private func offerWings(_ offer: ForkMeetingIslandOffer, reading: String, now: Date) -> some View {
+        let geometry = displayGeometry ?? service.compactActivityGeometry
+        let height = geometry.compactActivityContentHeight
+        let wing = geometry.compactActivityWingWidth
+        let iconSize = NotchTimerSupport.stripIconSize(height: height)
+        let textSize = NotchTimerSupport.stripTextSize(height: height)
+        let side = Self.markSide(iconSize: iconSize)
+        return HStack(spacing: 0) {
+            Group {
+                if wing >= 28 {
+                    ForkMeetingIslandOfferMark(offer: offer, now: now, side: side)
+                }
+            }
+            .padding(.leading, geometry.compactActivityEdgeInset(boxHeight: side, radius: side / 2))
+            .frame(width: wing, height: height, alignment: .leading)
+            Color.clear.frame(width: geometry.compactActivityCameraGap)
+            Group {
+                if wing >= 42 {
+                    offerReadingText(offer, reading: reading, font: .system(size: textSize, weight: .medium))
+                }
+            }
+            .padding(.trailing, geometry.compactActivityEdgeInset(boxHeight: textSize * 0.72, radius: 0))
+            .frame(width: wing, height: height, alignment: .trailing)
+        }
+        .frame(height: height)
+        .contentShape(Rectangle())
+        .padding(.horizontal, geometry.compactActivityHorizontalPadding)
+        .padding(.top, geometry.compactActivityTopPadding)
+    }
+
+    private func offerCapsule(_ offer: ForkMeetingIslandOffer, reading: String, now: Date, size: CGSize) -> some View {
+        let geometry = displayGeometry ?? service.geometry
+        let side = NotchCapsuleLayout.side(geometry)
+        return HStack(spacing: NotchCapsuleLayout.spacing) {
+            ForkMeetingIslandOfferMark(offer: offer, now: now, side: NotchCapsuleLayout.symbolSize)
+                .frame(width: NotchCapsuleLayout.symbolWidth)
+            offerReadingText(offer, reading: reading, font: Font(NotchCapsuleLayout.readingFont as CTFont))
+        }
+        .padding(.leading, side + NotchCapsuleLayout.endPadding)
+        .padding(.trailing, side + NotchCapsuleLayout.endPadding)
+        .frame(width: size.width, height: geometry.stripHeight)
+        .foregroundStyle(.white)
+        .contentShape(Rectangle())
+    }
+
+    /// Grey while it only waits, white while it counts down: nothing red,
+    /// nothing records yet.
+    private func offerReadingText(_ offer: ForkMeetingIslandOffer, reading: String, font: Font) -> some View {
+        Text(reading)
+            .font(font).monospacedDigit()
+            .foregroundStyle(.white.opacity(offer.phase.isScheduled ? 1 : 0.75))
+            .lineLimit(1).minimumScaleFactor(0.65)
+            .fixedSize(horizontal: size != nil, vertical: false)
+            .modifier(NotchRollingDigits(value: reading, countsDown: true, everySecond: false))
+            .modifier(ForkMeetingIslandOfferAttention(nudges: offer.nudges))
+    }
+
+    /// A click on the strip opens the Meetings section, as the timer's
+    /// opens Timer, with the same choice of what the island opens on;
+    /// with that section hidden, the live card holds the controls.
+    static func open(from service: NotchService) {
+        if service.modules.contains(.meetings) {
+            service.openActivity(.meetings)
+        } else {
+            ForkMeetingLiveCard.shared.present()
+        }
+    }
+
     // MARK: Measures
 
     /// Between the mark and the meters.
@@ -342,8 +485,24 @@ struct ForkMeetingIslandStrip: View {
         let shows = ForkMeetingIslandRules.showsStrip(
             enabled: defaults.bool(forKey: ForkFeature.meetings.enabledKey),
             indicator: ForkMeetingIndicator(stored: defaults.string(forKey: ForkDefaultsKey.meetingsIndicator)),
-            state: ForkMeetingIslandModel.shared.state)
-        return shows ? [.meeting] : []
+            state: ForkMeetingIslandModel.shared.state, offer: ForkMeetingIslandModel.shared.offer)
+        guard shows else { return [] }
+        let model = ForkMeetingIslandModel.shared
+        if model.state == .hidden, let offer = model.offer,
+           !ForkMeetingIslandRules.listsOffer(scheduled: offer.phase.isScheduled, otherActivityLive: officialActivityLive) {
+            return []
+        }
+        return [.meeting]
+    }
+
+    /// One of the island's own live activities is up: the official list,
+    /// read from the island's own flags, never through the hook (it would
+    /// ask itself).
+    private static var officialActivityLive: Bool {
+        let island = NotchService.shared
+        return island.hasTimerActivity || island.hasWatchActivity || island.hasDownloadActivity
+            || island.hasAgentActivity || island.hasCalendarActivity || island.hasMusicActivity
+            || island.hasKeepAwakeActivity
     }
 
     /// The wider of the two sides, the mark or the time, drawn as the strip
@@ -355,9 +514,15 @@ struct ForkMeetingIslandStrip: View {
                                                         wing: NotchTimerSupport.stripWingRange.lowerBound)
         let height = provisional.compactActivityContentHeight
         let textSize = NotchTimerSupport.stripTextSize(height: height)
-        let reading = (NotchAgentSupport.readingShape(currentReading) as NSString)
-            .size(withAttributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: textSize, weight: .medium)])
-            .width.rounded(.up)
+        var reading = readingWidth(currentReading(named: false), textSize: textSize)
+        // A countdown takes the service's name too, when the wing allows it.
+        if ForkMeetingIslandModel.shared.snapshot == nil, ForkMeetingIslandModel.shared.offer?.phase.isScheduled == true {
+            let named = readingWidth(currentReading(named: true), textSize: textSize)
+            let inset = provisional.compactActivityEdgeInset(boxHeight: textSize * 0.72, radius: 0)
+            let room = geometry.compactSideRoom ?? 0
+            let limit = min(NotchTimerSupport.stripWingRange.upperBound, room.isFinite && room >= 64 ? room : .infinity)
+            if named + inset + NotchTimerSupport.stripCameraGap <= limit { reading = named }
+        }
         let side = markSide(iconSize: NotchTimerSupport.stripIconSize(height: height))
         var mark = side + provisional.compactActivityEdgeInset(boxHeight: side, radius: side / 2)
         // Room for the microphone crossed out beside the mark, when it is.
@@ -373,6 +538,12 @@ struct ForkMeetingIslandStrip: View {
     /// and the time (seam `notch-meeting3`).
     static func capsuleSize(geometry: NotchGeometry) -> CGSize {
         let layout = NotchCapsuleLayout.self
+        if ForkMeetingIslandModel.shared.snapshot == nil, ForkMeetingIslandModel.shared.offer != nil {
+            // The offer: its mark, then the provider, the time left, or both.
+            let content = layout.symbolWidth + layout.spacing
+                + layout.width(NotchAgentSupport.readingShape(currentReading(named: true)), font: layout.readingFont)
+            return layout.surface(content: content, maximum: layout.Maximum.activity, geometry: geometry)
+        }
         let meters = ForkMeetingIslandModel.shared.phase?.acceptsControls == true
             ? ForkMeetingIslandMeters.width + layout.spacing : 0
         let content = layout.symbolWidth + layout.spacing + meters
@@ -380,9 +551,33 @@ struct ForkMeetingIslandStrip: View {
         return layout.surface(content: content, maximum: layout.Maximum.activity, geometry: geometry)
     }
 
-    /// The time as the strip reads it now.
-    private static var currentReading: String {
-        ForkMeetingIslandRules.clock(ForkMeetingIslandModel.shared.elapsed(at: Date()))
+    /// The time as the strip reads it now; for an offer, the provider or
+    /// the time left before its start, with the provider (`named`).
+    private static func currentReading(named: Bool) -> String {
+        let model = ForkMeetingIslandModel.shared
+        if model.snapshot == nil, let offer = model.offer {
+            return ForkMeetingIslandRules.offerReading(offer, now: Date(), named: named)
+        }
+        return ForkMeetingIslandRules.clock(model.elapsed(at: Date()))
+    }
+
+    private static var currentReading: String { currentReading(named: false) }
+
+    /// A reading's width as the wings draw it, its digits all "0".
+    private static func readingWidth(_ reading: String, textSize: CGFloat) -> CGFloat {
+        (NotchAgentSupport.readingShape(reading) as NSString)
+            .size(withAttributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: textSize, weight: .medium)])
+            .width.rounded(.up)
+    }
+
+    /// The countdown's wing holds "Meet · 4:12" (W2 F): as `wing(in:)`
+    /// measured it, so the strip draws what the island made room for.
+    static func offerNameFits(_ offer: ForkMeetingIslandOffer, in geometry: NotchGeometry) -> Bool {
+        guard offer.phase.isScheduled else { return false }
+        let textSize = NotchTimerSupport.stripTextSize(height: geometry.compactActivityContentHeight)
+        let named = readingWidth(ForkMeetingIslandRules.offerReading(offer, now: Date(), named: true), textSize: textSize)
+        return named + geometry.compactActivityEdgeInset(boxHeight: textSize * 0.72, radius: 0)
+            + NotchTimerSupport.stripCameraGap <= geometry.compactActivityWingWidth
     }
 
     // MARK: The island
@@ -447,6 +642,85 @@ private struct ForkMeetingIslandMutedMicrophone: View {
             .frame(width: side, height: side)
             .accessibilityHidden(true)
     }
+}
+
+// MARK: W2 F
+
+/// The offer's mark: "⏺" in grey, an empty ring and its dot, while the
+/// call waits for an answer; a gauge filling toward a start planned. It
+/// springs once at each nudge (`ForkMeetingIslandOfferAttention`).
+private struct ForkMeetingIslandOfferMark: View {
+    let offer: ForkMeetingIslandOffer
+    let now: Date
+    let side: CGFloat
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ZStack {
+            switch offer.phase {
+            case .detected:
+                ZStack {
+                    Circle().strokeBorder(Color.white.opacity(0.75), lineWidth: max(1.2, side * 0.12))
+                    Circle().fill(Color.white.opacity(0.75)).frame(width: side * 0.4, height: side * 0.4)
+                }
+                .transition(.blurReplace)
+            case let .scheduled(startsAt, scheduledAt):
+                // The offer's own mark, its ring filling in orange toward the
+                // start: never the gauge of a file being finished.
+                let line = max(1.2, side * 0.12)
+                ZStack {
+                    Circle().strokeBorder(Color.white.opacity(0.3), lineWidth: line)
+                    Circle()
+                        .trim(from: 0, to: max(0.02, ForkMeetingOfferTiming.progress(from: scheduledAt, until: startsAt, now: now)))
+                        .stroke(Color.orange, style: StrokeStyle(lineWidth: line, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                        .padding(line / 2)
+                    Circle().fill(Color.orange).frame(width: side * 0.4, height: side * 0.4)
+                }
+                .transition(.blurReplace)
+            }
+        }
+        .frame(width: side, height: side)
+        .animation(reduceMotion ? nil : .smooth(duration: 0.3), value: offer.phase.isScheduled)
+        .modifier(ForkMeetingIslandOfferAttention(nudges: offer.nudges))
+        .accessibilityHidden(true)
+    }
+}
+
+/// "It's started": the offer's activity springs up and glows once, then
+/// settles; with Reduce Motion it only lights up a moment, in place.
+struct ForkMeetingIslandOfferAttention: ViewModifier {
+    let nudges: Int
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var raised = false
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(raised && !reduceMotion ? 1.25 : 1)
+            .shadow(color: Color.white.opacity(raised ? 0.8 : 0), radius: raised ? 5 : 0)
+            .onChange(of: nudges) { _, _ in
+                let still = reduceMotion
+                if still {
+                    var instant = Transaction()
+                    instant.disablesAnimations = true
+                    withTransaction(instant) { raised = true }
+                } else {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.45)) { raised = true }
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + (still ? 1.2 : ForkMeetingIslandOfferAttention.bounce)) {
+                    if still {
+                        var instant = Transaction()
+                        instant.disablesAnimations = true
+                        withTransaction(instant) { raised = false }
+                    } else {
+                        withAnimation(.smooth(duration: 0.35)) { raised = false }
+                    }
+                }
+            }
+    }
+
+    /// The spring's way up, before the card opens over it.
+    static let bounce: TimeInterval = 0.45
 }
 
 /// A small ring: filled as far as the final pass went, or a turning arc
