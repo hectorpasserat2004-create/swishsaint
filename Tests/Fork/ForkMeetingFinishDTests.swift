@@ -107,6 +107,17 @@ enum ForkMeetingFinishDTests {
         }
         suite.expect(last.nudge && last.last && seconds == 120,
                      "then a last time after 2 minutes of conversation")
+        var call = ForkMeetingNudgePlan()
+        _ = call.second(meeting: meetA, source: .app, speaking: true, microphoneOpen: true)
+        var elapsed = 0
+        var lastOne = (nudge: false, last: false)
+        while !lastOne.nudge, elapsed < 1_000 {
+            elapsed += 1
+            // The others talk one second in three; the person's microphone stays open.
+            lastOne = call.second(meeting: meetA, source: .app, speaking: elapsed % 3 == 0, microphoneOpen: true)
+        }
+        suite.expect(lastOne.last && elapsed == 120,
+                     "the 2 minutes are the call's, the person's own turns included, and it comes while someone talks")
         let more = (0..<600).contains { _ in plan.second(meeting: meetA, source: .app, speaking: true,
                                                          microphoneOpen: true).nudge }
         suite.expect(!more && !plan.wantsMore(for: meetA), "never a third time")
@@ -321,10 +332,10 @@ enum ForkMeetingFinishDTests {
                         == "+4\u{00A0}min 12\u{00A0}s déjà gardées",
                      "in French too")
         suite.expect(ForkMeetingLookbackText.soundOnly(seconds: 252, strings: french)
-                        == "Les 5 premières minutes\u{00A0}: son seulement"
+                        == "Les 4 premières minutes\u{00A0}: son seulement"
                         && ForkMeetingLookbackText.soundOnly(seconds: 40, strings: french)
                         == "La première minute\u{00A0}: son seulement",
-                     "the detail says how the file begins, in whole minutes")
+                     "the detail says how the file begins, to the nearest minute")
         suite.expect(french.nudgeTitle == "Ça a commencé · Enregistrer\u{00A0}?"
                         && ForkMeetingAnnouncement.nudged("Point hebdo").text(english)
                         == "Point hebdo has started. Do you want to record it?",

@@ -272,14 +272,17 @@ final class ForkMeetingWriter: @unchecked Sendable {
         if placeholder == nil { placeholder = Self.blackFrame(outputSize) }
         var second: Int64 = 0
         while second * Int64(Self.sampleRate) < total, !failed {
-            if let placeholder { writeVideo(placeholder, at: CMTime(value: second, timescale: 1)) }
+            if let placeholder {
+                waitUntilReady(videoInput)
+                writeVideo(placeholder, at: CMTime(value: second, timescale: 1))
+            }
             let from = second * Int64(Self.sampleRate)
             let count = min(Int64(Self.sampleRate), total - from)
             for track in Track.allCases where track.rawValue < plan.tracks.count && track.rawValue < kept.rings.count {
                 let samples = Self.lookbackSamples(plan.tracks[track.rawValue], ring: kept.rings[track.rawValue],
                                                    from: from, count: Int(count))
                 guard let placement = timelines[track.rawValue].place(start: from, count: count) else { continue }
-                waitUntilReady(track)
+                waitUntilReady(audioInputs[track.rawValue])
                 writeSamples(Array(samples.dropFirst(Int(placement.skip))), at: placement.start, track: track)
             }
             second += 1
@@ -313,9 +316,9 @@ final class ForkMeetingWriter: @unchecked Sendable {
         return out
     }
 
-    private func waitUntilReady(_ track: Track) {
+    private func waitUntilReady(_ input: AVAssetWriterInput) {
         var waited = 0
-        while !audioInputs[track.rawValue].isReadyForMoreMediaData, waited < 500 {
+        while !input.isReadyForMoreMediaData, waited < 500 {
             usleep(1_000)
             waited += 1
         }

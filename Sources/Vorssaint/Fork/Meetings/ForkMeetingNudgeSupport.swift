@@ -173,6 +173,9 @@ struct ForkMeetingNudgePlan: Equatable {
     /// Once a second while the offer waits: whether to nudge now, and if it
     /// is the last one. `speaking`: the gate hears speech now (3 s in the
     /// last 10); `microphoneOpen`: the meeting app records its microphone.
+    /// After the first nudge, the call's time counts (its microphone open,
+    /// or voices heard), and the last nudge comes 2 minutes on, while
+    /// someone talks.
     mutating func second(meeting: ForkMeetingIdentity, source: Source, speaking: Bool,
                          microphoneOpen: Bool) -> (nudge: Bool, last: Bool) {
         if self.meeting != meeting {
@@ -180,8 +183,9 @@ struct ForkMeetingNudgePlan: Equatable {
             nudges = 0
             talk = 0
         }
-        guard nudges < Self.most, speaking else { return (false, false) }
+        guard nudges < Self.most else { return (false, false) }
         if nudges == 0 {
+            guard speaking else { return (false, false) }
             switch source {
             case .app:
                 // Others talking while the person is in the call (its app
@@ -195,8 +199,8 @@ struct ForkMeetingNudgePlan: Equatable {
             talk = 0
             return (true, false)
         }
-        talk += 1
-        guard talk >= Self.secondAfter else { return (false, false) }
+        if microphoneOpen || speaking { talk += 1 }
+        guard talk >= Self.secondAfter, speaking else { return (false, false) }
         nudges = Self.most
         return (true, true)
     }
@@ -462,9 +466,9 @@ enum ForkMeetingLookbackText {
         return String(format: s.lookbackMinutesFormat, minutes) + " " + String(format: s.lookbackSecondsFormat, rest)
     }
 
-    /// "The first 4 minutes: sound only", in whole minutes rounded up.
+    /// "The first 4 minutes: sound only", in whole minutes, the nearest.
     static func soundOnly(seconds: TimeInterval, strings s: ForkMeetingStrings) -> String {
-        let minutes = max(1, Int((seconds / 60).rounded(.up)))
+        let minutes = max(1, Int((seconds / 60).rounded()))
         return minutes == 1 ? s.lookbackSoundOnlyOne : String(format: s.lookbackSoundOnlyFormat, minutes)
     }
 }

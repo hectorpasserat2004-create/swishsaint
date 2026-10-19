@@ -20,6 +20,9 @@ struct ForkMeetingListening {
     var asleep = false
     /// Each nudge sent, for the recipe harness.
     var onNudge: ((ForkMeetingIdentity, Bool) -> Void)?
+    /// A harness's stand-in for the app's tap, which must not raise the
+    /// system's audio permission prompt; `nil`: the official tap.
+    var makeTap: ForkMeetingRecorder.TapMaker?
 }
 
 /// "I forget to start the recording": while a detected meeting is offered
@@ -50,7 +53,9 @@ extension ForkMeetingService {
         facts.asleep = listening.asleep
         facts.terminating = terminating
         facts.systemAudio = defaults.object(forKey: ForkDefaultsKey.meetingsSystemAudioVerified) as? Bool == true
+        // Allowed by macOS, and not turned off on the Meetings page.
         facts.microphoneAllowed = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+            && captureSettings().microphone != ForkMeetingCaptureSettings.microphoneOff
         let plan = ForkMeetingListenPlan.plan(facts)
         listening.facts = facts
 
@@ -75,7 +80,8 @@ extension ForkMeetingService {
                 let listener = ForkMeetingCallListener(
                     plan: plan, appPID: appPID,
                     microphoneChoice: ForkMeetingMicrophoneChoice(stored: captureSettings().microphone),
-                    meetingDevice: meetingMicrophone(for: candidate), lookback: listening.lookback
+                    meetingDevice: meetingMicrophone(for: candidate), lookback: listening.lookback,
+                    makeTap: listening.makeTap ?? { await RecorderSystemAudioTap.make(hearing: $0) }
                 ) { [weak self] app, microphone in
                     self?.listeningSecond(meeting, app: app, microphone: microphone)
                 }
