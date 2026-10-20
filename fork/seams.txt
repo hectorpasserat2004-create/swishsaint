@@ -45,3 +45,6 @@ notch-meetings6    Sources/Vorssaint/UI/Settings/NotchContentEditor.swift      #
 notch-meetings7    Sources/Vorssaint/UI/Settings/NotchSettings.swift           # réunions : options de la section (Contenu), pas d'AppFeature, et lien vers Extras tant que Réunions est coupé
 notch-meetings8    Sources/Vorssaint/UI/Settings/NotchSettings.swift           # réunions : carte « Réunions » de l'onglet Activité (la réunion dans l'île fermée)
 notch-meetings9    Sources/Vorssaint/Services/Notch/NotchService.swift         # réunions : un clic sur la notice d'une réunion ouvre la section Réunions
+notch-calendar-crm   Sources/Vorssaint/Services/Notch/NotchCalendarService.swift  # calendrier de l'île : chaque lecture reçoit les RDV du CRM (fusionnés, sans doublon) ; le compte à rebours et la tuile les voient aussi
+notch-calendar-crm2  Sources/Vorssaint/UI/Notch/NotchCalendarView.swift          # calendrier de l'île : la carte d'un RDV avec visio ou du CRM (Rejoindre, Copier le lien, menu) — hors de NotchCalendarEventRow, extrait par generate_sources.py
+notch-calendar-crm3  Sources/Vorssaint/UI/Settings/NotchSettings.swift          # calendrier de l'île : réglage « Afficher les RDV du CRM » dans Contenu › Calendrier (seulement avec un CRM importé)

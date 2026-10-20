@@ -93,6 +93,9 @@ FORK_SOURCES=(
     Sources/Vorssaint/Fork/Meetings/ForkMeetingTitleRules.swift
     Sources/Vorssaint/Fork/Meetings/ForkMeetingTranscriptFormat.swift
     Sources/Vorssaint/Fork/Meetings/ForkMeetingTranscriptSupport.swift
+    Sources/Vorssaint/Fork/Notch/Calendar/ForkCalendarAppointmentsStrings.swift
+    Sources/Vorssaint/Fork/Notch/Calendar/ForkCalendarAppointmentsSupport.swift
+    Sources/Vorssaint/Fork/Notch/Calendar/ForkCalendarVideoLink.swift
     Sources/Vorssaint/Fork/Update/ForkUpdateNotes.swift
     Sources/Vorssaint/Fork/Update/ForkUpdateStrings.swift
     Sources/Vorssaint/Fork/Update/ForkUpdateSupport.swift

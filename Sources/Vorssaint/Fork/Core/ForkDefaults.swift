@@ -133,6 +133,11 @@ enum ForkDefaultsKey {
     /// During a detected call, the last 5 minutes of sound are kept in
     /// memory and open the recording if one starts. Off by default.
     static let meetingsLookback = "fork.meetings.lookback"
+    // MARK: Island appointments
+    /// The CRM's upcoming appointments join the island's calendar, with
+    /// their video link (`ForkCalendarAppointments`); only with a CRM
+    /// imported. On by default.
+    static let meetingsIslandAppointments = "fork.meetings.islandAppointments"
     /// The meetings folder's path; empty: a folder in Movies, named in the
     /// person's language and saved here at the first recording. Machine
     /// state, like the official recorder's folder: kept out of the backup.
@@ -229,6 +234,7 @@ enum ForkDefaults {
         ForkDefaultsKey.meetingsSummarize: false,
         ForkDefaultsKey.meetingsNudge: true,
         ForkDefaultsKey.meetingsLookback: false,
+        ForkDefaultsKey.meetingsIslandAppointments: true,
     ]
 
     /// Where each setting lived in the test builds made before the fork

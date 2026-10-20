@@ -46,3 +46,11 @@ A profile never holds the token: it is typed once on the page, written at Save.
 
 The island's Meetings page reads `ForkMeetingExports.castralStatus(folder)` (phase, share, failure)
 and `ForkCastralStatus.short(_:)`, 28 characters at most.
+
+## The island's calendar
+
+`ForkCalendarAppointments` (`Fork/Notch/Calendar/`) reads `targets` with the same client and
+token, only while the island shows its calendar, at most every 5 minutes, from 12 hours ago to
+two weeks ahead, in memory only. Its setting is `fork.meetings.islandAppointments` (the CRM's
+block here, and the island's Content › Calendar); nothing shows while the island is visible in
+screenshots and videos.
