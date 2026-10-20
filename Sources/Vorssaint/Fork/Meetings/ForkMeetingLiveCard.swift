@@ -365,8 +365,9 @@ private struct ForkMeetingLiveCardClock: View {
             .fixedSize()
             .accessibilityElement()
             .accessibilityLabel(label)
-            // Spelled out once a second only for VoiceOver, which reads it.
-            .accessibilityValue(voiceOver ? ForkMeetingIslandRules.spokenDuration(elapsed, language: l10n.language) : "")
+            // Spelled out once a second only for VoiceOver or Switch Control.
+            .accessibilityValue(ForkMeetingIslandStrip.speaks(voiceOver)
+                                    ? ForkMeetingIslandRules.spokenDuration(elapsed, language: l10n.language) : "")
     }
 }
 

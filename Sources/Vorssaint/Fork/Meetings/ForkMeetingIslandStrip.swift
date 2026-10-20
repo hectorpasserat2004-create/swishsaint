@@ -230,8 +230,8 @@ struct ForkMeetingIslandStrip: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(ForkMeetingIslandRules.label(target: snapshot.context.target, strings: text))
-        // Spelled out once a second only for VoiceOver, which reads it.
-        .accessibilityValue(voiceOver ? ForkMeetingIslandRules.value(phase: snapshot.phase,
+        // Spelled out once a second only for VoiceOver or Switch Control.
+        .accessibilityValue(Self.speaks(voiceOver) ? ForkMeetingIslandRules.value(phase: snapshot.phase,
                                                                      elapsed: snapshot.elapsed(at: now),
                                                                      language: l10n.language, strings: text,
                                                                      diskMinutesLeft: model.diskMinutesLeft) : "")
@@ -347,6 +347,12 @@ struct ForkMeetingIslandStrip: View {
             .fixedSize(horizontal: size != nil, vertical: false)
             .modifier(NotchRollingDigits(value: reading, countsDown: false, everySecond: false))
             .animation(reduceMotion ? nil : .smooth(duration: 0.26), value: phase.clockIsAlert)
+    }
+
+    /// An assistive app reads the spoken time: VoiceOver (`voiceOver`, the
+    /// environment's, which redraws as it turns on) or Switch Control.
+    static func speaks(_ voiceOver: Bool) -> Bool {
+        voiceOver || NSWorkspace.shared.isVoiceOverEnabled || NSWorkspace.shared.isSwitchControlEnabled
     }
 
     static func readingColor(_ phase: ForkMeetingIslandPhase) -> Color {

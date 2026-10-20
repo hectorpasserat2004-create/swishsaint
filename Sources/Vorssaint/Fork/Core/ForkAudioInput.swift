@@ -33,10 +33,58 @@ enum ForkAudioInput {
     enum Mix: Equatable {
         /// Their average: everyone the array hears, as a meeting records it.
         case average
-        /// The loudest over the buffer (RMS), as is: a microphone array whose
-        /// other channels hear the room, or nothing, would otherwise thin out
-        /// the one voice dictation transcribes.
+        /// The loudest channel, as is: a microphone array whose other
+        /// channels hear the room, or nothing, would otherwise thin out the
+        /// one voice dictation transcribes. Kept from buffer to buffer
+        /// (`LoudestChannel`), so close microphones hearing the same voice
+        /// do not trade places at every buffer.
         case loudest
+    }
+
+    /// The channel `Mix.loudest` keeps, across a stream's buffers. Another
+    /// one takes over only once it has been clearly louder (`margin`) for
+    /// `buffersToSwitch` buffers in a row, and then through a short
+    /// crossfade: a switch at every buffer between equally loud
+    /// microphones, each a few samples off the others, clicks.
+    struct LoudestChannel: Equatable {
+        /// 1.5 dB, as a ratio of energies.
+        static let margin = 1.4125
+        static let buffersToSwitch = 3
+        /// About 1 ms at 48 kHz.
+        static let crossfadeFrames = 48
+
+        /// `nil` before the first buffer, or after the channel count changed.
+        private(set) var channel: Int?
+        private var channels = 0
+        private var challenger: Int?
+        private var streak = 0
+
+        init() {}
+
+        /// The channel to keep for a buffer of these energies (sums of
+        /// squares), and the one it takes over from, if any.
+        mutating func choose(energies: [Double]) -> (channel: Int, from: Int?) {
+            var loudest = 0
+            for index in energies.indices where energies[index] > energies[loudest] { loudest = index }
+            guard let current = channel, channels == energies.count, current < energies.count else {
+                self = LoudestChannel()
+                channels = energies.count
+                channel = loudest
+                return (loudest, nil)
+            }
+            guard loudest != current, energies[loudest] > energies[current] * Self.margin else {
+                challenger = nil
+                streak = 0
+                return (current, nil)
+            }
+            streak = challenger == loudest ? streak + 1 : 1
+            challenger = loudest
+            guard streak >= Self.buffersToSwitch else { return (current, nil) }
+            challenger = nil
+            streak = 0
+            channel = loudest
+            return (loudest, current)
+        }
     }
 
     enum Refusal: String, Error, Equatable {
@@ -150,6 +198,13 @@ enum ForkAudioInput {
     /// not hold them all.
     static func mono(_ list: UnsafeMutableAudioBufferListPointer, frames: Int, layout: Layout,
                      mix: Mix = .average) -> [Float]? {
+        var choice = LoudestChannel()
+        return mono(list, frames: frames, layout: layout, mix: mix, loudest: &choice)
+    }
+
+    /// The same, the loudest channel kept across buffers in `loudest`.
+    static func mono(_ list: UnsafeMutableAudioBufferListPointer, frames: Int, layout: Layout, mix: Mix,
+                     loudest choice: inout LoudestChannel) -> [Float]? {
         guard frames > 0, frames <= maximumFrames, list.count == layout.bufferCount else { return nil }
         let (needed, overflow) = frames.multipliedReportingOverflow(by: layout.stride)
         guard !overflow else { return nil }
@@ -169,24 +224,27 @@ enum ForkAudioInput {
             return value.isFinite ? value : 0
         }
         if mix == .loudest, layout.channels > 1 {
-            var loudest = 0
-            var loudestEnergy = -1.0
-            for channel in 0..<layout.channels {
+            let energies = (0..<layout.channels).map { channel -> Double in
                 let channelBase = base(channel)
                 var energy = 0.0
                 for frame in 0..<frames {
                     let value = Double(sample(channelBase, frame))
                     energy += value * value
                 }
-                // The first of equally loud channels wins.
-                if energy > loudestEnergy {
-                    loudest = channel
-                    loudestEnergy = energy
-                }
+                return energy
             }
-            let loudestBase = base(loudest)
+            let (kept, previous) = choice.choose(energies: energies)
+            let keptBase = base(kept)
             mixed.withUnsafeMutableBufferPointer { mixed in
-                for frame in 0..<frames { mixed[frame] = sample(loudestBase, frame) }
+                for frame in 0..<frames { mixed[frame] = sample(keptBase, frame) }
+                // A switch fades from the channel kept so far into the new one.
+                guard let previous else { return }
+                let previousBase = base(previous)
+                let fade = min(frames, LoudestChannel.crossfadeFrames)
+                for frame in 0..<fade {
+                    let weight = Float(frame + 1) / Float(fade + 1)
+                    mixed[frame] = sample(previousBase, frame) * (1 - weight) + mixed[frame] * weight
+                }
             }
             return mixed
         }
@@ -206,7 +264,8 @@ enum ForkAudioInput {
     }
 
     /// The PCM of `sample` copied out and made one channel by `mix`.
-    static func mono(of sample: CMSampleBuffer, frames: Int, layout: Layout, mix: Mix = .average) -> [Float]? {
+    static func mono(of sample: CMSampleBuffer, frames: Int, layout: Layout, mix: Mix,
+                     loudest: inout LoudestChannel) -> [Float]? {
         guard frames > 0, frames <= maximumFrames, let frameCount = Int32(exactly: frames) else { return nil }
         let (size, overflow) = frames.multipliedReportingOverflow(by: layout.stride)
         guard !overflow, let byteSize = UInt32(exactly: size) else { return nil }
@@ -225,7 +284,7 @@ enum ForkAudioInput {
         guard CMSampleBufferCopyPCMDataIntoAudioBufferList(sample, at: 0, frameCount: frameCount,
                                                            into: list.unsafeMutablePointer) == noErr
         else { return nil }
-        return mono(list, frames: frames, layout: layout, mix: mix)
+        return mono(list, frames: frames, layout: layout, mix: mix, loudest: &loudest)
     }
 
     /// The format of a one- or two-channel stream, through the failable
@@ -256,6 +315,8 @@ final class ForkAudioInputConverter {
     private let downmix: Bool
     /// Three channels or more: averaged, or the loudest kept.
     private let manyChannels: ForkAudioInput.Mix
+    /// The channel `.loudest` keeps, carried from buffer to buffer.
+    private var loudest = ForkAudioInput.LoudestChannel()
     private let log: Logger
     private var converter: AVAudioConverter?
     /// For the log, once per converter: a refused stream, a mixed-down one.
@@ -274,6 +335,7 @@ final class ForkAudioInputConverter {
     /// The next buffer starts a new stream.
     func reset() {
         converter = nil
+        loudest = ForkAudioInput.LoudestChannel()
     }
 
     /// Nil for a buffer that cannot be read: it is dropped, never fatal.
@@ -303,7 +365,8 @@ final class ForkAudioInputConverter {
             }
             return run(source)
         }
-        guard let mono = ForkAudioInput.mono(of: sample, frames: frames, layout: layout, mix: manyChannels)
+        guard let mono = ForkAudioInput.mono(of: sample, frames: frames, layout: layout, mix: manyChannels,
+                                             loudest: &loudest)
         else { return nil }
         if averagedChannels == nil {
             averagedChannels = layout.channels

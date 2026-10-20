@@ -254,12 +254,11 @@ final class ForkMeetingLevelBarsView: NSView {
     }
 
     /// Light or dark, and with Increase Contrast, as the pill's words.
+    /// A dynamic tint is resolved in the view's appearance too.
     private func refreshColor() {
-        if let tint {
-            color = tint.cgColor
-            return
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            color = (tint ?? NSColor.labelColor).cgColor
         }
-        effectiveAppearance.performAsCurrentDrawingAppearance { color = NSColor.labelColor.cgColor }
     }
 
     private func render() {

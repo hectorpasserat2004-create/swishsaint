@@ -18,6 +18,7 @@ enum ForkAudioInputTests {
         brokenLists(suite)
         loudest(suite)
         notNumbers(suite)
+        steadyChoice(suite)
     }
 
     // MARK: - Synthetic buffers
@@ -561,5 +562,72 @@ enum ForkAudioInputTests {
             suite.expect(loudest.count == frames && loudest.allSatisfy(\.isFinite),
                          "an infinite sample does not make its channel the loudest, nor reach the output")
         }
+    }
+
+    /// The loudest channel is kept from buffer to buffer: close microphones
+    /// hearing one voice never trade places at each buffer (they clicked),
+    /// and a real change of speaker crosses over smoothly.
+    private static func steadyChoice(_ suite: TestSuite) {
+        typealias Choice = ForkAudioInput.LoudestChannel
+        var choice = Choice()
+        suite.expect(choice.choose(energies: [1, 3, 2]) == (1, nil), "the first buffer takes the loudest")
+        suite.expect(choice.choose(energies: [1, 3, 4]) == (1, nil),
+                     "a channel 1.2 dB louder does not take over")
+        let louder: [Double] = [1, 1, 1.5]
+        suite.expect(choice.choose(energies: louder) == (1, nil) && choice.choose(energies: louder) == (1, nil),
+                     "nor one clearly louder for two buffers")
+        suite.expect(choice.choose(energies: louder) == (2, 1), "it takes over at the third buffer in a row")
+        suite.expect(choice.choose(energies: [3, 1, 1]) == (2, nil) && choice.choose(energies: [1, 1, 1]) == (2, nil)
+                        && choice.choose(energies: [3, 1, 1]) == (2, nil) && choice.choose(energies: [3, 1, 1]) == (2, nil),
+                     "an interrupted lead starts over")
+        suite.expect(choice.choose(energies: [1, 5]) == (1, nil), "a stream with another channel count starts afresh")
+
+        // Three microphones a few samples apart, equal gains, their own noise:
+        // ten seconds of 1 024-frame buffers, through the real reader.
+        let frames = 1_024, channels = 3, rate = 48_000.0
+        func voice(_ n: Int) -> Float {
+            let t = Double(n) / rate
+            let envelope = max(0, sin(2 * Double.pi * 4 * t))
+            let tone = sin(2 * Double.pi * 180 * t) + 0.5 * sin(2 * Double.pi * 900 * t)
+            return Float(envelope * 0.3 * tone)
+        }
+        func run(gains: (Int) -> [Float]) -> (switches: Int, worstStep: Float, naturalStep: Float) {
+            var state = Choice()
+            var seed: UInt64 = 42
+            var output: [Float] = []
+            var kept: [Int?] = []
+            for index in 0..<470 {
+                var channelsData: [[Float]] = Array(repeating: [], count: channels)
+                let gain = gains(index)
+                for channel in 0..<channels {
+                    channelsData[channel] = (0..<frames).map { frame -> Float in
+                        seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+                        let noise = Float(Double(seed >> 11) / Double(UInt64(1) << 53) * 2 - 1) * 0.01
+                        return gain[channel] * voice(index * frames + frame - 2 * channel) + noise
+                    }
+                }
+                planar(channelsData) { (list: UnsafeMutableAudioBufferListPointer, layout: ForkAudioInput.Layout) in
+                    output += ForkAudioInput.mono(list, frames: frames, layout: layout, mix: .loudest,
+                                                  loudest: &state) ?? []
+                }
+                kept.append(state.channel)
+            }
+            var switches = 0, worst: Float = 0, natural: Float = 0
+            for index in 1..<kept.count where kept[index] != kept[index - 1] { switches += 1 }
+            for sample in 1..<output.count {
+                let step = abs(output[sample] - output[sample - 1])
+                let atSwitch = sample % frames < ForkAudioInput.LoudestChannel.crossfadeFrames + 1
+                    && kept[sample / frames] != kept[max(0, sample / frames - 1)]
+                if atSwitch { worst = max(worst, step) } else { natural = max(natural, step) }
+            }
+            return (switches, worst, natural)
+        }
+        let equal = run { _ in [1, 1, 1] }
+        suite.expect(equal.switches == 0, "three equal microphones hearing one voice: no switch in 10 s (\(equal.switches))")
+        // The person turns to the third microphone after five seconds.
+        let turned = run { index in index < 235 ? [1, 0.4, 0.4] : [0.4, 0.4, 1] }
+        suite.expect(turned.switches == 1 && turned.worstStep <= turned.naturalStep,
+                     "a real change of speaker switches once, through a crossfade no steeper than the voice itself "
+                        + "(\(turned.switches) switch, step \(turned.worstStep) against \(turned.naturalStep))")
     }
 }
