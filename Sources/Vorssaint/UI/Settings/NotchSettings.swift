@@ -465,6 +465,7 @@ struct NotchSettings: View {
                       isOn: $calendarCountdown)
             switchRow("hourglass", calendar.timeLeft, caption: calendar.timeLeftHint, isOn: $calendarTimeLeft)
             switchRow("number", calendar.weekNumbers, isOn: $calendarWeekNumbers)
+            ForkCalendarAppointmentsSetting() // FORK(notch-calendar-crm3)
             if permissions.calendarAccess == .fullAccess { NotchCalendarSelection() }
         case .timer:
             let activities = FeatureStrings.notchActivities(l10n.language)

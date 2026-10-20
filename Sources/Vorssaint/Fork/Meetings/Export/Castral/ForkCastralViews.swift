@@ -170,6 +170,8 @@ struct ForkCastralRow: View {
             .font(.caption)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
+        // Its appointments in the island's calendar, as in the island's settings.
+        ForkCalendarAppointmentsSetting(place: .meetings)
         HStack {
             Spacer()
             Button(text.exportRemove, role: .destructive, action: remove)

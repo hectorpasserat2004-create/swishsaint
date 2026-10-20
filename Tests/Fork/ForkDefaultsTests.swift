@@ -46,7 +46,8 @@ enum ForkDefaultsTests {
                                            ForkDefaultsKey.meetingsNotifyResults, ForkDefaultsKey.meetingsSounds,
                                            ForkDefaultsKey.meetingsPauseShortcut, ForkDefaultsKey.meetingsMarkerShortcut,
                                            ForkDefaultsKey.meetingsSummarize,
-                                           ForkDefaultsKey.meetingsNudge, ForkDefaultsKey.meetingsLookback]
+                                           ForkDefaultsKey.meetingsNudge, ForkDefaultsKey.meetingsLookback,
+                                           ForkDefaultsKey.meetingsIslandAppointments]
         suite.expect(Set(ForkDefaults.legacyKeys.values) == Set(ForkDefaults.registered.keys).subtracting(addedSinceFork)
                         && ForkDefaults.legacyKeys.count == ForkDefaults.registered.count - addedSinceFork.count,
                      "every setting of the pre-fork test builds has its new name, and only those")

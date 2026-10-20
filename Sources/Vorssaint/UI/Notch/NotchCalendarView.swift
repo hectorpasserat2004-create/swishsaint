@@ -267,6 +267,7 @@ struct NotchCalendarView: View {
                                                   choose: { calendar.setCountdown($0, for: event) }) {
                                 openCalendar(showing: event)
                             }
+                            .forkAppointmentRow(event, day: group.day, now: now, isNext: event.id == next?.id, countdown: countdownChoice(event, now: now)) // FORK(notch-calendar-crm2)
                             .id(event.id)
                         }
                     }
