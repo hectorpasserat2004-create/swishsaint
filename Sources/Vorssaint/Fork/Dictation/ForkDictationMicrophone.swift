@@ -283,9 +283,10 @@ private final class CaptureSink: NSObject, AVCaptureAudioDataOutputSampleBufferD
     private let shared: ForkDictationMicrophone.Shared
     /// Capture queue only. Any microphone, three channels or more included,
     /// as 16 kHz mono; a buffer it cannot read is dropped (`ForkAudioInput`).
-    /// Two channels keep the first one, as always.
+    /// Two channels keep the first one, as always; three or more, the
+    /// loudest, the one the person speaks into.
     private let input = ForkAudioInputConverter(sampleRate: ForkDictationMicrophone.sampleRate, downmix: false,
-                                                category: "dictation")
+                                                manyChannels: .loudest, category: "dictation")
     private var generation = 0
 
     init(shared: ForkDictationMicrophone.Shared) {

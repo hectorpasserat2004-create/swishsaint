@@ -18,15 +18,26 @@ import os
 /// - one or two channels keep the path they always had: an `AVAudioFormat`
 ///   from the failable `init?(streamDescription:channelLayout:)`, and the
 ///   converter does the rest (resampling, and mixing down when asked);
-/// - three channels or more are read here and averaged to mono at their
-///   own rate, and only that mono goes to a converter, built from formats
-///   known to exist.
+/// - three channels or more are read here and made mono at their own rate
+///   (averaged for a meeting, the loudest kept for dictation: `Mix`), and
+///   only that mono goes to a converter, built from formats known to exist.
+///   A sample that is not a number (NaN, infinite) is read as silence.
 enum ForkAudioInput {
     static let maximumChannels = 64
     /// A rate outside this range is not a microphone or a call: refused.
     static let sampleRates: ClosedRange<Double> = 1_000...1_000_000
     /// About 87 s at 48 kHz in one buffer: anything bigger is a broken buffer.
     static let maximumFrames = 1 << 22
+
+    /// How a stream of three channels or more becomes one.
+    enum Mix: Equatable {
+        /// Their average: everyone the array hears, as a meeting records it.
+        case average
+        /// The loudest over the buffer (RMS), as is: a microphone array whose
+        /// other channels hear the room, or nothing, would otherwise thin out
+        /// the one voice dictation transcribes.
+        case loudest
+    }
 
     enum Refusal: String, Error, Equatable {
         case notAudio
@@ -134,9 +145,11 @@ enum ForkAudioInput {
         }
     }
 
-    /// The frames of `list`, in `layout`, averaged to one channel. Nil when
-    /// the list does not hold them all.
-    static func mono(_ list: UnsafeMutableAudioBufferListPointer, frames: Int, layout: Layout) -> [Float]? {
+    /// The frames of `list`, in `layout`, made one channel by `mix`; a
+    /// sample that is not a number counts as silence. Nil when the list does
+    /// not hold them all.
+    static func mono(_ list: UnsafeMutableAudioBufferListPointer, frames: Int, layout: Layout,
+                     mix: Mix = .average) -> [Float]? {
         guard frames > 0, frames <= maximumFrames, list.count == layout.bufferCount else { return nil }
         let (needed, overflow) = frames.multipliedReportingOverflow(by: layout.stride)
         guard !overflow else { return nil }
@@ -147,11 +160,41 @@ enum ForkAudioInput {
         }
         var mixed = [Float](repeating: 0, count: frames)
         let stride = layout.stride
+        func base(_ channel: Int) -> UnsafeRawPointer {
+            layout.interleaved ? bases[0] + channel * layout.bytes : bases[channel]
+        }
+        /// A sample that is not a number reads as silence.
+        func sample(_ base: UnsafeRawPointer, _ frame: Int) -> Float {
+            let value = layout.value(at: base + frame * stride)
+            return value.isFinite ? value : 0
+        }
+        if mix == .loudest, layout.channels > 1 {
+            var loudest = 0
+            var loudestEnergy = -1.0
+            for channel in 0..<layout.channels {
+                let channelBase = base(channel)
+                var energy = 0.0
+                for frame in 0..<frames {
+                    let value = Double(sample(channelBase, frame))
+                    energy += value * value
+                }
+                // The first of equally loud channels wins.
+                if energy > loudestEnergy {
+                    loudest = channel
+                    loudestEnergy = energy
+                }
+            }
+            let loudestBase = base(loudest)
+            mixed.withUnsafeMutableBufferPointer { mixed in
+                for frame in 0..<frames { mixed[frame] = sample(loudestBase, frame) }
+            }
+            return mixed
+        }
         mixed.withUnsafeMutableBufferPointer { mixed in
             for channel in 0..<layout.channels {
-                let base = layout.interleaved ? bases[0] + channel * layout.bytes : bases[channel]
+                let channelBase = base(channel)
                 for frame in 0..<frames {
-                    mixed[frame] += layout.value(at: base + frame * stride)
+                    mixed[frame] += sample(channelBase, frame)
                 }
             }
             if layout.channels > 1 {
@@ -162,8 +205,8 @@ enum ForkAudioInput {
         return mixed
     }
 
-    /// The PCM of `sample` copied out and averaged to one channel.
-    static func mono(of sample: CMSampleBuffer, frames: Int, layout: Layout) -> [Float]? {
+    /// The PCM of `sample` copied out and made one channel by `mix`.
+    static func mono(of sample: CMSampleBuffer, frames: Int, layout: Layout, mix: Mix = .average) -> [Float]? {
         guard frames > 0, frames <= maximumFrames, let frameCount = Int32(exactly: frames) else { return nil }
         let (size, overflow) = frames.multipliedReportingOverflow(by: layout.stride)
         guard !overflow, let byteSize = UInt32(exactly: size) else { return nil }
@@ -182,7 +225,7 @@ enum ForkAudioInput {
         guard CMSampleBufferCopyPCMDataIntoAudioBufferList(sample, at: 0, frameCount: frameCount,
                                                            into: list.unsafeMutablePointer) == noErr
         else { return nil }
-        return mono(list, frames: frames, layout: layout)
+        return mono(list, frames: frames, layout: layout, mix: mix)
     }
 
     /// The format of a one- or two-channel stream, through the failable
@@ -211,17 +254,20 @@ final class ForkAudioInputConverter {
     /// Two channels mixed down (a stereo call can put a voice on one side
     /// only) rather than the first one kept. Three or more are always mixed.
     private let downmix: Bool
+    /// Three channels or more: averaged, or the loudest kept.
+    private let manyChannels: ForkAudioInput.Mix
     private let log: Logger
     private var converter: AVAudioConverter?
     /// For the log, once per converter: a refused stream, a mixed-down one.
     private(set) var refusal: ForkAudioInput.Refusal?
     private(set) var averagedChannels: Int?
 
-    init?(sampleRate: Double, downmix: Bool, category: String) {
+    init?(sampleRate: Double, downmix: Bool, manyChannels: ForkAudioInput.Mix = .average, category: String) {
         guard let target = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate, channels: 1,
                                          interleaved: false) else { return nil }
         self.target = target
         self.downmix = downmix
+        self.manyChannels = manyChannels
         log = Logger(subsystem: "fork.audio", category: category)
     }
 
@@ -257,11 +303,13 @@ final class ForkAudioInputConverter {
             }
             return run(source)
         }
-        guard let mono = ForkAudioInput.mono(of: sample, frames: frames, layout: layout) else { return nil }
+        guard let mono = ForkAudioInput.mono(of: sample, frames: frames, layout: layout, mix: manyChannels)
+        else { return nil }
         if averagedChannels == nil {
             averagedChannels = layout.channels
             let channels = layout.channels, rate = layout.sampleRate
-            log.notice("Averaged to mono: \(channels, privacy: .public) channels at \(rate, privacy: .public) Hz")
+            let how = manyChannels == .loudest ? "loudest kept" : "averaged"
+            log.notice("Made mono (\(how, privacy: .public)): \(channels, privacy: .public) channels at \(rate, privacy: .public) Hz")
         }
         guard let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: layout.sampleRate, channels: 1,
                                          interleaved: false) else { return nil }
