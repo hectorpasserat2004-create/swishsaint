@@ -96,6 +96,13 @@ final class ForkMeetingMicWatcher {
 
     deinit {
         poll?.cancel()
+        pendingRead?.cancel()
+        // Dropped without `stop`: CoreAudio must not keep calling blocks of
+        // a watcher that is gone. Nothing else holds `self` any more, so
+        // the queue's state is ours here.
+        for listener in systemListeners + Array(deviceListeners.values) + Array(processListeners.values) {
+            remove(listener)
+        }
     }
 
     /// Listens and reads now. Nothing happens on a Mac without the signal

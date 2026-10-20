@@ -281,11 +281,11 @@ final class ForkDictationMicrophone: NSObject, @unchecked Sendable {
 /// The delegate of one session's output, with that session's converter.
 private final class CaptureSink: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate, @unchecked Sendable {
     private let shared: ForkDictationMicrophone.Shared
-    private let targetFormat = AVAudioFormat(
-        commonFormat: .pcmFormatFloat32, sampleRate: ForkDictationMicrophone.sampleRate, channels: 1,
-        interleaved: false)!
-    /// Capture queue only.
-    private var converter: AVAudioConverter?
+    /// Capture queue only. Any microphone, three channels or more included,
+    /// as 16 kHz mono; a buffer it cannot read is dropped (`ForkAudioInput`).
+    /// Two channels keep the first one, as always.
+    private let input = ForkAudioInputConverter(sampleRate: ForkDictationMicrophone.sampleRate, downmix: false,
+                                                category: "dictation")
     private var generation = 0
 
     init(shared: ForkDictationMicrophone.Shared) {
@@ -294,43 +294,15 @@ private final class CaptureSink: NSObject, AVCaptureAudioDataOutputSampleBufferD
 
     /// Capture queue.
     func resetConverter(generation: Int) {
-        converter = nil
+        input?.reset()
         self.generation = generation
     }
 
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer,
                        from connection: AVCaptureConnection) {
         guard shared.lock.withLock({ shared.generation }) == generation,
-              let description = CMSampleBufferGetFormatDescription(sampleBuffer) else { return }
-        let format = AVAudioFormat(cmAudioFormatDescription: description)
-        // Built from the first frame: the input format is not known before,
-        // and a wrong guess here gives white noise rather than an error.
-        if converter == nil || converter?.inputFormat != format {
-            converter = AVAudioConverter(from: format, to: targetFormat)
-        }
-        guard let converter else { return }
-
-        let frames = AVAudioFrameCount(CMSampleBufferGetNumSamples(sampleBuffer))
-        guard frames > 0, let source = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames) else { return }
-        source.frameLength = frames
-        guard CMSampleBufferCopyPCMDataIntoAudioBufferList(
-            sampleBuffer, at: 0, frameCount: Int32(frames), into: source.mutableAudioBufferList) == noErr else { return }
-
-        let capacity = AVAudioFrameCount(Double(frames) * targetFormat.sampleRate / format.sampleRate) + 64
-        guard let target = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: capacity) else { return }
-        // The converter asks for its input by callback and takes it once.
-        let handedOver = Latch()
-        var error: NSError?
-        converter.convert(to: target, error: &error) { _, status in
-            guard handedOver.close() else {
-                status.pointee = .noDataNow
-                return nil
-            }
-            status.pointee = .haveData
-            return source
-        }
-        guard error == nil, let channel = target.floatChannelData?[0], target.frameLength > 0 else { return }
-        consume(UnsafeBufferPointer(start: channel, count: Int(target.frameLength)))
+              let samples = input?.convert(sampleBuffer), !samples.isEmpty else { return }
+        samples.withUnsafeBufferPointer { consume($0) }
     }
 
     /// Everything under the lock, callbacks included: once `stop` has
@@ -358,12 +330,4 @@ private final class CaptureSink: NSObject, AVCaptureAudioDataOutputSampleBufferD
         }
     }
 
-    /// Single use: the first `close` returns true, the next ones false.
-    private final class Latch: @unchecked Sendable {
-        private var isOpen = true
-        func close() -> Bool {
-            defer { isOpen = false }
-            return isOpen
-        }
-    }
 }

@@ -80,7 +80,12 @@ final class ForkMeetingWriter: @unchecked Sendable {
     private var finishing = false
     private var failed = false
     private var timelines = [ForkMeetingTrackTimeline](repeating: ForkMeetingTrackTimeline(), count: Track.allCases.count)
-    private var converters: [AVAudioConverter?] = [nil, nil]
+    /// One per track. Mixed down, not the first channel kept: a stereo call
+    /// can put a voice on one side only. Three channels or more are averaged,
+    /// and a buffer that cannot be read is dropped (`ForkAudioInput`).
+    private let converters = Track.allCases.map { _ in
+        ForkAudioInputConverter(sampleRate: ForkMeetingWriter.sampleRate, downmix: true, category: "writer")
+    }
     /// Host seconds of each track's last real buffer, 0 for none yet.
     private var lastFed: [Double] = [0, 0]
     /// Each track's first real sound was told (`onFirstSound`).
@@ -529,45 +534,7 @@ final class ForkMeetingWriter: @unchecked Sendable {
     /// format (a device switch) gets a new converter; the same one is kept
     /// otherwise, so the resampler's state carries across buffers.
     private func convert(_ sample: CMSampleBuffer, track: Track) -> [Float]? {
-        guard let description = CMSampleBufferGetFormatDescription(sample),
-              let stream = CMAudioFormatDescriptionGetStreamBasicDescription(description)?.pointee,
-              stream.mFormatID == kAudioFormatLinearPCM, stream.mSampleRate > 0 else { return nil }
-        let format = AVAudioFormat(cmAudioFormatDescription: description)
-        let frames = CMSampleBufferGetNumSamples(sample)
-        guard frames > 0, let count = AVAudioFrameCount(exactly: frames),
-              let source = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: count) else { return nil }
-        source.frameLength = count
-        guard CMSampleBufferCopyPCMDataIntoAudioBufferList(sample, at: 0, frameCount: Int32(frames),
-                                                           into: source.mutableAudioBufferList) == noErr
-        else { return nil }
-        if format == targetFormat, let channel = source.floatChannelData?[0] {
-            return Array(UnsafeBufferPointer(start: channel, count: Int(source.frameLength)))
-        }
-        if converters[track.rawValue]?.inputFormat != format {
-            let converter = AVAudioConverter(from: format, to: targetFormat)
-            // Mixed down, not the first channel kept: a stereo call can put a
-            // voice on one side only.
-            converter?.downmix = true
-            converters[track.rawValue] = converter
-        }
-        guard let converter = converters[track.rawValue] else { return nil }
-        let capacity = AVAudioFrameCount(Double(count) * Self.sampleRate / format.sampleRate) + 64
-        guard let target = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: capacity) else { return nil }
-        let handedOver = Latch()
-        var error: NSError?
-        let status = converter.convert(to: target, error: &error) { _, inputStatus in
-            guard handedOver.close() else {
-                inputStatus.pointee = .noDataNow
-                return nil
-            }
-            inputStatus.pointee = .haveData
-            return source
-        }
-        guard status != .error, error == nil, let channel = target.floatChannelData?[0] else {
-            converters[track.rawValue] = nil
-            return nil
-        }
-        return Array(UnsafeBufferPointer(start: channel, count: Int(target.frameLength)))
+        converters[track.rawValue]?.convert(sample)
     }
 
     private func publish(peak: Float, track: Track) {
@@ -645,12 +612,4 @@ final class ForkMeetingWriter: @unchecked Sendable {
         CMClockGetTime(CMClockGetHostTimeClock()).seconds
     }
 
-    /// Single use: the first `close` returns true, the next ones false.
-    private final class Latch: @unchecked Sendable {
-        private var isOpen = true
-        func close() -> Bool {
-            defer { isOpen = false }
-            return isOpen
-        }
-    }
 }

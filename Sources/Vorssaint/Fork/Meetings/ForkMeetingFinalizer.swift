@@ -107,6 +107,12 @@ final class ForkMeetingFinalizer: ObservableObject, @unchecked Sendable {
         case stalled
         case incomplete(Double?, of: Double)
 
+        /// A writer cancelled (by the stall watch) or failed.
+        static func notWriting(_ writer: AVAssetWriter) -> PassError {
+            writer.status == .cancelled
+                ? .stalled : .writing(writer.error?.localizedDescription ?? "status \(writer.status.rawValue)")
+        }
+
         var description: String {
             switch self {
             case .noVideo: return "the master has no picture"
@@ -570,6 +576,8 @@ final class ForkMeetingFinalizer: ObservableObject, @unchecked Sendable {
             writer.cancelWriting()
             throw PassError.reading(reader.error?.localizedDescription ?? "status \(reader.status.rawValue)")
         }
+        // Backstop: a writer no longer writing raises on `endSession`.
+        guard writer.status == .writing else { throw PassError.notWriting(writer) }
         writer.endSession(atSourceTime: duration)
         await writer.finishWriting()
         guard writer.status == .completed else {
@@ -706,6 +714,8 @@ final class ForkMeetingFinalizer: ObservableObject, @unchecked Sendable {
             writer.cancelWriting()
             throw PassError.reading(reader.error?.localizedDescription ?? "status \(reader.status.rawValue)")
         }
+        // Backstop: a writer no longer writing raises on `finishWriting`.
+        guard writer.status == .writing else { throw PassError.notWriting(writer) }
         await writer.finishWriting()
         guard writer.status == .completed else {
             throw PassError.writing(writer.error?.localizedDescription ?? "status \(writer.status.rawValue)")
@@ -744,48 +754,6 @@ final class ForkMeetingFinalizer: ObservableObject, @unchecked Sendable {
         }
     }
 
-    /// What every pump of one pass shares: when a sample last moved, and
-    /// how to let each pump go when nothing moves any more.
-    private final class Flow: @unchecked Sendable {
-        private let lock = NSLock()
-        private var lastMove = DispatchTime.now().uptimeNanoseconds
-        private var releases: [() -> Void] = []
-        private var stalled = false
-
-        var isStalled: Bool {
-            lock.lock()
-            defer { lock.unlock() }
-            return stalled
-        }
-
-        func moved() {
-            lock.lock()
-            lastMove = DispatchTime.now().uptimeNanoseconds
-            lock.unlock()
-        }
-
-        func onStall(_ release: @escaping () -> Void) {
-            lock.lock()
-            releases.append(release)
-            lock.unlock()
-        }
-
-        /// Silent for `limit`: releases every pump, once.
-        func stallIfSilent(for limit: TimeInterval) -> Bool {
-            lock.lock()
-            let silent = Double(DispatchTime.now().uptimeNanoseconds - lastMove) / 1e9
-            guard !stalled, silent >= limit else {
-                lock.unlock()
-                return false
-            }
-            stalled = true
-            let pending = releases
-            lock.unlock()
-            pending.forEach { $0() }
-            return true
-        }
-    }
-
     private final class Once: @unchecked Sendable {
         private let lock = NSLock()
         private var done = false
@@ -806,7 +774,7 @@ final class ForkMeetingFinalizer: ObservableObject, @unchecked Sendable {
     /// abandoned for silence; `abandon` then cancels the reading and the
     /// writing.
     private static func pump(_ pairs: [Pair], abandon: Abandon) async -> Bool {
-        let flow = Flow()
+        let flow = ForkMeetingPassFlow()
         let watch = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .utility))
         watch.schedule(deadline: .now() + 10, repeating: 10, leeway: .seconds(2))
         watch.setEventHandler {
@@ -819,10 +787,12 @@ final class ForkMeetingFinalizer: ObservableObject, @unchecked Sendable {
             }
         }
         watch.cancel()
-        return flow.isStalled
+        // Under the flow's lock: a stall either came first (the pass is
+        // abandoned) or can no longer come.
+        return flow.complete()
     }
 
-    private static func pump(_ pair: Pair, flow: Flow) async {
+    private static func pump(_ pair: Pair, flow: ForkMeetingPassFlow) async {
         let queue = DispatchQueue(label: "fork.meetings.finalize." + pair.label, qos: .utility)
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             let once = Once()

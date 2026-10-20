@@ -15,6 +15,7 @@ set -euo pipefail
 cd "$FORK_ROOT"
 
 FORK_SOURCES=(
+    Sources/Vorssaint/Fork/Core/ForkAudioInput.swift
     Sources/Vorssaint/Fork/Core/ForkBackup.swift
     Sources/Vorssaint/Fork/Core/ForkDefaults.swift
     Sources/Vorssaint/Fork/Core/ForkExtrasStrings.swift
@@ -76,6 +77,7 @@ FORK_SOURCES=(
     Sources/Vorssaint/Fork/Meetings/ForkMeetingNotifications.swift
     Sources/Vorssaint/Fork/Meetings/ForkMeetingNudgeSupport.swift
     Sources/Vorssaint/Fork/Meetings/ForkMeetingOfferSupport.swift
+    Sources/Vorssaint/Fork/Meetings/ForkMeetingPassFlow.swift
     Sources/Vorssaint/Fork/Meetings/ForkMeetingPlaybackSupport.swift
     Sources/Vorssaint/Fork/Meetings/ForkMeetingPreferences.swift
     Sources/Vorssaint/Fork/Meetings/ForkMeetingProviders.swift

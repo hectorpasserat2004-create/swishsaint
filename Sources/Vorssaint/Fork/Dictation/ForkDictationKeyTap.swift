@@ -309,9 +309,14 @@ final class ForkDictationKeyTap: @unchecked Sendable {
             let momentum = event.getIntegerValueField(.scrollWheelEventMomentumPhase)
             guard ForkDictationOtherInput.scrollCounts(momentumPhase: momentum) else { return }
         } else if type == Self.systemDefined {
-            guard let system = NSEvent(cgEvent: event),
-                  ForkDictationOtherInput.systemKeyCounts(subtype: Int(system.subtype.rawValue),
-                                                          data1: system.data1) else { return }
+            // The tap's thread has no pool of its own: the event goes with
+            // this one, not at the thread's end.
+            let counts = autoreleasepool { () -> Bool in
+                guard let system = NSEvent(cgEvent: event) else { return false }
+                return ForkDictationOtherInput.systemKeyCounts(subtype: Int(system.subtype.rawValue),
+                                                               data1: system.data1)
+            }
+            guard counts else { return }
         }
         post(.otherKey)
     }
