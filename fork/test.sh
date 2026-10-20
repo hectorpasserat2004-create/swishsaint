@@ -77,6 +77,7 @@ FORK_SOURCES=(
     Sources/Vorssaint/Fork/Meetings/ForkMeetingNotifications.swift
     Sources/Vorssaint/Fork/Meetings/ForkMeetingNudgeSupport.swift
     Sources/Vorssaint/Fork/Meetings/ForkMeetingOfferSupport.swift
+    Sources/Vorssaint/Fork/Meetings/ForkMeetingPassFlow.swift
     Sources/Vorssaint/Fork/Meetings/ForkMeetingPlaybackSupport.swift
     Sources/Vorssaint/Fork/Meetings/ForkMeetingPreferences.swift
     Sources/Vorssaint/Fork/Meetings/ForkMeetingProviders.swift

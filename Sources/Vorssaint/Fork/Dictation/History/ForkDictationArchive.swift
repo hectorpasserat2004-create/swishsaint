@@ -361,8 +361,8 @@ final class ForkDictationArchive: ObservableObject {
     /// The recording back as 16 kHz mono Float32.
     static func readAudio(_ url: URL) throws -> [Float] {
         let file = try AVAudioFile(forReading: url, commonFormat: .pcmFormatFloat32, interleaved: false)
-        let frames = AVAudioFrameCount(file.length)
-        guard frames > 0,
+        // `exactly`: a negative or huge length must not trap.
+        guard let frames = AVAudioFrameCount(exactly: file.length), frames > 0,
               let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: frames)
         else { return [] }
         try file.read(into: buffer)
@@ -372,8 +372,8 @@ final class ForkDictationArchive: ObservableObject {
               let converter = AVAudioConverter(from: file.processingFormat, to: target)
         else { return samples }
         let ratio = sampleRate / file.processingFormat.sampleRate
-        guard let output = AVAudioPCMBuffer(pcmFormat: target,
-                                            frameCapacity: AVAudioFrameCount(Double(frames) * ratio) + 1024)
+        guard let capacity = AVAudioFrameCount(exactly: (Double(frames) * ratio).rounded(.up) + 1024),
+              let output = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: capacity)
         else { return samples }
         var consumed = false
         var error: NSError?

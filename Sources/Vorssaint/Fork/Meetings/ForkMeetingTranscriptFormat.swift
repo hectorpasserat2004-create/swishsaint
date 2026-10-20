@@ -253,6 +253,8 @@ enum ForkMeetingEcho {
         }
         let slices = paths(micro: microEnvelope, meeting: meetingEnvelope, lag: lag, person: person,
                            gain: gain, settings: settings)
+        // No slice (an empty envelope): `slices.count - 1` would index -1.
+        guard !slices.isEmpty else { return Report(delay: lag, matches: ratios.count, gain: gain, echo: []) }
         var echo = Set<Int>()
         for (index, word) in micro.enumerated() {
             let slice = min(max(0, Int(word.start / settings.slice)), slices.count - 1)

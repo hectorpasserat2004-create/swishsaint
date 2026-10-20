@@ -64,7 +64,8 @@ enum ForkDictationHistoryListing {
 
     /// "m:ss", like the bubble's clock.
     static func duration(_ seconds: TimeInterval) -> String {
-        let whole = max(0, Int(seconds.rounded()))
+        // Bounded before `Int`: NaN or an absurd length would trap there.
+        let whole = seconds.isFinite ? Int(min(max(0, seconds), 359_999).rounded()) : 0
         return String(format: "%d:%02d", whole / 60, whole % 60)
     }
 
