@@ -777,8 +777,9 @@ final class ForkMeetingFinalizer: ObservableObject, @unchecked Sendable {
         let flow = ForkMeetingPassFlow()
         let watch = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .utility))
         watch.schedule(deadline: .now() + 10, repeating: 10, leeway: .seconds(2))
+        // The reading and the writing are cancelled before any pump is let go.
         watch.setEventHandler {
-            if flow.stallIfSilent(for: stallTimeout) { abandon() }
+            _ = flow.stallIfSilent(for: stallTimeout) { abandon() }
         }
         watch.resume()
         await withTaskGroup(of: Void.self) { group in
@@ -808,6 +809,9 @@ final class ForkMeetingFinalizer: ObservableObject, @unchecked Sendable {
                           let sample = shifted(read, by: pair.shift), pair.input.append(sample) else {
                         if once.claim() {
                             pair.input.markAsFinished()
+                            // A pump done is movement: the others' last
+                            // samples get the whole wait again.
+                            flow.moved()
                             continuation.resume()
                         }
                         return
