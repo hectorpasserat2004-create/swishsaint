@@ -24,8 +24,6 @@ final class ForkMeetingIslandModel: ObservableObject {
     /// The time recorded when the clock last stopped: once the recording
     /// stops, the strip keeps the length it reached.
     private(set) var lastElapsed: TimeInterval = 0
-    /// The engine's latest levels, read under its lock (the pill's own).
-    var levels: () -> ForkMeetingLevels = { .silent }
     /// The pill's actions: the card's buttons do exactly what the pill's do.
     var actions = ForkMeetingPill.Actions()
 
@@ -104,7 +102,7 @@ final class ForkMeetingIslandModel: ObservableObject {
     func reset() {
         markedWork?.cancel()
         markedWork = nil
-        levels = { .silent }
+        ForkMeetingLevelFeed.shared.reset()
         actions = ForkMeetingPill.Actions()
         ForkMeetingLivePreview.shared.reset()
         context = ForkMeetingLiveContext()
@@ -180,6 +178,7 @@ struct ForkMeetingIslandStrip: View {
     @ObservedObject private var model = ForkMeetingIslandModel.shared
     @ObservedObject private var l10n = L10n.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
 
     /// The hanging strip, around the camera.
     init(service: NotchService, displayGeometry: NotchGeometry?) {
@@ -231,9 +230,11 @@ struct ForkMeetingIslandStrip: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(ForkMeetingIslandRules.label(target: snapshot.context.target, strings: text))
-        .accessibilityValue(ForkMeetingIslandRules.value(phase: snapshot.phase, elapsed: snapshot.elapsed(at: now),
-                                                         language: l10n.language, strings: text,
-                                                         diskMinutesLeft: model.diskMinutesLeft))
+        // Spelled out once a second only for VoiceOver, which reads it.
+        .accessibilityValue(voiceOver ? ForkMeetingIslandRules.value(phase: snapshot.phase,
+                                                                     elapsed: snapshot.elapsed(at: now),
+                                                                     language: l10n.language, strings: text,
+                                                                     diskMinutesLeft: model.diskMinutesLeft) : "")
         .accessibilityHint(text.islandHint)
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("notch.meeting")
@@ -758,15 +759,13 @@ struct ForkMeetingIslandGauge: View {
 }
 
 /// The microphone's level, then the meeting's, as two small bar meters.
-/// Only this view reads the levels, fifteen times a second while it is on
-/// screen (twice with Reduce Motion), so the rest of the strip never
-/// redraws for them. A source not heard is drawn flat and dim.
+/// Their bars are layers the shared feed sets fifteen times a second while
+/// they are on screen (twice with Reduce Motion): the strip never redraws
+/// for them. A source not heard is drawn flat and dim.
 struct ForkMeetingIslandMeters: View {
     let snapshot: ForkMeetingIslandSnapshot
     let height: CGFloat
     var tint: Color = .white
-    @ObservedObject private var model = ForkMeetingIslandModel.shared
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Two meters of three bars and the room between them.
     static let width: CGFloat = 2 * meterWidth + 3
@@ -774,51 +773,26 @@ struct ForkMeetingIslandMeters: View {
 
     var body: some View {
         let live = snapshot.phase.showsLevels
-        TimelineView(.animation(minimumInterval: reduceMotion ? 0.5 : 1.0 / 15, paused: !live)) { _ in
-            let levels = live ? model.levels() : .silent
-            HStack(alignment: .center, spacing: 3) {
-                if ForkMeetingIslandRules.showsMicrophoneMuted(snapshot.facts) {
-                    // Recorded and silent: crossed out in orange, as the pill does.
-                    Image(systemName: "mic.slash.fill")
-                        .font(.system(size: min(9, height * 0.75), weight: .semibold))
-                        .foregroundStyle(.orange)
-                        .frame(width: Self.meterWidth, height: height)
-                } else {
-                    ForkMeetingIslandMeter(level: snapshot.hearsMicrophone ? levels.microphone : 0,
-                                           heard: snapshot.hearsMicrophone && live, height: height, tint: tint,
-                                           animated: !reduceMotion)
-                }
-                ForkMeetingIslandMeter(level: snapshot.hearsMeeting ? levels.meeting : 0,
-                                       heard: snapshot.hearsMeeting && live, height: height, tint: tint,
-                                       animated: !reduceMotion)
+        HStack(alignment: .center, spacing: 3) {
+            if ForkMeetingIslandRules.showsMicrophoneMuted(snapshot.facts) {
+                // Recorded and silent: crossed out in orange, as the pill does.
+                Image(systemName: "mic.slash.fill")
+                    .font(.system(size: min(9, height * 0.75), weight: .semibold))
+                    .foregroundStyle(.orange)
+                    .frame(width: Self.meterWidth, height: height)
+            } else {
+                meter(.microphone, heard: snapshot.hearsMicrophone && live)
             }
+            meter(.meeting, heard: snapshot.hearsMeeting && live)
         }
         .frame(width: Self.width, height: height)
         .accessibilityHidden(true)
     }
-}
 
-/// Three bars rising with a level, centred on the strip's middle line.
-private struct ForkMeetingIslandMeter: View {
-    let level: Float
-    let heard: Bool
-    let height: CGFloat
-    let tint: Color
-    let animated: Bool
-
-    var body: some View {
-        let value = CGFloat(min(1, max(0, level.isFinite ? level : 0)))
-        HStack(alignment: .center, spacing: 1) {
-            ForEach(0..<3, id: \.self) { index in
-                let lit = heard ? min(1, max(0, (value - CGFloat(index) / 3) * 3)) : 0
-                let shape: CGFloat = index == 1 ? 1 : 0.7
-                Capsule(style: .continuous)
-                    .fill(tint.opacity(heard ? 0.4 + 0.6 * lit : 0.25))
-                    .frame(width: 2, height: max(2, height * shape * (0.25 + 0.75 * lit)))
-            }
-        }
-        .frame(width: ForkMeetingIslandMeters.meterWidth, height: height)
-        .animation(animated ? .linear(duration: 1.0 / 15) : nil, value: value)
+    private func meter(_ track: ForkMeetingLevelTrack, heard: Bool) -> some View {
+        ForkMeetingLevelBars(style: .island(height: height), track: track, heard: heard, reads: heard,
+                             tint: NSColor(tint))
+            .frame(width: Self.meterWidth, height: height)
     }
 }
 

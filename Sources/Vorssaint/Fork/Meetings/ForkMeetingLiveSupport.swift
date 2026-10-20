@@ -307,3 +307,88 @@ enum ForkMeetingLiveText {
 private extension CGPoint {
     var wholePoints: CGPoint { CGPoint(x: x.rounded(), y: y.rounded()) }
 }
+
+// MARK: - Sober recording
+
+/// The bars of a level meter, as the pill, the island's strip and the live
+/// card draw them: their number and size, and each bar's height and
+/// opacity for a level. The meters are Core Animation layers set from
+/// these numbers (`ForkMeetingLevelBarsView`), so fifteen readings a
+/// second never redraw a SwiftUI view, nor the window around it.
+struct ForkMeetingMeterStyle: Equatable {
+    enum Kind: Equatable {
+        /// Three bars standing on the pill's baseline, in the label colour.
+        case pill
+        /// Three bars around the strip's middle line, the middle one tallest.
+        case island
+        /// Five bars around the card's middle line.
+        case card
+    }
+
+    let kind: Kind
+    let bars: Int
+    let barWidth: CGFloat
+    let spacing: CGFloat
+    /// The meter's box: the bars are laid out in it.
+    let size: CGSize
+
+    static let pill = ForkMeetingMeterStyle(kind: .pill, bars: 3, barWidth: 2.5, spacing: 1.5,
+                                            size: CGSize(width: 12, height: 16))
+    static let card = ForkMeetingMeterStyle(kind: .card, bars: 5, barWidth: 2.5, spacing: 2,
+                                            size: CGSize(width: 5 * 2.5 + 4 * 2, height: 14))
+
+    /// The strip's meter, as tall as the strip's symbols.
+    static func island(height: CGFloat) -> ForkMeetingMeterStyle {
+        ForkMeetingMeterStyle(kind: .island, bars: 3, barWidth: 2, spacing: 1,
+                              size: CGSize(width: 3 * 2 + 2 * 1, height: height))
+    }
+
+    /// The bars and the room between them, centred in the box.
+    var contentWidth: CGFloat { CGFloat(bars) * barWidth + CGFloat(max(0, bars - 1)) * spacing }
+
+    /// The bars stand on the box's bottom (the pill) or around its middle.
+    var standsOnBottom: Bool { kind == .pill }
+
+    /// Bar `index`'s height and opacity. `level` is `nil` while the meter
+    /// reads nothing (paused, stopped): its bars are then at rest. A source
+    /// not `heard` is drawn flat and dim on the strip and the card; the
+    /// pill crosses such a source out instead of drawing its meter.
+    func bar(_ index: Int, level: Float?, heard: Bool) -> (height: CGFloat, opacity: CGFloat) {
+        let reading = level.map { $0.isFinite ? $0 : 0 } ?? 0
+        let value = CGFloat(min(1, max(0, reading)))
+        let count = CGFloat(bars)
+        let lit = heard && level != nil ? min(1, max(0, (value - CGFloat(index) / count) * count)) : 0
+        switch kind {
+        case .pill:
+            return (3 + 11 * lit * (0.6 + 0.2 * CGFloat(index)), 0.3 + 0.6 * lit)
+        case .island:
+            let shape: CGFloat = index == 1 ? 1 : 0.7
+            return (max(2, size.height * shape * (0.25 + 0.75 * lit)), heard ? 0.4 + 0.6 * lit : 0.25)
+        case .card:
+            return (max(3, size.height * (0.3 + 0.7 * lit)), heard ? 0.3 + 0.7 * lit : 0.18)
+        }
+    }
+}
+
+extension ForkMeetingPillLayout {
+    /// A little past the second the words change, so the reading made then
+    /// is already the new one.
+    static let tickMargin: TimeInterval = 0.005
+
+    /// How long the pill may sleep before its words change: the time
+    /// recorded at its next whole second, the countdown at its next whole
+    /// second left (`ForkMeetingOfferTiming.secondsLeft`). `nil` when
+    /// neither is shown or the countdown is over: nothing changes on its
+    /// own. Never more than a second and a margin.
+    static func nextTick(elapsed: TimeInterval?, countdownLeft: TimeInterval?) -> TimeInterval? {
+        var waits: [TimeInterval] = []
+        if let elapsed, elapsed.isFinite {
+            let seconds = max(0, elapsed)
+            waits.append(seconds.rounded(.down) + 1 - seconds)
+        }
+        if let left = countdownLeft, left.isFinite, left > 0 {
+            waits.append(left - left.rounded(.up) + 1)
+        }
+        return waits.min().map { min(1, max(0, $0)) + tickMargin }
+    }
+}
