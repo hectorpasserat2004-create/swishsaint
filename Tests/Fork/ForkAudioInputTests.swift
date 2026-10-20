@@ -16,6 +16,9 @@ enum ForkAudioInputTests {
         refused(suite)
         switching(suite)
         brokenLists(suite)
+        loudest(suite)
+        notNumbers(suite)
+        steadyChoice(suite)
     }
 
     // MARK: - Synthetic buffers
@@ -468,5 +471,163 @@ enum ForkAudioInputTests {
                                                              flags: 0, bufferList: pcm.audioBufferList) == noErr
         else { return nil }
         return buffer
+    }
+
+    // MARK: - Review follow-ups
+
+    /// Planar Float32 channels as a buffer list, and their layout.
+    private static func planar(_ channels: [[Float]], _ body: (UnsafeMutableAudioBufferListPointer,
+                                                            ForkAudioInput.Layout) -> Void) {
+        guard case .success(let layout) = ForkAudioInput.Layout.make(
+            stream(channels: channels.count, rate: 48_000, encoding: .float32, interleaved: false)) else { return }
+        let list = AudioBufferList.allocate(maximumBuffers: channels.count)
+        var memory: [UnsafeMutableRawPointer] = []
+        defer {
+            memory.forEach { $0.deallocate() }
+            free(list.unsafeMutablePointer)
+        }
+        for (index, samples) in channels.enumerated() {
+            let data = UnsafeMutableRawPointer.allocate(byteCount: samples.count * 4, alignment: 16)
+            memory.append(data)
+            samples.withUnsafeBytes { data.copyMemory(from: $0.baseAddress!, byteCount: $0.count) }
+            list[index] = AudioBuffer(mNumberChannels: 1, mDataByteSize: UInt32(samples.count * 4), mData: data)
+        }
+        body(list, layout)
+    }
+
+    /// Dictation keeps the loudest of three channels or more; meetings
+    /// still average them.
+    private static func loudest(_ suite: TestSuite) {
+        let frames = 480
+        let quiet: [Float] = (0..<frames).map { Float(0.05 * sin(Double($0) * 0.1)) }
+        let voice: [Float] = (0..<frames).map { Float(0.6 * sin(Double($0) * 0.03)) }
+        let hum = [Float](repeating: 0.2, count: frames)
+        var average = [Float](repeating: 0, count: frames)
+        for frame in 0..<frames {
+            let sum: Float = quiet[frame] + voice[frame] + hum[frame]
+            average[frame] = sum * (1 / Float(3))
+        }
+        planar([quiet, voice, hum]) { (list: UnsafeMutableAudioBufferListPointer, layout: ForkAudioInput.Layout) in
+            let kept: [Float]? = ForkAudioInput.mono(list, frames: frames, layout: layout, mix: .loudest)
+            suite.expect(kept == voice,
+                         "of three channels, dictation keeps the loudest over the buffer, sample for sample")
+            let mixed: [Float]? = ForkAudioInput.mono(list, frames: frames, layout: layout)
+            suite.expect(mixed == average, "a meeting still averages them")
+        }
+        // A short loud click loses to a channel that speaks the whole buffer.
+        var click = [Float](repeating: 0, count: frames)
+        click[10] = 1
+        planar([click, hum]) { (list: UnsafeMutableAudioBufferListPointer, layout: ForkAudioInput.Layout) in
+            let kept: [Float]? = ForkAudioInput.mono(list, frames: frames, layout: layout, mix: .loudest)
+            suite.expect(kept == hum,
+                         "loudest is measured over the whole buffer (RMS), not by its peak")
+        }
+        planar([voice, voice, voice]) { (list: UnsafeMutableAudioBufferListPointer, layout: ForkAudioInput.Layout) in
+            let kept: [Float]? = ForkAudioInput.mono(list, frames: frames, layout: layout, mix: .loudest)
+            suite.expect(kept == voice,
+                         "equally loud channels give the first one")
+        }
+
+        // Through the converters, the crash's stream: three Float32 channels at 48 kHz, no layout.
+        let dictation = ForkAudioInputConverter(sampleRate: 48_000, downmix: false, manyChannels: .loudest,
+                                                category: "tests")!
+        let meeting = ForkAudioInputConverter(sampleRate: 48_000, downmix: true, category: "tests")!
+        if let made = buffer(channels: 3, encoding: .float32, interleaved: true, layout: false, frames: frames) {
+            // The test stream's first channel is its loudest (0.9, 0.45, 0.3).
+            let first: [Float] = (0..<frames).map { Float(signal(channel: 0, frame: $0, rate: 48_000)) }
+            suite.expect(dictation.convert(made.sample) == first, "dictation's converter keeps the loudest channel")
+            suite.expect(meeting.convert(made.sample) == made.mono, "the meeting's converter keeps the average")
+        }
+        let microphone = ForkMeetingFinalizeTests.source("Sources/Vorssaint/Fork/Dictation/ForkDictationMicrophone.swift")
+        suite.expect(microphone.contains("manyChannels: .loudest"), "the dictation microphone asks for the loudest channel")
+    }
+
+    /// A sample that is not a number never reaches a file or a transcript.
+    private static func notNumbers(_ suite: TestSuite) {
+        let frames = 64
+        var broken: [Float] = (0..<frames).map { Float($0) / 128 }
+        broken[3] = .nan
+        broken[7] = .infinity
+        broken[9] = -.infinity
+        broken[11] = .signalingNaN
+        let steady = [Float](repeating: 0.25, count: frames)
+        planar([broken, steady, steady]) { (list: UnsafeMutableAudioBufferListPointer, layout: ForkAudioInput.Layout) in
+            let average: [Float] = ForkAudioInput.mono(list, frames: frames, layout: layout) ?? []
+            let silentThere: Float = 0.5 * (1 / Float(3))
+            let fine: Float = (Float(5) / 128 + 0.5) * (1 / Float(3))
+            suite.expect(average.count == frames && average.allSatisfy(\.isFinite)
+                            && average[3] == silentThere && average[7] == silentThere && average[5] == fine,
+                         "averaged, a NaN or infinite sample counts as silence")
+            let loudest: [Float] = ForkAudioInput.mono(list, frames: frames, layout: layout, mix: .loudest) ?? []
+            suite.expect(loudest.count == frames && loudest.allSatisfy(\.isFinite),
+                         "an infinite sample does not make its channel the loudest, nor reach the output")
+        }
+    }
+
+    /// The loudest channel is kept from buffer to buffer: close microphones
+    /// hearing one voice never trade places at each buffer (they clicked),
+    /// and a real change of speaker crosses over smoothly.
+    private static func steadyChoice(_ suite: TestSuite) {
+        typealias Choice = ForkAudioInput.LoudestChannel
+        var choice = Choice()
+        suite.expect(choice.choose(energies: [1, 3, 2]) == (1, nil), "the first buffer takes the loudest")
+        suite.expect(choice.choose(energies: [1, 3, 4]) == (1, nil),
+                     "a channel 1.2 dB louder does not take over")
+        let louder: [Double] = [1, 1, 1.5]
+        suite.expect(choice.choose(energies: louder) == (1, nil) && choice.choose(energies: louder) == (1, nil),
+                     "nor one clearly louder for two buffers")
+        suite.expect(choice.choose(energies: louder) == (2, 1), "it takes over at the third buffer in a row")
+        suite.expect(choice.choose(energies: [3, 1, 1]) == (2, nil) && choice.choose(energies: [1, 1, 1]) == (2, nil)
+                        && choice.choose(energies: [3, 1, 1]) == (2, nil) && choice.choose(energies: [3, 1, 1]) == (2, nil),
+                     "an interrupted lead starts over")
+        suite.expect(choice.choose(energies: [1, 5]) == (1, nil), "a stream with another channel count starts afresh")
+
+        // Three microphones a few samples apart, equal gains, their own noise:
+        // ten seconds of 1 024-frame buffers, through the real reader.
+        let frames = 1_024, channels = 3, rate = 48_000.0
+        func voice(_ n: Int) -> Float {
+            let t = Double(n) / rate
+            let envelope = max(0, sin(2 * Double.pi * 4 * t))
+            let tone = sin(2 * Double.pi * 180 * t) + 0.5 * sin(2 * Double.pi * 900 * t)
+            return Float(envelope * 0.3 * tone)
+        }
+        func run(gains: (Int) -> [Float]) -> (switches: Int, worstStep: Float, naturalStep: Float) {
+            var state = Choice()
+            var seed: UInt64 = 42
+            var output: [Float] = []
+            var kept: [Int?] = []
+            for index in 0..<470 {
+                var channelsData: [[Float]] = Array(repeating: [], count: channels)
+                let gain = gains(index)
+                for channel in 0..<channels {
+                    channelsData[channel] = (0..<frames).map { frame -> Float in
+                        seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+                        let noise = Float(Double(seed >> 11) / Double(UInt64(1) << 53) * 2 - 1) * 0.01
+                        return gain[channel] * voice(index * frames + frame - 2 * channel) + noise
+                    }
+                }
+                planar(channelsData) { (list: UnsafeMutableAudioBufferListPointer, layout: ForkAudioInput.Layout) in
+                    output += ForkAudioInput.mono(list, frames: frames, layout: layout, mix: .loudest,
+                                                  loudest: &state) ?? []
+                }
+                kept.append(state.channel)
+            }
+            var switches = 0, worst: Float = 0, natural: Float = 0
+            for index in 1..<kept.count where kept[index] != kept[index - 1] { switches += 1 }
+            for sample in 1..<output.count {
+                let step = abs(output[sample] - output[sample - 1])
+                let atSwitch = sample % frames < ForkAudioInput.LoudestChannel.crossfadeFrames + 1
+                    && kept[sample / frames] != kept[max(0, sample / frames - 1)]
+                if atSwitch { worst = max(worst, step) } else { natural = max(natural, step) }
+            }
+            return (switches, worst, natural)
+        }
+        let equal = run { _ in [1, 1, 1] }
+        suite.expect(equal.switches == 0, "three equal microphones hearing one voice: no switch in 10 s (\(equal.switches))")
+        // The person turns to the third microphone after five seconds.
+        let turned = run { index in index < 235 ? [1, 0.4, 0.4] : [0.4, 0.4, 1] }
+        suite.expect(turned.switches == 1 && turned.worstStep <= turned.naturalStep,
+                     "a real change of speaker switches once, through a crossfade no steeper than the voice itself "
+                        + "(\(turned.switches) switch, step \(turned.worstStep) against \(turned.naturalStep))")
     }
 }

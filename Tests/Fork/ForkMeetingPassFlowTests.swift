@@ -32,6 +32,20 @@ enum ForkMeetingPassFlowTests {
         suite.expect(!silent.stallIfSilent(for: 120, now: 900 * second) && released == 1, "a stall happens once")
         suite.expect(silent.complete(), "a pass stalled before its end says so: the writer is not finished")
 
+        // Review follow-up: the pass is cancelled before any pump is released.
+        let ordered = ForkMeetingPassFlow(now: 0)
+        var events: [String] = []
+        ordered.onStall { events.append("release") }
+        ordered.onStall { events.append("release") }
+        suite.expect(ordered.stallIfSilent(for: 120, now: 130 * second, abandon: { events.append("abandon") })
+                        && events == ["abandon", "release", "release"],
+                     "a stall cancels the reading and the writing first, then lets the pumps go: \(events)")
+        let late = ForkMeetingPassFlow(now: 0)
+        var abandoned = false
+        _ = late.complete()
+        suite.expect(!late.stallIfSilent(for: 120, now: 500 * second, abandon: { abandoned = true }) && !abandoned,
+                     "a pass already ended is never cancelled")
+
         let clock = ForkMeetingPassFlow(now: 50 * second)
         suite.expect(!clock.stallIfSilent(for: 0.5, now: 10 * second), "a clock read before the last move never traps")
     }
@@ -64,6 +78,17 @@ enum ForkMeetingPassFlowTests {
         let finalizer = ForkMeetingFinalizeTests.source("Sources/Vorssaint/Fork/Meetings/ForkMeetingFinalizer.swift")
         suite.expect(finalizer.contains("return flow.complete()") && !finalizer.contains("return flow.isStalled"),
                      "the pump reports a stall under the same lock that ends the pass")
+        suite.expect(finalizer.contains("_ = flow.stallIfSilent(for: stallTimeout) { abandon() }")
+                        && !finalizer.contains("if flow.stallIfSilent(for: stallTimeout) { abandon() }"),
+                     "the stall watch cancels the pass before releasing the pumps, not after")
+        if let finished = finalizer.range(of: "pair.input.markAsFinished()"),
+           let resumed = finalizer.range(of: "continuation.resume()", range: finished.upperBound..<finalizer.endIndex),
+           let moved = finalizer.range(of: "flow.moved()", range: finished.upperBound..<finalizer.endIndex) {
+            suite.expect(moved.lowerBound < resumed.lowerBound,
+                         "a pump that finishes counts as movement: a long last pump is not taken for a stall")
+        } else {
+            suite.expect(false, "a pump that finishes counts as movement")
+        }
         let backstop = "guard writer.status == .writing else { throw PassError.notWriting(writer) }"
         suite.expect(finalizer.components(separatedBy: backstop).count == 3,
                      "endSession and the M4A's finishWriting are never called on a writer no longer writing")

@@ -11,6 +11,8 @@ enum ForkMeetingLiveTests {
         positions(suite)
         savedDetail(suite)
         sentences(suite)
+        meters(suite)
+        ticks(suite)
     }
 
     private static let running = ForkMeetingClock(recordedBefore: 30, runningSince: nil)
@@ -173,5 +175,86 @@ enum ForkMeetingLiveTests {
         let spoken = ForkMeetingAnnouncement.failure(.screenRecordingDenied).text(chinese)
         suite.expect(spoken.contains("。") && !spoken.contains(". "),
                      "a failure said by VoiceOver in Chinese has no ASCII dot between its summary and its remedy: \(spoken)")
+    }
+
+    // MARK: Sober recording
+
+    private static func meters(_ suite: TestSuite) {
+        let pill = ForkMeetingMeterStyle.pill
+        let quiet = (0..<3).map { pill.bar($0, level: 0, heard: true) }
+        suite.expect(quiet.allSatisfy { $0.height == 3 && abs($0.opacity - 0.3) < 1e-9 },
+                     "a silent voice leaves the pill's three bars short and faint")
+        let loud = (0..<3).map { pill.bar($0, level: 1, heard: true) }
+        suite.expect(loud.map(\.height) == [3 + 11 * 0.6, 3 + 11 * 0.8, 3 + 11 * 1.0]
+                        && loud.allSatisfy { abs($0.opacity - 0.9) < 1e-9 },
+                     "a loud one lights all three, rising from left to right")
+        let half = (0..<3).map { pill.bar($0, level: 0.5, heard: true) }
+        suite.expect(half[0].height == loud[0].height && half[1].height > 3 && half[1].height < loud[1].height
+                        && half[2].height == 3,
+                     "half way, the first bar is lit, the second partly, the third not")
+        suite.expect(pill.bar(1, level: .nan, heard: true) == quiet[1] && pill.bar(2, level: 7, heard: true) == loud[2]
+                        && pill.bar(0, level: -1, heard: true) == quiet[0],
+                     "a reading gone wrong is read as silence, one past full as full")
+        suite.expect(pill.bar(2, level: nil, heard: true) == quiet[2],
+                     "a meter that reads nothing rests")
+        suite.expect(pill.standsOnBottom && pill.contentWidth == 10.5 && pill.size == CGSize(width: 12, height: 16),
+                     "the pill's bars stand on its baseline, 12 by 16 points")
+
+        let island = ForkMeetingMeterStyle.island(height: 14)
+        suite.expect(!island.standsOnBottom && island.contentWidth == ForkMeetingMeterStyle.island(height: 9).size.width
+                        && island.size.width == 8,
+                     "the strip's meter is 8 points wide, its bars around the middle line")
+        let islandLoud = (0..<3).map { island.bar($0, level: 1, heard: true) }
+        suite.expect(zip(islandLoud.map(\.height), [14 * 0.7, 14, 14 * 0.7]).allSatisfy { abs($0 - $1) < 1e-9 }
+                        && islandLoud.allSatisfy { abs($0.opacity - 1) < 1e-9 },
+                     "on the strip the middle bar is the tallest")
+        let unheard = island.bar(1, level: 1, heard: false)
+        suite.expect(unheard.height == 14 * 0.25 && unheard.opacity == 0.25,
+                     "a source not heard is drawn flat and dim on the strip, whatever it reads")
+        suite.expect(ForkMeetingMeterStyle.island(height: 4).bar(0, level: 0, heard: true).height == 2,
+                     "a strip's bar never shrinks under two points")
+
+        let card = ForkMeetingMeterStyle.card
+        suite.expect(card.bars == 5 && card.size == CGSize(width: 20.5, height: 14),
+                     "the card's meter has five bars on 20.5 by 14 points")
+        let paused = card.bar(4, level: nil, heard: true)
+        let dim = card.bar(4, level: 0.9, heard: false)
+        suite.expect(abs(paused.height - 14 * 0.3) < 1e-9 && abs(paused.opacity - 0.3) < 1e-9
+                        && abs(dim.height - 14 * 0.3) < 1e-9 && abs(dim.opacity - 0.18) < 1e-9,
+                     "paused, a heard source rests brighter than one not heard")
+        suite.expect(abs(card.bar(4, level: 1, heard: true).height - 14) < 1e-9
+                        && abs(card.bar(0, level: 0.2, heard: true).opacity - 1) < 1e-9,
+                     "a loud source fills the card's five bars")
+    }
+
+    private static func ticks(_ suite: TestSuite) {
+        let margin = ForkMeetingPillLayout.tickMargin
+        func near(_ a: TimeInterval?, _ b: TimeInterval) -> Bool { a.map { abs($0 - b) < 1e-9 } ?? false }
+        suite.expect(near(ForkMeetingPillLayout.nextTick(elapsed: 61.25, countdownLeft: nil), 0.75 + margin),
+                     "the pill wakes at the second its time reads differently, not before")
+        suite.expect(near(ForkMeetingPillLayout.nextTick(elapsed: 62, countdownLeft: nil), 1 + margin)
+                        && near(ForkMeetingPillLayout.nextTick(elapsed: 0, countdownLeft: nil), 1 + margin),
+                     "on a whole second, the next change is a second away")
+        suite.expect(near(ForkMeetingPillLayout.nextTick(elapsed: nil, countdownLeft: 12.2), 0.2 + margin)
+                        && near(ForkMeetingPillLayout.nextTick(elapsed: nil, countdownLeft: 12), 1 + margin),
+                     "the countdown changes as the seconds left go down: 12.2 s reads 13 for 0.2 s more")
+        suite.expect(near(ForkMeetingPillLayout.nextTick(elapsed: 5.9, countdownLeft: 12.5), 0.1 + margin),
+                     "with both shown, the sooner change wakes it")
+        suite.expect(ForkMeetingPillLayout.nextTick(elapsed: nil, countdownLeft: nil) == nil
+                        && ForkMeetingPillLayout.nextTick(elapsed: nil, countdownLeft: 0) == nil
+                        && ForkMeetingPillLayout.nextTick(elapsed: .nan, countdownLeft: -3) == nil,
+                     "with nothing that changes on its own, nothing wakes it")
+        suite.expect(near(ForkMeetingPillLayout.nextTick(elapsed: -2, countdownLeft: nil), 1 + margin),
+                     "a clock gone wrong still wakes it within a second")
+        // Each tick lands just past a whole second: a run of them reads every
+        // second once, and none twice.
+        var elapsed = 0.37
+        var readings: [String] = []
+        for _ in 0..<5 {
+            elapsed += ForkMeetingPillLayout.nextTick(elapsed: elapsed, countdownLeft: nil) ?? 1
+            readings.append(ForkMeetingPillLayout.clock(elapsed))
+        }
+        suite.expect(readings == ["0:01", "0:02", "0:03", "0:04", "0:05"],
+                     "ticking from tick to tick reads each second once: \(readings)")
     }
 }

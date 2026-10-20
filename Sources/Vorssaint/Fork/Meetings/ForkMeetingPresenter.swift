@@ -72,10 +72,10 @@ final class ForkMeetingPresenter {
     var windowNumbers: [Int] { ([pill.windowNumber, bubble.windowNumber] + offerUI.windowNumbers).compactMap { $0 } }
     var pillWindow: NSWindow? { pill.window }
 
-    /// `levels` is read on the main thread fifteen times a second while
-    /// recording: the engine's latest levels, from under its lock, between 0
-    /// and 1. `onFailureAction` runs a failure's button in the bubble; without
-    /// it the bubble shows no button.
+    /// `levels` is read on the main thread fifteen times a second while a
+    /// meter is on screen: the engine's latest levels, from under its lock,
+    /// between 0 and 1. `onFailureAction` runs a failure's button in the
+    /// bubble; without it the bubble shows no button.
     func configure(levels: @escaping () -> ForkMeetingLevels,
                    onPause: @escaping () -> Void,
                    onResume: @escaping () -> Void,
@@ -91,11 +91,12 @@ final class ForkMeetingPresenter {
         }
         let actions = ForkMeetingPill.Actions(pause: onPause, resume: onResume, stop: onStop, toggleTarget: onToggleTarget,
                                               continueRecording: { ForkMeetingService.shared.continueRecording() })
-        pill.configure(levels: levels, actions: actions)
+        pill.configure(actions: actions)
         pill.stepsAside = Self.pillStepsAside
         pill.prepare()
-        // The island's strip and live card read the same levels and do the same.
-        ForkMeetingIslandModel.shared.levels = levels
+        // The pill's, the island strip's and the live card's meters read the
+        // levels once for all of them; the card's buttons do what the pill's do.
+        ForkMeetingLevelFeed.shared.source = levels
         ForkMeetingIslandModel.shared.actions = actions
         failureAction = onFailureAction
     }
@@ -471,7 +472,7 @@ final class ForkMeetingPresenter {
         hideAll()
         context = ForkMeetingLiveContext()
         failureAction = nil
-        pill.configure(levels: { ForkMeetingLevels() }, actions: ForkMeetingPill.Actions())
+        pill.configure(actions: ForkMeetingPill.Actions())
         ForkMeetingIslandModel.shared.reset()
     }
 

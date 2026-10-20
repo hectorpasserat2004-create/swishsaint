@@ -35,7 +35,6 @@ final class ForkMeetingPill {
 
     private let model = ForkMeetingPillModel()
     private let ticker = ForkMeetingPillTicker()
-    private var levels: () -> ForkMeetingLevels = { ForkMeetingLevels() }
     private var actions = Actions()
     private var panel: NSPanel?
     private var timer: Timer?
@@ -66,10 +65,9 @@ final class ForkMeetingPill {
 
     private var reducesMotion: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
 
-    /// `levels` runs on the main thread at each tick: it reads the engine's
-    /// latest levels under its lock and returns at once.
-    func configure(levels: @escaping () -> ForkMeetingLevels, actions: Actions) {
-        self.levels = levels
+    /// The meters read the engine's levels through `ForkMeetingLevelFeed`,
+    /// shared with the island's strip and card.
+    func configure(actions: Actions) {
         self.actions = actions
     }
 
@@ -156,6 +154,7 @@ final class ForkMeetingPill {
         guard model.endingSoonUntil != until else { return }
         withAnimation(model.reducesMotion ? nil : .smooth(duration: 0.25)) { model.endingSoonUntil = until }
         tick()
+        updateTicker()
         fit()
         syncStepAside()
     }
@@ -176,9 +175,9 @@ final class ForkMeetingPill {
     }
 
     func hide() {
-        stopTicker()
         unobserve()
         setSteppedAside(false)
+        stopTicker()
         model.endingSoonUntil = nil
         model.cancelsUntil = nil
         collapseWork?.cancel()
@@ -224,24 +223,52 @@ final class ForkMeetingPill {
         panel?.ignoresMouseEvents = aside
         if model.steppedAside != aside { model.steppedAside = aside }
         if aside { collapseWork?.cancel(); model.hovering = false }
+        updateTicker()
     }
 
     // MARK: - Ticks
 
-    /// Fifteen readings a second while recording, for the meters; the time
-    /// only needs one. With Reduce Motion, twice a second: the meters still
-    /// follow the voices, which is information, not decoration. Paused or
-    /// finishing, nothing ticks.
+    /// The time and the countdown change once a second: the pill wakes at
+    /// that second, not fifteen times a second; the meters read the levels
+    /// on their own (`ForkMeetingLevelFeed`). Paused or finishing, stepped
+    /// aside for the island, or with its window covered or on no display,
+    /// nothing ticks; back in sight, the words are brought up to date at
+    /// once.
     private func updateTicker() {
-        guard case .recording = model.state else {
+        guard ticks else {
             stopTicker()
             return
         }
-        let interval = model.reducesMotion ? 0.5 : 1.0 / 15
-        if let timer, timer.timeInterval == interval { return }
-        stopTicker()
-        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in self?.tick() }
-        timer.tolerance = interval / 4
+        let resumes = timer == nil
+        timer?.invalidate()
+        timer = nil
+        if resumes { tick() }
+        scheduleTick()
+    }
+
+    /// Recording, shown, and in sight.
+    private var ticks: Bool {
+        guard case .recording = model.state, !observers.isEmpty, !steppedAside, let panel else { return false }
+        return panel.isVisible && panel.occlusionState.contains(.visible)
+    }
+
+    /// At the next second the time or the countdown reads differently.
+    private func scheduleTick() {
+        let now = Date()
+        var elapsed: TimeInterval?
+        if case let .recording(clock, _) = model.state, model.endingSoonUntil == nil {
+            elapsed = clock.elapsed(at: now)
+        }
+        guard let wait = ForkMeetingPillLayout.nextTick(elapsed: elapsed,
+                                                        countdownLeft: model.endingSoonUntil?.timeIntervalSince(now))
+        else { return }
+        let timer = Timer(timeInterval: wait, repeats: false) { [weak self] _ in
+            guard let self else { return }
+            self.timer = nil
+            self.tick()
+            self.scheduleTick()
+        }
+        timer.tolerance = 0.02
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
     }
@@ -275,12 +302,6 @@ final class ForkMeetingPill {
                 ticker.countdown = words
                 if resizes { fit() }
             }
-        }
-        if case .recording = model.state {
-            let reading = levels()
-            if reading != ticker.levels { ticker.levels = reading }
-        } else if ticker.levels != ForkMeetingLevels() {
-            ticker.levels = ForkMeetingLevels()
         }
     }
 
@@ -497,6 +518,13 @@ final class ForkMeetingPill {
             object: nil, queue: .main) { [weak self] _ in
             self?.motionChanged()
         }))
+        // Covered, on no display, or back: the time stops or catches up.
+        if let panel {
+            observers.append((center, center.addObserver(forName: NSWindow.didChangeOcclusionStateNotification,
+                                                         object: panel, queue: .main) { [weak self] _ in
+                self?.updateTicker()
+            }))
+        }
         geometryWatch = ForkMeetingIsland.observeGeometry { [weak self] in
             guard let self, !self.placedByPerson else { return }
             self.reposition()
@@ -564,10 +592,9 @@ final class ForkMeetingPillModel: ObservableObject {
 }
 
 /// What changes at each tick, apart from the rest: only the time and the
-/// meters observe it, so fifteen readings a second never redraw the pill.
+/// countdown observe it, so a tick never redraws the rest of the pill.
 final class ForkMeetingPillTicker: ObservableObject {
     @Published var clock = "0:00"
-    @Published var levels = ForkMeetingLevels()
     /// "Meeting over? Stopping in 12 s", while the countdown runs.
     @Published var countdown = ""
 }
@@ -690,8 +717,7 @@ struct ForkMeetingPillView: View {
     private func status(_ status: ForkMeetingPillLook.Status, text: ForkMeetingStrings) -> some View {
         switch status {
         case .meters:
-            ForkMeetingPillMeters(ticker: ticker, context: model.context, text: text,
-                                  animated: !model.reducesMotion)
+            ForkMeetingPillMeters(context: model.context, text: text, reads: !model.steppedAside)
         case .paused:
             label(text.pillPaused, color: .orange)
         case let .diskLow(minutes):
@@ -822,11 +848,11 @@ private struct ForkMeetingPillClock: View {
 
 /// The microphone's level, then the meeting's. A microphone left out of
 /// the recording is crossed out in grey; one that sends nothing, in orange.
+/// Stepped aside for the island, the meters read nothing.
 private struct ForkMeetingPillMeters: View {
-    @ObservedObject var ticker: ForkMeetingPillTicker
     let context: ForkMeetingLiveContext
     let text: ForkMeetingStrings
-    let animated: Bool
+    let reads: Bool
 
     var body: some View {
         HStack(spacing: 5) {
@@ -835,19 +861,22 @@ private struct ForkMeetingPillMeters: View {
             } else if context.microphoneSilent {
                 crossed(color: .orange, label: text.noticeMicrophoneSilent)
             } else {
-                ForkMeetingMiniMeter(level: ticker.levels.microphone, animated: animated)
-                    .help(text.pillMicrophoneLevel)
-                    .accessibilityLabel(text.pillMicrophoneLevel)
+                meter(.microphone, label: text.pillMicrophoneLevel)
             }
             if let note = ForkMeetingPillView.soundNote(context.trackSound, text: text) {
                 crossed(symbol: "speaker.slash.fill", color: .orange, label: note)
             } else {
-                ForkMeetingMiniMeter(level: ticker.levels.meeting, animated: animated)
-                    .help(text.pillMeetingLevel)
-                    .accessibilityLabel(text.pillMeetingLevel)
+                meter(.meeting, label: text.pillMeetingLevel)
             }
         }
         .allowsHitTesting(false)
+    }
+
+    /// Three bars rising with the level, like the menu bar's sound meters.
+    private func meter(_ track: ForkMeetingLevelTrack, label: String) -> some View {
+        ForkMeetingLevelBars(style: .pill, track: track, reads: reads, label: label)
+            .frame(width: ForkMeetingMeterStyle.pill.size.width, height: ForkMeetingMeterStyle.pill.size.height)
+            .help(label)
     }
 
     private func crossed(symbol: String = "mic.slash.fill", color: some ShapeStyle, label: String) -> some View {
@@ -857,28 +886,6 @@ private struct ForkMeetingPillMeters: View {
             .frame(width: 12, height: 16)
             .help(label)
             .accessibilityLabel(label)
-    }
-}
-
-/// Three bars rising with the level, like the menu bar's sound meters.
-private struct ForkMeetingMiniMeter: View {
-    let level: Float
-    let animated: Bool
-
-    var body: some View {
-        let value = CGFloat(min(1, max(0, level.isFinite ? level : 0)))
-        HStack(alignment: .bottom, spacing: 1.5) {
-            ForEach(0..<3, id: \.self) { index in
-                let lit = min(1, max(0, (value - CGFloat(index) / 3) * 3))
-                Capsule(style: .continuous)
-                    .fill(Color.primary.opacity(0.3 + 0.6 * lit))
-                    .frame(width: 2.5, height: 3 + 11 * lit * (0.6 + 0.2 * CGFloat(index)))
-            }
-        }
-        .frame(width: 12, height: 16, alignment: .bottom)
-        .animation(animated ? .linear(duration: 1.0 / 15) : nil, value: value)
-        .accessibilityElement()
-        .accessibilityValue((Double(value)).formatted(.percent.precision(.fractionLength(0))))
     }
 }
 
@@ -982,6 +989,10 @@ struct ForkMeetingRecordingDot: NSViewRepresentable {
             pulse.autoreverses = true
             pulse.repeatCount = .infinity
             pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            // The window server would draw the breath again on every refresh
+            // of the display, up to 120 times a second, for the whole
+            // meeting; thirty look the same (`NotchDecorativeClock`).
+            pulse.preferredFrameRateRange = CAFrameRateRange(minimum: 15, maximum: 30, preferred: 30)
             dot.add(pulse, forKey: "pulse")
         }
     }
