@@ -11,6 +11,7 @@ struct ForkTests {
         let suite = TestSuite()
         let groups: [(String, () -> Void)] = [
             ("fork-defaults", { ForkDefaultsTests.run(suite) }),
+            ("fork-audio-input", { ForkAudioInputTests.run(suite) }),
             ("window-trackpad", { ForkTrackpadGestureTests.run(suite) }),
             ("fork-update", { ForkUpdateTests.run(suite) }),
             ("fork-update-notes", { ForkUpdateNotesTests.run(suite) }),

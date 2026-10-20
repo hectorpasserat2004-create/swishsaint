@@ -183,56 +183,17 @@ final class ForkMeetingCallListener: @unchecked Sendable {
 
 /// Any PCM buffer as 16 kHz mono floats, with its host time. One per
 /// source: the resampler's state carries across buffers, and a source that
-/// changes its format gets a new one. Its queue only.
+/// changes its format gets a new one. Two channels are mixed down, three or
+/// more averaged; a buffer that cannot be read is dropped (`ForkAudioInput`).
+/// Its queue only.
 final class ForkMeetingMonoConverter {
-    private let target = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: ForkMeetingLookbackRing.sampleRate,
-                                       channels: 1, interleaved: false)
-    private var converter: AVAudioConverter?
+    private let input = ForkAudioInputConverter(sampleRate: ForkMeetingLookbackRing.sampleRate, downmix: true,
+                                                category: "listener")
 
     func convert(_ sample: CMSampleBuffer) -> (samples: [Float], host: Double)? {
-        guard let target, CMSampleBufferIsValid(sample),
-              let description = CMSampleBufferGetFormatDescription(sample),
-              let stream = CMAudioFormatDescriptionGetStreamBasicDescription(description)?.pointee,
-              stream.mFormatID == kAudioFormatLinearPCM, stream.mSampleRate > 0 else { return nil }
+        guard let input, CMSampleBufferIsValid(sample) else { return nil }
         let presentation = CMSampleBufferGetPresentationTimeStamp(sample)
-        guard presentation.isNumeric else { return nil }
-        let format = AVAudioFormat(cmAudioFormatDescription: description)
-        let frames = CMSampleBufferGetNumSamples(sample)
-        guard frames > 0, let count = AVAudioFrameCount(exactly: frames),
-              let source = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: count) else { return nil }
-        source.frameLength = count
-        guard CMSampleBufferCopyPCMDataIntoAudioBufferList(sample, at: 0, frameCount: Int32(frames),
-                                                           into: source.mutableAudioBufferList) == noErr else { return nil }
-        if converter?.inputFormat != format {
-            converter = AVAudioConverter(from: format, to: target)
-            converter?.downmix = true
-        }
-        guard let converter else { return nil }
-        let capacity = AVAudioFrameCount(Double(count) * target.sampleRate / format.sampleRate) + 64
-        guard let output = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: capacity) else { return nil }
-        let handed = Handed()
-        var error: NSError?
-        let status = converter.convert(to: output, error: &error) { _, inputStatus in
-            guard handed.first() else {
-                inputStatus.pointee = .noDataNow
-                return nil
-            }
-            inputStatus.pointee = .haveData
-            return source
-        }
-        guard status != .error, error == nil, let channel = output.floatChannelData?[0] else {
-            self.converter = nil
-            return nil
-        }
-        return (Array(UnsafeBufferPointer(start: channel, count: Int(output.frameLength))), presentation.seconds)
-    }
-
-    /// True the first time only.
-    private final class Handed: @unchecked Sendable {
-        private var done = false
-        func first() -> Bool {
-            defer { done = true }
-            return !done
-        }
+        guard presentation.isNumeric, let samples = input.convert(sample) else { return nil }
+        return (samples, presentation.seconds)
     }
 }
