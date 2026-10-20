@@ -109,14 +109,20 @@ enum ForkCalendarAppointmentsSupport {
         /// The appointment behind each event of the list, by the event's id:
         /// its own, or the calendar's event it was found as.
         var appointments: [String: ForkCalendarAppointment]
+        /// Each calendar event found as an appointment, as the calendar has it.
+        var originals: [String: NotchCalendarEvent] = [:]
     }
 
     /// The calendar read for `interval`, with the appointments of that
     /// interval. An appointment already in the calendar (the same call
     /// link close to its start, or the same start and its name in the
     /// title) shows once, as the calendar's event, marked as the CRM's.
+    /// While the calendar's links are still being looked up
+    /// (`linksPending`), an appointment with a link found no other way waits
+    /// for them, rather than show twice for a moment.
     static func merge(_ events: [NotchCalendarEvent], links: [String: ForkCalendarVideoLink],
-                      appointments: [ForkCalendarAppointment], interval: DateInterval, mark: String) -> Merged {
+                      appointments: [ForkCalendarAppointment], interval: DateInterval, mark: String,
+                      linksPending: Bool = false) -> Merged {
         var merged = Merged(events: events, appointments: [:])
         var taken = Set<String>()
         for appointment in appointments where appointment.start < interval.end && appointment.end > interval.start {
@@ -126,7 +132,8 @@ enum ForkCalendarAppointmentsSupport {
                 taken.insert(found.id)
                 merged.events[index] = marked(found, mark: mark, appointment: appointment)
                 merged.appointments[found.id] = appointment
-            } else {
+                merged.originals[found.id] = found
+            } else if !(linksPending && appointment.link != nil) {
                 let event = event(appointment, mark: mark)
                 merged.events.append(event)
                 merged.appointments[event.id] = appointment
@@ -148,11 +155,12 @@ enum ForkCalendarAppointmentsSupport {
             let linked = candidates.filter { links[events[$0].id]?.key == key && distance($0) <= linkReach }
             if let best = linked.min(by: { distance($0) < distance($1) }) { return best }
         }
-        let names = [appointment.who, appointment.attendee].compactMap { $0.map(folded) }.filter { $0.count >= 3 }
+        let names = [appointment.who, appointment.attendee].compactMap { $0.map(words) }.filter { $0.count >= 3 }
         return candidates.first { index in
             guard distance(index) < sameStart else { return false }
-            let title = folded(events[index].title)
-            return names.contains { title == $0 || title.contains($0) }
+            // Whole words only: "Al" is not in "Alice".
+            let title = " " + words(events[index].title) + " "
+            return names.contains { title.contains(" " + $0 + " ") }
         }
     }
 
@@ -164,9 +172,10 @@ enum ForkCalendarAppointmentsSupport {
                            recurring: event.recurring, countdownKey: event.countdownKey)
     }
 
-    /// Without case, accents nor extra spaces, for comparing names.
-    static func folded(_ text: String) -> String {
+    /// The words of a text without case nor accents, one space apart, for
+    /// comparing names: punctuation separates words.
+    static func words(_ text: String) -> String {
         text.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: nil)
-            .split(whereSeparator: \.isWhitespace).joined(separator: " ")
+            .split(whereSeparator: { !$0.isLetter && !$0.isNumber }).joined(separator: " ")
     }
 }

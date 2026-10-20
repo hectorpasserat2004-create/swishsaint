@@ -10,10 +10,11 @@ import Foundation
 /// - Only a link to a call counts: Google Meet, Zoom (`zoommtg://` too, its
 ///   password kept), Microsoft Teams, Webex, Whereby, Jitsi, FaceTime. An
 ///   invitation's other links (help pages, dial-in numbers, the meeting's
-///   options, a map) are never one.
+///   options, a map, a host's start link) are never one, nor a look-alike
+///   host, nor a link carrying a user name.
 /// - One link per appointment, the likeliest: the event's address first,
 ///   then its place, then its notes, the first call link of each. An
-///   Outlook safe link or a Google redirect is read as the link it wraps.
+///   Outlook safe link or a Google redirect is read as the web link it wraps.
 /// - Kept in memory only, like the rest of an event's text.
 struct ForkCalendarVideoLink: Equatable, Sendable {
     enum Provider: String, CaseIterable, Sendable {
@@ -38,7 +39,8 @@ struct ForkCalendarVideoLink: Equatable, Sendable {
     }
 
     let provider: Provider
-    /// The link as written, unwrapped: what Copy Link copies.
+    /// The link as written, unwrapped (a Zoom app link rebuilt with its
+    /// meeting's fields only): what Copy Link copies.
     let url: URL
     /// What says two links join the same call: the Meet code, the Zoom
     /// meeting number, else the address without its query, lowercased.
@@ -55,22 +57,29 @@ struct ForkCalendarVideoLink: Equatable, Sendable {
         return nil
     }
 
-    /// The first call link of a free text.
+    /// The first call link of a free text. A link glued to the word before
+    /// it ("Lien:https://…") is read from its scheme; invisible characters
+    /// (zero-width spaces, joiners) end it.
     static func first(in text: String) -> ForkCalendarVideoLink? {
         let searched = text.count > searchedCharacters ? String(text.prefix(searchedCharacters)) : text
-        for word in searched.split(whereSeparator: { $0.isWhitespace || "<>\"'()[]{}|\\^`".contains($0) }) {
-            if let link = link(String(word)) { return link }
+        let separators = Set<Character>("<>\"'()[]{}|\\^`\u{200B}\u{200C}\u{200D}\u{2060}\u{FEFF}")
+        for word in searched.split(whereSeparator: { $0.isWhitespace || separators.contains($0) }) {
+            if let link = link(fromScheme(String(word))) { return link }
         }
         return nil
     }
 
     /// A CRM appointment's meeting link: a call link it recognizes, else
-    /// any web address (the CRM says it is the meeting's), else nothing.
+    /// any HTTPS address on a named host (the CRM says it is the meeting's),
+    /// else nothing.
     static func meetingLink(_ text: String?) -> ForkCalendarVideoLink? {
         guard let text = text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return nil }
-        if let link = first(in: text) { return link }
+        if let link = first(in: text) {
+            // Never a plain-text address for a link the CRM gives.
+            return ["https", "zoommtg"].contains(link.url.scheme?.lowercased() ?? "") ? link : nil
+        }
         guard !text.contains(where: \.isWhitespace), let url = URL(string: trimmed(text)),
-              ["https", "http"].contains(url.scheme?.lowercased() ?? ""), let host = url.host, !host.isEmpty else {
+              url.scheme?.lowercased() == "https", isPlain(url), let host = url.host, host.contains(".") else {
             return nil
         }
         return ForkCalendarVideoLink(provider: .other, url: url, key: plainKey(url))
@@ -79,42 +88,44 @@ struct ForkCalendarVideoLink: Equatable, Sendable {
     /// One word of a text, as a call link, or `nil`.
     static func link(_ word: String) -> ForkCalendarVideoLink? {
         let cleaned = trimmed(word.replacingOccurrences(of: "&amp;", with: "&"))
-        guard cleaned.count >= 8, cleaned.contains(":"), let url = unwrapped(URL(string: cleaned)) else { return nil }
+        guard cleaned.count >= 8, cleaned.contains(":"), let url = unwrapped(URL(string: cleaned)), isPlain(url) else {
+            return nil
+        }
         let scheme = url.scheme?.lowercased() ?? ""
         let host = url.host?.lowercased() ?? ""
         let path = url.path
-        if scheme == "zoommtg" || scheme == "zoomus" {
-            guard isZoom(host), let number = query(url, "confno"), !number.isEmpty else { return nil }
-            return ForkCalendarVideoLink(provider: .zoom, url: url, key: "zoom:" + number.lowercased())
-        }
+        let parts = path.split(separator: "/").map(String.init)
+        if scheme == "zoommtg" || scheme == "zoomus" { return zoomApp(url, host: host) }
         guard scheme == "https" || scheme == "http" else { return nil }
         if host == "meet.google.com" {
-            guard let code = ForkMeetingTitleRules.meetCode(inLink: url.absoluteString) else { return nil }
+            // The code is the path, never something further in the query.
+            guard parts.count == 1, parts[0].count == 12, let code = ForkMeetingTitleRules.meetCode(in: parts[0]) else {
+                return nil
+            }
             return ForkCalendarVideoLink(provider: .meet, url: url, key: "meet:" + code)
         }
-        if isZoom(host) { return zoom(url, path: path) }
-        if (host == "teams.microsoft.com" && (path.hasPrefix("/l/meetup-join/") || path.hasPrefix("/meet/")))
-            || (host == "teams.live.com" && path.hasPrefix("/meet/")) {
+        if isZoom(host) { return zoom(url, parts: parts) }
+        if ["teams.microsoft.com", "teams.cloud.microsoft"].contains(host)
+            && (path.hasPrefix("/l/meetup-join/") || path.hasPrefix("/meet/"))
+            || host == "teams.live.com" && path.hasPrefix("/meet/") {
             return ForkCalendarVideoLink(provider: .teams, url: url, key: plainKey(url))
         }
-        if host == "webex.com" || host.hasSuffix(".webex.com") {
-            let lowered = path.lowercased()
-            if lowered.hasSuffix("/j.php"), let id = query(url, "MTID") {
+        if host == "webex.com" || host.hasSuffix(".webex.com"), !webexOwnHosts.contains(host) {
+            if path.lowercased().hasSuffix("/j.php"), let id = query(url, "MTID"), !id.isEmpty {
                 return ForkCalendarVideoLink(provider: .webex, url: url, key: plainKey(url) + "?mtid=" + id.lowercased())
             }
-            guard lowered.contains("/meet/") || lowered.contains("/join/") else { return nil }
+            guard parts.count >= 2, ["meet", "join"].contains(parts[0].lowercased()) else { return nil }
             return ForkCalendarVideoLink(provider: .webex, url: url, key: plainKey(url))
         }
         if host == "whereby.com" || host.hasSuffix(".whereby.com") {
-            let room = path.split(separator: "/").first.map { String($0).lowercased() } ?? ""
-            guard !room.isEmpty, !wherebyPages.contains(room) else { return nil }
+            guard parts.count == 1, !wherebyPages.contains(parts[0].lowercased()) else { return nil }
             return ForkCalendarVideoLink(provider: .whereby, url: url, key: plainKey(url))
         }
         if host == "meet.jit.si" || host == "8x8.vc" {
-            guard path.count > 1 else { return nil }
+            guard let room = parts.last, !room.contains("."), !jitsiPaths.contains(parts[0].lowercased()) else { return nil }
             return ForkCalendarVideoLink(provider: .jitsi, url: url, key: plainKey(url))
         }
-        if host == "facetime.apple.com", path.lowercased().hasPrefix("/join") {
+        if host == "facetime.apple.com", path.lowercased() == "/join", !(url.fragment ?? "").isEmpty {
             // The call is named after the `#`, which Copy Link keeps.
             return ForkCalendarVideoLink(provider: .facetime, url: url, key: url.absoluteString.lowercased())
         }
@@ -125,23 +136,26 @@ struct ForkCalendarVideoLink: Equatable, Sendable {
     /// (the browser would only hand over to it), else the link.
     static func joinURL(_ link: ForkCalendarVideoLink, zoomApp: Bool, teamsApp: Bool) -> URL {
         let url = link.url
+        let web = ["https", "http"].contains(url.scheme?.lowercased() ?? "")
         switch link.provider {
-        case .zoom where zoomApp:
-            let scheme = url.scheme?.lowercased() ?? ""
-            guard scheme == "https" || scheme == "http", let host = url.host, let number = zoomNumber(url.path) else {
-                return url
-            }
+        case .zoom where zoomApp && web:
+            let parts = url.path.lowercased().split(separator: "/").map(String.init)
+            guard let host = url.host, let number = zoomNumber(parts) else { return url }
+            var items = [URLQueryItem(name: "action", value: "join"), URLQueryItem(name: "confno", value: number)]
+            if let pwd = query(url, "pwd") { items.append(URLQueryItem(name: "pwd", value: pwd)) }
+            // A webinar's registration token.
+            if parts.first == "w", let token = query(url, "tk") { items.append(URLQueryItem(name: "tk", value: token)) }
             var components = URLComponents()
             components.scheme = "zoommtg"
             components.host = host
             components.path = "/join"
-            components.queryItems = [URLQueryItem(name: "action", value: "join"), URLQueryItem(name: "confno", value: number)]
-                + (query(url, "pwd").map { [URLQueryItem(name: "pwd", value: $0)] } ?? [])
+            components.queryItems = items
             return components.url ?? url
-        case .teams where teamsApp:
-            guard url.host?.lowercased() == "teams.microsoft.com",
-                  let rest = url.absoluteString.range(of: "teams.microsoft.com", options: .caseInsensitive),
-                  let app = URL(string: "msteams:" + url.absoluteString[rest.upperBound...]) else { return url }
+        case .teams where teamsApp && web:
+            // The desktop app takes the same path and query after `msteams:`.
+            guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+                  let app = URL(string: "msteams:" + components.percentEncodedPath
+                                + (components.percentEncodedQuery.map { "?" + $0 } ?? "")) else { return url }
             return app
         default:
             return url
@@ -151,33 +165,64 @@ struct ForkCalendarVideoLink: Equatable, Sendable {
     // MARK: - Underneath
 
     /// Whereby's own pages, which are not rooms.
-    private static let wherebyPages: Set<String> = ["user", "information", "login", "signup", "org", "pricing",
-                                                     "blog", "download", "support", "embed"]
+    private static let wherebyPages: Set<String> = [
+        "user", "information", "login", "signup", "org", "pricing", "blog", "download", "support", "embed", "terms",
+        "privacy", "legal", "about", "contact", "careers", "security", "cookies", "help", "features", "integrations",
+    ]
+    /// Jitsi's own files and pages, which are not rooms.
+    private static let jitsiPaths: Set<String> = ["static", "libs", "css", "images", "sounds", "fonts", "lang", "http-bind"]
+    /// Webex's own sites, which hold no meeting.
+    private static let webexOwnHosts: Set<String> = ["help.webex.com", "www.webex.com", "developer.webex.com", "blog.webex.com"]
 
     private static func isZoom(_ host: String) -> Bool {
         ["zoom.us", "zoomgov.com"].contains { host == $0 || host.hasSuffix("." + $0) }
     }
 
-    private static func zoom(_ url: URL, path: String) -> ForkCalendarVideoLink? {
-        if let number = zoomNumber(path) {
-            return ForkCalendarVideoLink(provider: .zoom, url: url, key: "zoom:" + number)
-        }
-        let lowered = path.lowercased()
-        guard lowered.hasPrefix("/my/"), lowered.count > 4 else { return nil }
-        return ForkCalendarVideoLink(provider: .zoom, url: url, key: "zoom:" + lowered.dropFirst())
+    /// A web address of a call never carries a user name nor a password.
+    private static func isPlain(_ url: URL) -> Bool {
+        url.user == nil && url.password == nil
     }
 
-    /// The meeting number of `/j/<n>`, `/w/<n>`, `/s/<n>` or `/wc/join/<n>`.
-    private static func zoomNumber(_ path: String) -> String? {
-        let parts = path.lowercased().split(separator: "/").map(String.init)
-        let number: String?
-        switch parts.first {
-        case "j", "w", "s": number = parts.count > 1 ? parts[1] : nil
-        case "wc": number = parts.count > 2 && parts[1] == "join" ? parts[2] : nil
-        default: number = nil
+    /// `/j/<n>` (a meeting), `/w/<n>` (a webinar), `/my/<name>` (a personal
+    /// room); never `/s/`, the host's start link, which carries the host's own key.
+    private static func zoom(_ url: URL, parts: [String]) -> ForkCalendarVideoLink? {
+        let lowered = parts.map { $0.lowercased() }
+        if let number = zoomNumber(lowered) {
+            return ForkCalendarVideoLink(provider: .zoom, url: url, key: "zoom:" + number)
         }
-        guard let number, number.count >= 9, number.allSatisfy(\.isASCII), number.allSatisfy(\.isNumber) else { return nil }
+        guard lowered.count == 2, lowered[0] == "my" else { return nil }
+        return ForkCalendarVideoLink(provider: .zoom, url: url, key: "zoom:my/" + lowered[1])
+    }
+
+    private static func zoomNumber(_ parts: [String]) -> String? {
+        guard parts.count == 2, parts[0] == "j" || parts[0] == "w" else { return nil }
+        let number = parts[1]
+        guard number.count >= 9, number.allSatisfy({ $0.isASCII && $0.isNumber }) else { return nil }
         return number
+    }
+
+    /// A `zoommtg://` or `zoomus://` link on a Zoom host, rebuilt with its
+    /// meeting's own fields only.
+    private static func zoomApp(_ url: URL, host: String) -> ForkCalendarVideoLink? {
+        guard isZoom(host), url.path.lowercased() == "/join", let number = query(url, "confno"),
+              number.count >= 9, number.allSatisfy({ $0.isASCII && $0.isNumber }) else { return nil }
+        var components = URLComponents()
+        components.scheme = "zoommtg"
+        components.host = host
+        components.path = "/join"
+        components.queryItems = [URLQueryItem(name: "action", value: "join"), URLQueryItem(name: "confno", value: number)]
+            + (query(url, "pwd").map { [URLQueryItem(name: "pwd", value: $0)] } ?? [])
+        guard let rebuilt = components.url else { return nil }
+        return ForkCalendarVideoLink(provider: .zoom, url: rebuilt, key: "zoom:" + number)
+    }
+
+    /// A word from the first scheme it holds: "Lien:https://…" is the link.
+    private static func fromScheme(_ word: String) -> String {
+        let lowered = word.lowercased()
+        let starts = ["https://", "http://", "zoommtg://", "zoomus://"].compactMap { lowered.range(of: $0)?.lowerBound }
+        guard let start = starts.min(), start != lowered.startIndex else { return word }
+        let offset = lowered.distance(from: lowered.startIndex, to: start)
+        return String(word.dropFirst(offset))
     }
 
     /// A word without the punctuation a sentence puts around a link.
@@ -188,18 +233,20 @@ struct ForkCalendarVideoLink: Equatable, Sendable {
         return String(text)
     }
 
-    /// The link an Outlook safe link or a Google redirect wraps, else the link.
+    /// The web link an Outlook safe link or a Google redirect wraps, else
+    /// the link; a wrapped link of any other kind is nothing.
     private static func unwrapped(_ url: URL?) -> URL? {
         guard let url, let host = url.host?.lowercased() else { return url }
         let wrapped: String?
-        if host.hasSuffix("safelinks.protection.outlook.com") {
+        if host.hasSuffix(".safelinks.protection.outlook.com") {
             wrapped = query(url, "url")
         } else if (host == "google.com" || host == "www.google.com") && url.path == "/url" {
             wrapped = query(url, "q")
         } else {
-            wrapped = nil
+            return url
         }
-        guard let wrapped, let inner = URL(string: trimmed(wrapped)), inner.host != nil else { return url }
+        guard let wrapped, let inner = URL(string: trimmed(wrapped)),
+              ["https", "http"].contains(inner.scheme?.lowercased() ?? ""), inner.host != nil else { return nil }
         return inner
     }
 

@@ -9,10 +9,11 @@ import EventKit
 /// appointments among the calendar's (seams `notch-calendar-crm`,
 /// `notch-calendar-crm2`, `notch-calendar-crm3`).
 ///
-/// - **The links**: each event the official calendar reads is looked up
-///   once, on a utility serial queue that keeps its own EventKit store,
-///   while the island shows its calendar; only the link found leaves the
-///   queue, never the notes, and nothing is written.
+/// - **The links**: with the Meetings feature on only (anyone else keeps
+///   the official calendar as it is), each event the official calendar
+///   reads is looked up once, on a utility serial queue that keeps its own
+///   EventKit store, while the island shows its calendar; only the link
+///   found leaves the queue, never the notes, and nothing is written.
 /// - **The CRM**: only with the Meetings feature on and a CRM imported,
 ///   and its setting on (`ForkCalendarAppointmentsSupport.shows`); set
 ///   aside while a call is detected or a meeting records, if the island
@@ -33,8 +34,13 @@ final class ForkCalendarAppointments: ObservableObject {
     @Published private(set) var links: [String: ForkCalendarVideoLink] = [:]
     /// The CRM appointment behind each event of the merged list, by its id.
     @Published private(set) var appointments: [String: ForkCalendarAppointment] = [:]
+    /// Each calendar event found as an appointment, as the calendar has it.
+    @Published private(set) var originals: [String: NotchCalendarEvent] = [:]
     /// The event whose link was just copied, for a moment.
     @Published private(set) var copied: String?
+    /// A call is going on while a CRM can show: the Settings window's
+    /// preview of the calendar leaves the appointments out.
+    @Published private(set) var calling = false
     /// The CRM's name and addresses, as its last read gave them (no token).
     private(set) var profile: ForkCastralProfile?
 
@@ -109,6 +115,9 @@ final class ForkCalendarAppointments: ObservableObject {
 
     // MARK: - What shows
 
+    /// The Meetings feature, which the links and the CRM both belong to.
+    private var meetingsOn: Bool { defaults.bool(forKey: ForkDefaultsKey.meetingsEnabled) }
+
     /// Whether the island's calendar shows the CRM's appointments now.
     var showsCRM: Bool {
         guard defaults.bool(forKey: ForkDefaultsKey.meetingsEnabled),
@@ -129,8 +138,11 @@ final class ForkCalendarAppointments: ObservableObject {
     }
 
     private func preferencesChanged() {
+        if !meetingsOn { forgetLinks() }
         let key = gateKey()
         if key != nil { followCalls() }
+        let inCall = key != nil && self.inCall()
+        if calling != inCall { calling = inCall }
         let hides = key != nil && hidesCRM
         guard key != gate || hides != hidden else { return }
         if key != gate { forget() }
@@ -168,6 +180,16 @@ final class ForkCalendarAppointments: ObservableObject {
         readAt = nil
         profile = nil
         if !appointments.isEmpty { appointments = [:] }
+        if !originals.isEmpty { originals = [:] }
+    }
+
+    /// The Meetings feature off: the links go, with the EventKit store.
+    private func forgetLinks() {
+        guard !links.isEmpty || !looked.isEmpty || looking else { return }
+        looked = []
+        waiting = nil
+        if !links.isEmpty { links = [:] }
+        queue.async { [weak self] in self?.store = nil }
     }
 
     // MARK: - The official read (seam `notch-calendar-crm`)
@@ -185,16 +207,25 @@ final class ForkCalendarAppointments: ObservableObject {
             forget()
         }
         if key != nil { followCalls() }
+        let meetings = meetingsOn
+        if !meetings { forgetLinks() }
+        let inCall = crm && self.inCall()
+        if calling != inCall { calling = inCall }
         hidden = crm && hidesCRM
-        if showing || (crm && !read.isEmpty) { lookUp(events, interval: interval) }
+        if meetings, showing || (crm && !read.isEmpty) { lookUp(events, interval: interval) }
         if crm, !hidden, showing { readIfDue() }
         guard crm, !hidden, !read.isEmpty else {
             if !appointments.isEmpty { appointments = [:] }
+            if !originals.isEmpty { originals = [:] }
             return events
         }
         let merged = ForkCalendarAppointmentsSupport.merge(events, links: links, appointments: read, interval: interval,
-                                                           mark: ForkCalendarAppointmentsStrings.current.crmMark)
+                                                           mark: ForkCalendarAppointmentsStrings.current.crmMark,
+                                                           linksPending: looking)
+        // What waited for the links shows at the read their lookup starts.
+        if looking { readAfterLookup = true }
         if appointments != merged.appointments { appointments = merged.appointments }
+        if originals != merged.originals { originals = merged.originals }
         return merged.events
     }
 
@@ -259,6 +290,8 @@ final class ForkCalendarAppointments: ObservableObject {
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 looking = false
+                // The Meetings feature turned off meanwhile: nothing is kept.
+                guard meetingsOn else { return forgetLinks() }
                 let ids = Set(wanted.map(\.id))
                 var next = links.filter { !ids.contains($0.key) || found[$0.key] != nil }
                 next.merge(found) { $1 }

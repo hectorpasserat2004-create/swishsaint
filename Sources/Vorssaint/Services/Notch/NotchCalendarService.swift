@@ -169,8 +169,7 @@ final class NotchCalendarService: NSObject, ObservableObject {
                 self.events = []; self.countdown = nil; self.loading = false; self.task = nil
                 return
             }
-            self.events = NotchCalendarSupport.ordered(result)
-            self.events = ForkCalendarAppointments.shared.merged(self.events, interval: interval) // FORK(notch-calendar-crm)
+            self.events = ForkCalendarAppointments.shared.merged(NotchCalendarSupport.ordered(result), interval: interval) // FORK(notch-calendar-crm)
             let currentEvents = needsCurrentRead ? NotchCalendarSupport.ordered(currentResult) : self.events
             self.updateChosenCountdowns(currentEvents, now: now)
             self.countdown = NotchCalendarSupport.countdown(currentEvents, now: now, starts: self.countdownEnabled,

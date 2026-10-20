@@ -13,6 +13,7 @@ enum ForkCalendarAppointmentsTests {
         notLinks(suite)
         likeliest(suite)
         wrapped(suite)
+        hostile(suite)
         join(suite)
         meetingLinks(suite)
         appointments(suite)
@@ -109,7 +110,63 @@ enum ForkCalendarAppointmentsTests {
                      "a safe link to anything else is not a call")
     }
 
+    /// The review's probe: look-alike hosts, user names, wrapped links of
+    /// another kind, a service's own pages, a host's start link.
+    private static func hostile(_ suite: TestSuite) {
+        let refused = [
+            "https://meet.google.com.evil.com/abc-defg-hij", "https://zoom.us@evil.com/j/123456789",
+            "https://evil.com@zoom.us/j/123456789", "https://evil.com\\@zoom.us/j/123456789",
+            "https://evilzoom.us/j/123456789", "https://zoom.us.evil.com/j/123456789",
+            "https://teams.microsoft.com@evil.com/l/meetup-join/x", "https://evil.com#@teams.microsoft.com/l/meetup-join/x",
+            "https://user:pw@teams.microsoft.com/l/meetup-join/19%3ax/0",
+            "https://teams.microsoft.com.evil.com/l/meetup-join/x",
+            "https://www.google.com/url?q=javascript:alert(1)//meet.google.com/abc-defg-hij",
+            "https://www.google.com/url?q=file:///etc/passwd",
+            "https://www.google.com/url?q=zoommtg://zoom.us/join?confno=123456789%26browser=evil",
+            "https://www.google.com/url?q=zoommtg://evil.com/join?confno=123456789",
+            "https://www.google.com/url?q=https://evil.com/meet.google.com/abc-defg-hij",
+            "https://eur01.safelinks.protection.outlook.com/?url=vnc%3A%2F%2Fzoom.us%2Fj%2F123456789",
+            "https://eur01.safelinks.protection.outlook.com/?url=smb%3A%2F%2Fzoom.us%2Fj%2F123456789",
+            "https://eur01.safelinks.protection.outlook.com.evil.com/?url=https%3A%2F%2Fzoom.us%2Fj%2F123456789",
+            "https://evil.com/?safelinks.protection.outlook.com&url=x",
+            "zoommtg://evil.com/join?action=join&confno=123456789",
+            "https://meet.google.com/landing?x=meet.google.com/abc-defg-hij",
+            "https://help.webex.com/en-us/meet/article", "https://whereby.com/terms", "https://whereby.com/privacy",
+            "https://8x8.vc/", "https://meet.jit.si/static/close.html", "https://facetime.apple.com/join",
+            "https://zoom.us/j/123456789abc", "https://zoom.us/s/81234567890?zak=SECRET", "https://zoom.us/my/",
+        ].filter { link($0) != nil }
+        suite.expect(refused.isEmpty, "no look-alike, user name, foreign wrapped link, own page nor start link is a call: \(refused)")
+        let rebuilt = link("zoomus://zoom.us/join?confno=123456789&browser=../../evil")
+        suite.expect(rebuilt?.url.absoluteString == "zoommtg://zoom.us/join?action=join&confno=123456789",
+                     "a Zoom app link is rebuilt with its meeting's fields only")
+        suite.expect(link("HTTPS://MEET.GOOGLE.COM/ABC-DEFG-HIJ")?.key == "meet:abc-defg-hij"
+                        && link("http://meet.google.com/abc-defg-hij")?.provider == .meet,
+                     "a Meet link in capitals, or in plain HTTP, is still its call")
+        suite.expect(link("https://teams.cloud.microsoft/l/meetup-join/19%3ameeting_x%40thread.v2/0")?.provider == .teams,
+                     "Teams' new address is a call")
+        suite.expect(link("https://zoom.us/j/123456789?pwd=abc.")?.url.absoluteString == "https://zoom.us/j/123456789?pwd=abc",
+                     "a sentence's full stop is not part of the password")
+        suite.expect(link("Lien:https://meet.google.com/abc-defg-hij")?.key == "meet:abc-defg-hij",
+                     "a link glued to the word before it is read from its scheme")
+        suite.expect(link("https://meet.google.com/abc-defg-hij\u{200B}")?.url.absoluteString == "https://meet.google.com/abc-defg-hij",
+                     "an invisible character ends the link")
+        suite.expect(link("https://zoom.us/my/x")?.key == "zoom:my/x" && link("https://meet.jit.si/AcmeWeekly")?.provider == .jitsi,
+                     "a personal room and a Jitsi room are calls")
+        let crm = ["http://evil.com/x", "javascript:alert(1)", "https://a@b.com", "data:text/html,hi",
+                   "file:///Applications/Calculator.app", "https://x y.com", "http://meet.google.com/abc-defg-hij"]
+            .filter { ForkCalendarVideoLink.meetingLink($0) != nil }
+        suite.expect(crm.isEmpty, "a CRM's meeting link is HTTPS on a named host, without a user name: \(crm)")
+        suite.expect(ForkCalendarVideoLink.meetingLink("https://meet.google.com.evil.com/abc-defg-hij")?.provider == .other,
+                     "a look-alike Meet address from the CRM is never named Google Meet")
+        suite.expect(ForkCalendarVideoLink.meetingLink("HTTPS://Example.com")?.provider == .other,
+                     "an HTTPS meeting address of another service is still the CRM's link")
+    }
+
     private static func join(_ suite: TestSuite) {
+        let webinar = link("https://zoom.us/w/81234567890?tk=TOKEN&pwd=p")!
+        suite.expect(ForkCalendarVideoLink.joinURL(webinar, zoomApp: true, teamsApp: false).absoluteString
+                        == "zoommtg://zoom.us/join?action=join&confno=81234567890&pwd=p&tk=TOKEN",
+                     "a Zoom webinar keeps its registration token when Zoom opens it")
         let zoom = link("https://us02web.zoom.us/j/81234567890?pwd=AbC123.1")!
         suite.expect(ForkCalendarVideoLink.joinURL(zoom, zoomApp: true, teamsApp: false).absoluteString
                         == "zoommtg://us02web.zoom.us/join?action=join&confno=81234567890&pwd=AbC123.1",
@@ -267,6 +324,16 @@ enum ForkCalendarAppointmentsTests {
                      "the same title at another time: both show")
         let day = calendarEvent("d", title: "ACME", start: 0, length: 86_400, allDay: true)
         suite.expect(merged([day], [booking(1, start: 0)]).events.count == 2, "an all-day event is never an appointment")
+        let short = calendarEvent("w", title: "Call with Alice", start: 3600)
+        suite.expect(merged([short], [booking(1, start: 3600, company: nil, attendee: "Ali")]).events.count == 2,
+                     "a name is matched as whole words: Ali is not in Alice")
+        suite.expect(byLink.originals["g"] == call, "the calendar's event is kept as it was, for a preview that hides the CRM")
+        let pending = ForkCalendarAppointmentsSupport.merge(
+            [call], links: [:], appointments: ForkCalendarAppointmentsSupport.appointments(
+                [booking(1, start: 3600, url: "https://meet.google.com/abc-defg-hij"), booking(2, start: 9000)], now: now),
+            interval: week, mark: "CRM", linksPending: true)
+        suite.expect(pending.events.map(\.title) == ["Discovery call", "ACME"],
+                     "while the calendar's links are being looked up, an appointment with a link waits; one without shows")
         let twice = merged([titled], [booking(1, start: 3600), booking(2, start: 3600, company: "Globex")])
         suite.expect(twice.events.count == 2 && twice.appointments.count == 2,
                      "a calendar event stands for one appointment only")
@@ -330,13 +397,17 @@ enum ForkCalendarAppointmentsTests {
                      "no text uses a straight apostrophe")
     }
 
-    /// The lines of `private var card` in a file, after `scope` when given.
-    private static func card(_ path: String, after scope: String? = nil) -> [String] {
+    /// The lines of a member opening with `opening` in a file, after `scope` when given.
+    private static func block(_ path: String, _ opening: String, after scope: String? = nil) -> [String] {
         let lines = ((try? String(contentsOfFile: path, encoding: .utf8)) ?? "").components(separatedBy: "\n")
         let from = scope.flatMap { scope in lines.firstIndex { $0.hasPrefix(scope) } } ?? 0
-        guard let start = lines[from...].firstIndex(of: "    private var card: some View {"),
+        guard let start = lines[from...].firstIndex(of: opening),
               let end = lines[(start + 1)...].firstIndex(of: "    }") else { return [] }
         return Array(lines[start...end])
+    }
+
+    private static func card(_ path: String, after scope: String? = nil) -> [String] {
+        block(path, "    private var card: some View {", after: scope)
     }
 
     private static func mirror(_ suite: TestSuite) {
@@ -346,6 +417,21 @@ enum ForkCalendarAppointmentsTests {
         suite.expect(!official.isEmpty && official == fork,
                      "the card of an appointment with a link is the official card, line for line, plus the call's line: "
                         + "after an official change to NotchCalendarEventRow.card, copy it to ForkCalendarAppointmentRow")
+        // The body: each official line, its "Open in Calendar" made the row's own title, in order; the
+        // countdown's menu is the row's (`menuItems`).
+        let officialBody = block("Sources/Vorssaint/UI/Notch/NotchCalendarView.swift", "    var body: some View {",
+                                 after: "private struct NotchCalendarEventRow")
+            .filter { !$0.contains("NotchCountdownChoice") }
+            .map { $0.replacingOccurrences(of: "text.openCalendar", with: "openTitle") }
+        var forkBody = block("Sources/Vorssaint/Fork/Notch/Calendar/ForkCalendarAppointmentRow.swift", "    var body: some View {",
+                             after: "struct ForkCalendarAppointmentRow")[...]
+        let inOrder = officialBody.allSatisfy { line in
+            guard let found = forkBody.firstIndex(of: line) else { return false }
+            forkBody = forkBody[(found + 1)...]
+            return true
+        }
+        suite.expect(officialBody.count >= 5 && inOrder,
+                     "the row's button is the official card's, with every one of its modifiers, in order")
     }
 
     private static func setting(_ suite: TestSuite) {

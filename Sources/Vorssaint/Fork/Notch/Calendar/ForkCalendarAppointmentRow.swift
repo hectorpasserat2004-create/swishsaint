@@ -21,9 +21,17 @@ private struct ForkCalendarRowChoice: ViewModifier {
     let isNext: Bool
     let countdown: Bool?
     @ObservedObject private var model = ForkCalendarAppointments.shared
+    @Environment(\.notchSettingsPreview) private var preview
 
     @ViewBuilder func body(content: Content) -> some View {
-        if model.decorates(event) {
+        if preview, model.calling, model.appointments[event.id] != nil {
+            // The Settings window may be shared during a call: its preview
+            // shows no CRM name, only the calendar as it has it.
+            if let original = model.originals[event.id] {
+                ForkCalendarAppointmentRow(event: original, day: day, now: now, isNext: isNext, countdown: countdown,
+                                           hidesCRM: true)
+            }
+        } else if model.decorates(event) {
             ForkCalendarAppointmentRow(event: event, day: day, now: now, isNext: isNext, countdown: countdown)
         } else {
             content
@@ -47,6 +55,8 @@ struct ForkCalendarAppointmentRow: View {
     let isNext: Bool
     /// Whether the event counts down on its own; nil when it cannot.
     let countdown: Bool?
+    /// Drawn as the calendar has it, without its appointment.
+    var hidesCRM = false
     @ObservedObject private var model = ForkCalendarAppointments.shared
     @ObservedObject private var l10n = L10n.shared
     @Environment(\.colorSchemeContrast) private var contrast
@@ -54,12 +64,12 @@ struct ForkCalendarAppointmentRow: View {
 
     private var text: NotchCalendarStrings { FeatureStrings.notchCalendar(l10n.language) }
     private var strings: ForkCalendarAppointmentsStrings { .strings(l10n.language) }
-    private var link: ForkCalendarVideoLink? { model.link(for: event) }
+    private var link: ForkCalendarVideoLink? { hidesCRM ? model.links[event.id] : model.link(for: event) }
     /// Known only to the CRM: no Calendar event to open.
     private var crmOnly: Bool { event.id.hasPrefix(ForkCalendarAppointmentsSupport.eventPrefix) }
     /// "Open in <CRM>", for an appointment of the CRM.
     private var openInCRM: String? {
-        model.crmURL(for: event) == nil ? nil : model.crmName(ForkMeetingStrings.strings(l10n.language))
+        hidesCRM || model.crmURL(for: event) == nil ? nil : model.crmName(ForkMeetingStrings.strings(l10n.language))
     }
     private var openTitle: String { openInCRM ?? text.openCalendar }
     private var ongoing: Bool { !event.allDay && event.start <= now && event.end > now }
@@ -210,12 +220,15 @@ struct ForkCalendarAppointmentsSetting: View {
 
     var place: Place = .island
     @ObservedObject private var l10n = L10n.shared
-    @ObservedObject private var exports = ForkMeetingExports.shared
+    /// The app's registry; the render harness alone gives its own.
+    @ObservedObject var exports = ForkMeetingExports.shared
     @AppStorage(ForkDefaultsKey.meetingsEnabled) private var meetings = false
     @AppStorage(ForkDefaultsKey.meetingsIslandAppointments) private var wanted = true
 
     var body: some View {
-        if meetings, let config = exports.castralConfig {
+        // Once the CRM can be read: its profile and its token saved.
+        if meetings, let config = exports.castralConfig,
+           exports.savedSecrets.contains(ForkMeetingExporterConfig.tokenAccount(config.id)) {
             let strings = ForkCalendarAppointmentsStrings.strings(l10n.language)
             let caption = strings.settingCaption(exports.title(config, ForkMeetingStrings.strings(l10n.language)))
             switch place {
@@ -239,6 +252,14 @@ struct ForkCalendarAppointmentsSetting: View {
                     }
                 }
             }
+        }
+        // Not asked yet this launch: what the Keychain holds, asked off the
+        // main thread as the Meetings page does at its display, for a moment.
+        if meetings, let config = exports.castralConfig,
+           !exports.savedSecrets.contains(ForkMeetingExporterConfig.profileAccount(config.id)) {
+            Color.clear.frame(width: 0, height: 0)
+                .accessibilityHidden(true)
+                .onAppear { if exports.isIdle { exports.refresh() } }
         }
     }
 }

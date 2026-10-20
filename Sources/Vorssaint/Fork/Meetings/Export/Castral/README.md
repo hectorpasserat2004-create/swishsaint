@@ -52,5 +52,10 @@ and `ForkCastralStatus.short(_:)`, 28 characters at most.
 `ForkCalendarAppointments` (`Fork/Notch/Calendar/`) reads `targets` with the same client and
 token, only while the island shows its calendar, at most every 5 minutes, from 12 hours ago to
 two weeks ahead, in memory only. Its setting is `fork.meetings.islandAppointments` (the CRM's
-block here, and the island's Content › Calendar). They step aside while a call is detected or a
-meeting records, if the island is visible in screenshots and videos.
+block here, and the island's Content › Calendar), shown once the CRM has its token. They step
+aside while a call is detected or a meeting records, if the island is visible in screenshots and
+videos; the Settings window's preview of the calendar leaves them out during any call.
+
+Known limit, kept on purpose (no extra seam): while the open island browses another month with
+a countdown on, the official read for the closed island's countdown is the current week's own,
+without the CRM's appointments; they count again as soon as the page closes or comes back to now.
