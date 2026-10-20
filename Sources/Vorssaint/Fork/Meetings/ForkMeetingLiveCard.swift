@@ -335,8 +335,10 @@ private struct ForkMeetingLiveCardMark: View {
     }
 }
 
-/// The time recorded, large, its digits rolling each second; still and
-/// orange while paused. Only this view wakes once a second.
+/// The time recorded, large, in digits of one width; still and orange
+/// while paused. Only this view wakes, once a second: the digits change in
+/// place, since rolling them each second (`NotchRollingDigits`) kept the
+/// island's window redrawing all the time the card was open.
 private struct ForkMeetingLiveCardClock: View {
     let snapshot: ForkMeetingIslandSnapshot
     let label: String
@@ -361,7 +363,6 @@ private struct ForkMeetingLiveCardClock: View {
             .foregroundStyle(ForkMeetingIslandStrip.readingColor(snapshot.phase))
             .lineLimit(1)
             .fixedSize()
-            .modifier(NotchRollingDigits(value: text, countsDown: false))
             .accessibilityElement()
             .accessibilityLabel(label)
             // Spelled out once a second only for VoiceOver, which reads it.
