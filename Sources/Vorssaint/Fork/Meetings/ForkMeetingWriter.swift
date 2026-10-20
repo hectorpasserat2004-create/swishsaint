@@ -73,7 +73,11 @@ final class ForkMeetingWriter: @unchecked Sendable {
     private let videoInput: AVAssetWriterInput?
     private let audioInputs: [AVAssetWriterInput]
     private let pauseClock: RecorderPauseClock
-    private let targetFormat: AVAudioFormat
+    /// 48 kHz mono Float32, made once: every buffer written carries it.
+    private let targetDescription: CMAudioFormatDescription
+    /// One per track: the memory of a buffer the encoder is done with is
+    /// used again for the next one, a hundred times a second.
+    private let pools = Track.allCases.map { _ in CMMemoryPoolCreate(options: nil) }
 
     // Writer queue only.
     private var started = false
@@ -174,7 +178,11 @@ final class ForkMeetingWriter: @unchecked Sendable {
         self.videoInput = videoInput
         self.audioInputs = audioInputs
         self.pauseClock = pauseClock
-        targetFormat = format
+        targetDescription = format.formatDescription
+    }
+
+    deinit {
+        pools.forEach(CMMemoryPoolInvalidate)
     }
 
     /// The official clock is not `Sendable`; it is only handed from the
@@ -289,17 +297,24 @@ final class ForkMeetingWriter: @unchecked Sendable {
             if placement.silence > 0 {
                 writeSilence(placement.silence, at: placement.start - placement.silence, track: track)
             }
-            let kept = samples.dropFirst(Int(placement.skip))
+            let skip = min(samples.count, Int(placement.skip))
+            let kept = samples.count - skip
             lastFed[track.rawValue] = Self.hostSeconds()
-            if !heardFirst[track.rawValue], !kept.isEmpty {
+            if !heardFirst[track.rawValue], kept > 0 {
                 heardFirst[track.rawValue] = true
                 onFirstSound?(track, Double(placement.start) / Self.sampleRate)
             }
-            // A drift absorbed: the first sample held a little longer.
-            let held = placement.stretch > 0 && !kept.isEmpty
-                ? [Float](repeating: kept[kept.startIndex], count: Int(placement.stretch)) : []
-            writeSamples(held + kept, at: placement.start, track: track)
-            publish(peak: Self.peak(kept), track: track)
+            // A drift absorbed: the first sample held a little longer. Both
+            // go straight into the buffer's memory, no array in between.
+            let held = placement.stretch > 0 && kept > 0 ? Int(placement.stretch) : 0
+            writeSamples(count: held + kept, at: placement.start, track: track) { out in
+                samples.withUnsafeBufferPointer { source in
+                    guard let base = source.baseAddress else { return }
+                    if held > 0 { out.update(repeating: base[skip], count: held) }
+                    (out + held).update(from: base + skip, count: kept)
+                }
+            }
+            publish(peak: Self.peak(samples[skip...]), track: track)
         }
     }
 
@@ -456,7 +471,7 @@ final class ForkMeetingWriter: @unchecked Sendable {
         // one-second buffers.
         while left > 0 {
             let chunk = Int(min(left, Int64(Self.sampleRate)))
-            writeSamples([Float](repeating: 0, count: chunk), at: position, track: track)
+            writeSamples(count: chunk, at: position, track: track) { $0.update(repeating: 0, count: chunk) }
             position += Int64(chunk)
             left -= Int64(chunk)
         }
@@ -471,11 +486,17 @@ final class ForkMeetingWriter: @unchecked Sendable {
     /// to pace it, a track whose live sound starts first after minutes
     /// kept before the click waits for the other's (Finish D × sound only).
     /// Past `heldLimit` (the other track stopped for good), the oldest goes.
-    private func writeSamples(_ samples: [Float], at start: Int64, track: Track) {
-        guard !failed, !samples.isEmpty,
-              let buffer = Self.sampleBuffer(samples, start: start, format: targetFormat) else { return }
+    ///
+    /// `fill` writes the `count` samples into the buffer's own memory, taken
+    /// from the track's pool.
+    private func writeSamples(count: Int, at start: Int64, track: Track,
+                              fill: (UnsafeMutablePointer<Float>) -> Void) {
+        guard !failed, count > 0,
+              let buffer = Self.sampleBuffer(count: count, start: start, description: targetDescription,
+                                             blockAllocator: CMMemoryPoolGetAllocator(pools[track.rawValue]),
+                                             fill: fill) else { return }
         held[track.rawValue].append(buffer)
-        heldSamples[track.rawValue] += Int64(samples.count)
+        heldSamples[track.rawValue] += Int64(count)
         appendHeld()
         while heldSamples[track.rawValue] > Self.heldLimit, let oldest = held[track.rawValue].first {
             held[track.rawValue].removeFirst()
@@ -548,32 +569,47 @@ final class ForkMeetingWriter: @unchecked Sendable {
         return peak
     }
 
-    /// Mono Float32 samples as a buffer stamped at sample `start`.
     /// Mono Float32 samples of `format` as a buffer at file sample `start`.
     static func sampleBuffer(_ samples: [Float], start: Int64, format: AVAudioFormat) -> CMSampleBuffer? {
-        guard let count = AVAudioFrameCount(exactly: samples.count),
-              let pcm = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: count),
-              let channel = pcm.floatChannelData?[0] else { return nil }
-        pcm.frameLength = count
-        samples.withUnsafeBufferPointer { source in
-            guard let base = source.baseAddress else { return }
-            channel.update(from: base, count: samples.count)
+        sampleBuffer(count: samples.count, start: start, description: format.formatDescription,
+                     blockAllocator: kCFAllocatorDefault) { out in
+            samples.withUnsafeBufferPointer { source in
+                guard let base = source.baseAddress else { return }
+                out.update(from: base, count: samples.count)
+            }
         }
+    }
+
+    /// `count` mono Float32 samples at file sample `start`, one sample a
+    /// tick of 1/48 000 s, in a block of memory from `blockAllocator` that
+    /// `fill` writes once: nothing is copied after it.
+    static func sampleBuffer(count: Int, start: Int64, description: CMAudioFormatDescription,
+                             blockAllocator: CFAllocator?,
+                             fill: (UnsafeMutablePointer<Float>) -> Void) -> CMSampleBuffer? {
+        guard count > 0 else { return nil }
+        let bytes = count * MemoryLayout<Float>.size
+        var block: CMBlockBuffer?
+        guard CMBlockBufferCreateWithMemoryBlock(allocator: kCFAllocatorDefault, memoryBlock: nil, blockLength: bytes,
+                                                 blockAllocator: blockAllocator, customBlockSource: nil,
+                                                 offsetToData: 0, dataLength: bytes,
+                                                 flags: kCMBlockBufferAssureMemoryNowFlag,
+                                                 blockBufferOut: &block) == kCMBlockBufferNoErr,
+              let block else { return nil }
+        var data: UnsafeMutablePointer<CChar>?
+        guard CMBlockBufferGetDataPointer(block, atOffset: 0, lengthAtOffsetOut: nil, totalLengthOut: nil,
+                                          dataPointerOut: &data) == kCMBlockBufferNoErr,
+              let data else { return nil }
+        UnsafeMutableRawPointer(data).withMemoryRebound(to: Float.self, capacity: count) { fill($0) }
         let timescale = CMTimeScale(sampleRate)
         var timing = CMSampleTimingInfo(duration: CMTime(value: 1, timescale: timescale),
                                         presentationTimeStamp: CMTime(value: start, timescale: timescale),
                                         decodeTimeStamp: .invalid)
         var buffer: CMSampleBuffer?
-        guard CMSampleBufferCreate(allocator: kCFAllocatorDefault, dataBuffer: nil, dataReady: false,
-                                   makeDataReadyCallback: nil, refcon: nil,
-                                   formatDescription: format.formatDescription,
-                                   sampleCount: samples.count, sampleTimingEntryCount: 1,
-                                   sampleTimingArray: &timing, sampleSizeEntryCount: 0, sampleSizeArray: nil,
-                                   sampleBufferOut: &buffer) == noErr,
-              let buffer,
-              CMSampleBufferSetDataBufferFromAudioBufferList(buffer, blockBufferAllocator: kCFAllocatorDefault,
-                                                             blockBufferMemoryAllocator: kCFAllocatorDefault,
-                                                             flags: 0, bufferList: pcm.audioBufferList) == noErr
+        guard CMSampleBufferCreateReady(allocator: kCFAllocatorDefault, dataBuffer: block,
+                                        formatDescription: description, sampleCount: count,
+                                        sampleTimingEntryCount: 1, sampleTimingArray: &timing,
+                                        sampleSizeEntryCount: 0, sampleSizeArray: nil,
+                                        sampleBufferOut: &buffer) == noErr
         else { return nil }
         return buffer
     }

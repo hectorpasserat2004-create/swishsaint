@@ -335,12 +335,15 @@ private struct ForkMeetingLiveCardMark: View {
     }
 }
 
-/// The time recorded, large, its digits rolling each second; still and
-/// orange while paused. Only this view wakes once a second.
+/// The time recorded, large, in digits of one width; still and orange
+/// while paused. Only this view wakes, once a second: the digits change in
+/// place, since rolling them each second (`NotchRollingDigits`) kept the
+/// island's window redrawing all the time the card was open.
 private struct ForkMeetingLiveCardClock: View {
     let snapshot: ForkMeetingIslandSnapshot
     let label: String
     @ObservedObject private var l10n = L10n.shared
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
 
     var body: some View {
         if snapshot.phase.clockRuns {
@@ -360,10 +363,11 @@ private struct ForkMeetingLiveCardClock: View {
             .foregroundStyle(ForkMeetingIslandStrip.readingColor(snapshot.phase))
             .lineLimit(1)
             .fixedSize()
-            .modifier(NotchRollingDigits(value: text, countsDown: false))
             .accessibilityElement()
             .accessibilityLabel(label)
-            .accessibilityValue(ForkMeetingIslandRules.spokenDuration(elapsed, language: l10n.language))
+            // Spelled out once a second only for VoiceOver or Switch Control.
+            .accessibilityValue(ForkMeetingIslandStrip.speaks(voiceOver)
+                                    ? ForkMeetingIslandRules.spokenDuration(elapsed, language: l10n.language) : "")
     }
 }
 
@@ -371,28 +375,13 @@ private struct ForkMeetingLiveCardClock: View {
 private struct ForkMeetingLiveCardMeter: View {
     let snapshot: ForkMeetingIslandSnapshot
     let microphone: Bool
-    @ObservedObject private var model = ForkMeetingIslandModel.shared
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        let live = snapshot.phase.showsLevels
         let heard = microphone ? snapshot.hearsMicrophone : snapshot.hearsMeeting
-        TimelineView(.animation(minimumInterval: reduceMotion ? 0.5 : 1.0 / 15, paused: !live || !heard)) { _ in
-            let levels = live ? model.levels() : .silent
-            let level = microphone ? levels.microphone : levels.meeting
-            HStack(alignment: .center, spacing: 2) {
-                ForEach(0..<5, id: \.self) { index in
-                    let value = CGFloat(min(1, max(0, level.isFinite ? level : 0)))
-                    let lit = heard && live ? min(1, max(0, (value - CGFloat(index) / 5) * 5)) : 0
-                    Capsule(style: .continuous)
-                        .fill(Color.white.opacity(heard ? 0.3 + 0.7 * lit : 0.18))
-                        .frame(width: 2.5, height: max(3, 14 * (0.3 + 0.7 * lit)))
-                }
-            }
-            .frame(height: 14)
-            .animation(reduceMotion ? nil : .linear(duration: 1.0 / 15), value: level)
-        }
-        .accessibilityHidden(true)
+        ForkMeetingLevelBars(style: .card, track: microphone ? .microphone : .meeting, heard: heard,
+                             reads: heard && snapshot.phase.showsLevels, tint: .white)
+            .frame(width: ForkMeetingMeterStyle.card.size.width, height: ForkMeetingMeterStyle.card.size.height)
+            .accessibilityHidden(true)
     }
 }
 

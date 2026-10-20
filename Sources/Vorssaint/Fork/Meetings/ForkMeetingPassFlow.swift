@@ -41,9 +41,12 @@ final class ForkMeetingPassFlow: @unchecked Sendable {
         lock.unlock()
     }
 
-    /// Silent for `limit`, and not completed: releases every pump, once.
-    /// `true` when it did, and the caller then cancels the pass.
-    func stallIfSilent(for limit: TimeInterval, now: UInt64 = DispatchTime.now().uptimeNanoseconds) -> Bool {
+    /// Silent for `limit`, and not completed: `abandon` cancels the pass,
+    /// then every pump is released, once. `true` when it did. The pass is
+    /// cancelled first, so no pump released can go on to finish an input of
+    /// a writer that is about to be cancelled under it.
+    func stallIfSilent(for limit: TimeInterval, now: UInt64 = DispatchTime.now().uptimeNanoseconds,
+                       abandon: () -> Void = {}) -> Bool {
         lock.lock()
         let silent = Double(now >= lastMove ? now - lastMove : 0) / 1e9
         guard !stalled, !completed, silent >= limit else {
@@ -53,6 +56,7 @@ final class ForkMeetingPassFlow: @unchecked Sendable {
         stalled = true
         let pending = releases
         lock.unlock()
+        abandon()
         pending.forEach { $0() }
         return true
     }
