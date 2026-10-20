@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Martial
 
 import AppKit
+import Combine
 import EventKit
 
 /// The island's calendar with each appointment's video link, and the CRM's
@@ -13,8 +14,9 @@ import EventKit
 ///   while the island shows its calendar; only the link found leaves the
 ///   queue, never the notes, and nothing is written.
 /// - **The CRM**: only with the Meetings feature on and a CRM imported,
-///   its setting on, and the island kept out of screenshots and videos
-///   (`ForkCalendarAppointmentsSupport.shows`). Read with the CRM export's
+///   and its setting on (`ForkCalendarAppointmentsSupport.shows`); set
+///   aside while a call is detected or a meeting records, if the island
+///   shows in screenshots and videos (`hides`). Read with the CRM export's
 ///   own client and token, when the island shows its calendar and at most
 ///   every five minutes: no timer, nothing asked otherwise. Kept in memory
 ///   only; a CRM out of reach, or a token refused, leaves the calendar alone,
@@ -43,6 +45,13 @@ final class ForkCalendarAppointments: ObservableObject {
     var isShowing: () -> Bool = { NotchService.shared.expanded && NotchService.shared.selected == .calendar }
     /// A new official read, for what the CRM or the lookups just found.
     var refreshCalendar: () -> Void = { NotchCalendarService.shared.refresh() }
+    /// A call is detected or offered, or a meeting starts or records.
+    var inCall: () -> Bool = {
+        let meetings = ForkMeetingService.shared
+        return meetings.isRecording || meetings.isStarting || meetings.detectedMeeting != nil
+    }
+    /// Follows the Meetings service's calls; the harness tells `callChanged` itself.
+    var followsCalls = true
     /// The links of an interval's events, on `queue`; `nil`: EventKit.
     var readLinks: ((DateInterval) -> [String: ForkCalendarVideoLink])?
     var pasteboard: NSPasteboard = .general
@@ -55,6 +64,10 @@ final class ForkCalendarAppointments: ObservableObject {
     private var generation = 0
     /// What `shows` was last decided on, to notice a change.
     private var gate: String?
+    /// Whether the appointments last stepped aside for a call.
+    private var hidden = false
+    /// The Meetings service's calls, followed once a CRM can show.
+    private var calls: AnyCancellable?
     /// The events already looked up for a link, by id.
     private var looked = Set<String>()
     private var looking = false
@@ -78,6 +91,7 @@ final class ForkCalendarAppointments: ObservableObject {
     private func observe() {
         guard observers.isEmpty else { return }
         gate = gateKey()
+        if gate != nil { followCalls() }
         observers.append(NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification,
                                                                 object: nil, queue: .main) { [weak self] _ in
             self?.preferencesChanged()
@@ -101,7 +115,12 @@ final class ForkCalendarAppointments: ObservableObject {
               defaults.bool(forKey: ForkDefaultsKey.meetingsIslandAppointments) else { return false }
         return ForkCalendarAppointmentsSupport.shows(
             meetings: true, hasCRM: exports().castralConfig != nil, wanted: true,
-            calendar: NotchCalendarSupport.isEnabled(in: defaults), inCaptures: NotchSupport.showsInCaptures(in: defaults))
+            calendar: NotchCalendarSupport.isEnabled(in: defaults))
+    }
+
+    /// Whether the appointments step aside now (`ForkCalendarAppointmentsSupport.hides`).
+    var hidesCRM: Bool {
+        ForkCalendarAppointmentsSupport.hides(inCall: inCall(), inCaptures: NotchSupport.showsInCaptures(in: defaults))
     }
 
     /// The CRM exporter shown, or nothing: what the appointments read belong to.
@@ -111,10 +130,33 @@ final class ForkCalendarAppointments: ObservableObject {
 
     private func preferencesChanged() {
         let key = gateKey()
-        guard key != gate else { return }
+        if key != nil { followCalls() }
+        let hides = key != nil && hidesCRM
+        guard key != gate || hides != hidden else { return }
+        if key != gate { forget() }
         gate = key
-        forget()
+        hidden = hides
         if NotchCalendarSupport.isEnabled(in: defaults) { refreshCalendar() }
+    }
+
+    /// A call's start or end may set the appointments aside or bring them
+    /// back: the Meetings service is followed once a CRM can show (never
+    /// for anyone without one).
+    private func followCalls() {
+        guard followsCalls, calls == nil else { return }
+        let meetings = ForkMeetingService.shared
+        calls = Publishers.CombineLatest3(meetings.$isRecording, meetings.$isStarting,
+                                          meetings.$detectedMeeting.map { $0 != nil })
+            .map { $0 || $1 || $2 }
+            .removeDuplicates()
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.callChanged() }
+    }
+
+    /// A call began or ended (the recipe harness calls it too).
+    func callChanged() {
+        preferencesChanged()
     }
 
     /// Drops every appointment read, and any answer on its way.
@@ -142,9 +184,11 @@ final class ForkCalendarAppointments: ObservableObject {
             gate = key
             forget()
         }
+        if key != nil { followCalls() }
+        hidden = crm && hidesCRM
         if showing || (crm && !read.isEmpty) { lookUp(events, interval: interval) }
-        if crm, showing { readIfDue() }
-        guard crm, !read.isEmpty else {
+        if crm, !hidden, showing { readIfDue() }
+        guard crm, !hidden, !read.isEmpty else {
             if !appointments.isEmpty { appointments = [:] }
             return events
         }

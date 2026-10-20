@@ -190,12 +190,16 @@ enum ForkCalendarAppointmentsTests {
 
     private static func privacy(_ suite: TestSuite) {
         let shows = ForkCalendarAppointmentsSupport.shows
-        suite.expect(shows(true, true, true, true, false), "the CRM's appointments show with everything on")
-        suite.expect(!shows(true, true, true, true, true),
-                     "never while the island shows in screenshots and videos: a shared screen never shows a prospect")
-        suite.expect(!shows(false, true, true, true, false) && !shows(true, false, true, true, false)
-                        && !shows(true, true, false, true, false) && !shows(true, true, true, false, false),
-                     "nor with Meetings off, without a CRM, with the setting off, or with the island's calendar off")
+        suite.expect(shows(true, true, true, true), "the CRM's appointments show with everything on")
+        suite.expect(!shows(false, true, true, true) && !shows(true, false, true, true)
+                        && !shows(true, true, false, true) && !shows(true, true, true, false),
+                     "not with Meetings off, without a CRM, with the setting off, or with the island's calendar off")
+        let hides = ForkCalendarAppointmentsSupport.hides
+        suite.expect(!hides(false, true) && !hides(false, false),
+                     "without a call, they show, the island in screenshots and videos or not (the official default)")
+        suite.expect(hides(true, true),
+                     "during a call detected or recorded, with the island in captures, they step aside: a shared screen never shows a prospect")
+        suite.expect(!hides(true, false), "during a call with the island kept out of captures, they stay")
         let event = ForkCalendarAppointmentsSupport.event(
             ForkCalendarAppointmentsSupport.appointments([booking(1, start: 3600)], now: now)[0], mark: "CRM")
         suite.expect(event.countdownKey.isEmpty && event.calendarItemIdentifier.isEmpty && event.location.isEmpty,

@@ -55,13 +55,19 @@ enum ForkCalendarAppointmentsSupport {
         return now.timeIntervalSince(lastRead) >= refreshInterval || now < lastRead
     }
 
-    /// Whether the island's calendar shows the CRM's appointments: the
+    /// Whether the island's calendar has the CRM's appointments: the
     /// Meetings feature on with a CRM imported, the setting on, the island's
-    /// calendar on, and the island kept out of screenshots and screen
-    /// shares (the official "Show in screenshots and videos" off): a
+    /// calendar on.
+    static func shows(meetings: Bool, hasCRM: Bool, wanted: Bool, calendar: Bool) -> Bool {
+        meetings && hasCRM && wanted && calendar
+    }
+
+    /// Whether they step aside for now: while a call is detected or offered,
+    /// or a meeting records (when a screen is likely shared), with the
+    /// island visible in screenshots and videos (the official setting): a
     /// prospect's name never goes out with a shared screen.
-    static func shows(meetings: Bool, hasCRM: Bool, wanted: Bool, calendar: Bool, inCaptures: Bool) -> Bool {
-        meetings && hasCRM && wanted && calendar && !inCaptures
+    static func hides(inCall: Bool, inCaptures: Bool) -> Bool {
+        inCall && inCaptures
     }
 
     /// The appointments to show: not cancelled nor missed, with a start,

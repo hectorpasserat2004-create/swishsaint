@@ -213,7 +213,6 @@ struct ForkCalendarAppointmentsSetting: View {
     @ObservedObject private var exports = ForkMeetingExports.shared
     @AppStorage(ForkDefaultsKey.meetingsEnabled) private var meetings = false
     @AppStorage(ForkDefaultsKey.meetingsIslandAppointments) private var wanted = true
-    @AppStorage(DefaultsKey.notchShowInCaptures) private var inCaptures = true
 
     var body: some View {
         if meetings, let config = exports.castralConfig {
@@ -224,33 +223,22 @@ struct ForkCalendarAppointmentsSetting: View {
                 SettingsRow(symbol: "person.crop.rectangle.stack", title: strings.settingTitle, caption: caption) {
                     Toggle(strings.settingTitle, isOn: $wanted).labelsHidden().toggleStyle(.switch)
                 }
-                if wanted && inCaptures { hidden(strings).padding(.leading, settingsRowTextInset) }
+                Text(strings.callCaption)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, settingsRowTextInset)
             case .meetings:
                 Toggle(isOn: $wanted) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(strings.settingTitle)
-                        Text(caption)
+                        Text(caption + " " + strings.callCaption)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                if wanted && inCaptures { hidden(strings) }
             }
-        }
-    }
-
-    /// The official "Show in screenshots and videos" keeps them out of the
-    /// island: said, with the way to turn it off (the same setting as the
-    /// island's Behavior tab).
-    private func hidden(_ strings: ForkCalendarAppointmentsStrings) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(strings.hiddenInCaptures)
-                .font(.caption)
-                .foregroundStyle(.orange)
-                .fixedSize(horizontal: false, vertical: true)
-            Button(strings.hideFromCaptures) { inCaptures = false }
-                .controlSize(.small)
         }
     }
 }
