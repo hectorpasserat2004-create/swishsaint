@@ -17,6 +17,10 @@ enum ForkMacBackupIslandRules {
     /// activity leaves and the end-of-run notice takes the island.
     static let finishHold: TimeInterval = 1.4
 
+    /// How long the ring takes to fill (its `.smooth(0.3)`, and a breath)
+    /// before it turns into the checkmark, within `finishHold`.
+    static let fillHold: TimeInterval = 0.35
+
     /// Whether the closed island lists the backup among its activities:
     /// the feature on, the setting « while one runs », and a backup, a
     /// restore or a verification running (or just finished, for the ring's
@@ -78,8 +82,10 @@ enum ForkMacBackupIslandRules {
 
     /// The ring's share: full once finished, the real share while bytes
     /// move, nil (a turning arc) while nothing honest can be said.
+    /// Every byte is sent while the run concludes: the ring stays full
+    /// rather than turning again between the last percent and the checkmark.
     static func ringProgress(_ state: ForkMacBackupPresentation, finishing: Bool) -> Double? {
-        finishing ? 1 : state.fraction
+        finishing || state.phase == .concluding ? 1 : state.fraction
     }
 
     /// The right wing: the percentage or the time left, as chosen
@@ -88,7 +94,7 @@ enum ForkMacBackupIslandRules {
     /// guess nor a word too long for the wing.
     static func reading(_ state: ForkMacBackupPresentation, text: ForkMacBackupStrings, locale: Locale,
                         reading: ForkMacBackupReading, finishing: Bool) -> String {
-        if finishing { return ForkMacBackupFormat.percent(1, locale: locale) }
+        if finishing || state.phase == .concluding { return ForkMacBackupFormat.percent(1, locale: locale) }
         if state.fraction != nil { return state.compactValue(text, locale: locale, reading: reading) }
         if let bytes = state.progress?.bytesDone, bytes > 0 { return ForkMacBackupFormat.bytes(bytes, locale: locale) }
         return "…"
@@ -265,7 +271,7 @@ enum ForkMacBackupIslandRules {
     static func tileReading(_ state: ForkMacBackupPresentation, text: ForkMacBackupStrings, locale: Locale,
                             reading: ForkMacBackupReading, now: Date) -> String? {
         guard state.phase.showsInClosedIsland else { return nil }
-        return state.compactValue(text, locale: locale, reading: reading)
+        return self.reading(state, text: text, locale: locale, reading: reading, finishing: false)
     }
 
     /// The tile lights while something runs, like the timer's; never in red:

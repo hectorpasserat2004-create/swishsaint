@@ -4,19 +4,6 @@
 import AppKit
 import SwiftUI
 
-/// What one frame of the closed island's backup draws, held by
-/// `NotchStripHold` while the activity leaves.
-struct ForkMacBackupIslandSnapshot: Equatable {
-    let state: ForkMacBackupPresentation
-    let finishing: Bool
-
-    var glyph: ForkMacBackupIslandRules.Glyph {
-        ForkMacBackupIslandRules.glyph(phase: state.phase, finishing: finishing)
-    }
-
-    var progress: Double? { ForkMacBackupIslandRules.ringProgress(state, finishing: finishing) }
-}
-
 /// The closed island while a backup, a restore or a verification runs, an
 /// official live activity like Keep Awake's (`NotchKeepAwakeStrip`): left of
 /// the camera a sarcelle ring around its arrow (up for a backup, down for a
@@ -67,7 +54,8 @@ struct ForkMacBackupIslandStrip: View {
     private var text: ForkMacBackupStrings { ForkMacBackupStrings.strings(l10n.language) }
 
     var body: some View {
-        let current = forced ?? ForkMacBackupIslandSnapshot(state: status.presentation, finishing: model.finishing)
+        let current = forced ?? ForkMacBackupIslandSnapshot(state: status.presentation, finishing: model.finishing,
+                                                               checked: model.checked)
         NotchStripHold(current, shows: forced != nil || model.showsActivity) { snapshot in
             strip(snapshot)
         }

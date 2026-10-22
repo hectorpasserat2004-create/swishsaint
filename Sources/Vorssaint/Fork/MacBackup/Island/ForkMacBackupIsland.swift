@@ -177,6 +177,8 @@ final class ForkMacBackupIslandModel: ObservableObject {
 
     /// The ring has just filled: it shows a checkmark for a moment.
     @Published private(set) var finishing = false
+    /// The filled ring has turned into its checkmark.
+    @Published private(set) var checked = false
 
     private let defaults = UserDefaults.standard
     private var stateObserver: AnyCancellable?
@@ -186,6 +188,7 @@ final class ForkMacBackupIslandModel: ObservableObject {
     private var lastReadingShape = ""
     private var failuresInRow = 0
     private var finishWork: DispatchWorkItem?
+    private var checkWork: DispatchWorkItem?
     private var card: (id: UUID, kind: ForkMacBackupIslandCard.Kind)?
     private var cardShownAt: Date?
     private var waitsForPower = false
@@ -241,6 +244,9 @@ final class ForkMacBackupIslandModel: ObservableObject {
         powerObserver = nil
         waitsForPower = false
         if finishing { finishing = false }
+        if checked { checked = false }
+        checkWork?.cancel()
+        checkWork = nil
         if let card { ForkMacBackupIsland.remove(id: card.id) }
         card = nil
         last = nil
@@ -292,12 +298,22 @@ final class ForkMacBackupIslandModel: ObservableObject {
 
     private func finish(then tell: @escaping () -> Void) {
         finishWork?.cancel()
+        checkWork?.cancel()
         finishing = true
+        checked = false
         ForkMacBackupIsland.refreshIsland()
+        // The ring fills first, then turns into the checkmark.
+        let check = DispatchWorkItem { [weak self] in
+            self?.checkWork = nil
+            self?.checked = true
+        }
+        checkWork = check
+        DispatchQueue.main.asyncAfter(deadline: .now() + ForkMacBackupIslandRules.fillHold, execute: check)
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
             self.finishWork = nil
             self.finishing = false
+            self.checked = false
             tell()
             self.relayoutIfNeeded()
         }

@@ -59,6 +59,12 @@ struct ForkMacBackupIslandSection: View {
                 TimelineView(.periodic(from: Date(), by: 30)) { context in
                     page(state, top: top, now: fixedNow ?? context.date)
                 }
+                // Another kind of card swaps through black, as the island's
+                // strips do, so two cards never show half faded over each
+                // other; the steps of one run keep their card and only its
+                // figures move.
+                .id(Self.family(top))
+                .transition(reduceMotion ? .identity : .notchFadeThrough)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -164,7 +170,7 @@ struct ForkMacBackupIslandSection: View {
                                    now: Date) -> some View {
         switch top {
         case .running, .restoring, .verifying, .maintaining:
-            let fraction = state.fraction
+            let fraction = ForkMacBackupIslandRules.ringProgress(state, finishing: false)
             ForkMacBackupIslandHeroRing(
                 progress: fraction, tint: ForkMacBackupIslandRules.readingIsSlowed(state) ? .orange : .teal,
                 value: fraction.map { ForkMacBackupFormat.percent($0, locale: locale) },
@@ -280,6 +286,21 @@ struct ForkMacBackupIslandSection: View {
             files += " / " + total.formatted(.number.locale(locale))
         }
         return String(format: island.filesRead, files) + " · " + island.errors(progress.errors, language: l10n.language)
+    }
+
+    static func family(_ top: ForkMacBackupIslandRules.Top) -> String {
+        switch top {
+        case .off, .notConfigured: return "empty"
+        case .rest: return "rest"
+        case .running: return "running"
+        case .waiting: return "waiting"
+        case .paused: return "paused"
+        case .partial: return "partial"
+        case .failed: return "failed"
+        case .restoring: return "restoring"
+        case .verifying: return "verifying"
+        case .maintaining: return "maintaining"
+        }
     }
 
     static func heroHasAction(_ top: ForkMacBackupIslandRules.Top) -> Bool {
