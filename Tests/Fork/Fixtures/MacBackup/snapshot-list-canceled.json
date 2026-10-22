@@ -1,0 +1,3 @@
+[
+ {"id":"a077aa226fddfab4facb6a9564a945d0","source":{"host":"bench-mac","userName":"bench","path":"/Users/bench/bench/data-cancel"},"description":"","startTime":"2026-10-22T14:31:30.946673Z","endTime":"2026-10-22T14:32:05.676623Z","stats":{"totalSize":0,"excludedTotalSize":0,"fileCount":0,"cachedFiles":0,"nonCachedFiles":1,"dirCount":1,"excludedFileCount":0,"excludedDirCount":0,"ignoredErrorCount":0,"errorCount":0},"incomplete":"canceled","rootEntry":{"name":"data-cancel","type":"d","mode":"0755","mtime":"2026-10-22T14:31:25.906023134Z","uid":501,"obj":"kd09433baf042d54a4c068ba64578b166","summ":{"size":0,"files":0,"symlinks":0,"dirs":1,"maxTime":"2026-10-22T14:31:25.906023134Z","incomplete":"canceled","numFailed":0}},"retentionReason":["incomplete"]}
+]

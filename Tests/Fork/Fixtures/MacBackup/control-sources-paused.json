@@ -1,0 +1,166 @@
+{
+  "localUsername": "bench",
+  "localHost": "bench-mac",
+  "multiUser": true,
+  "sources": [
+    {
+      "source": {
+        "host": "bench-mac",
+        "userName": "bench",
+        "path": "/Users/bench/bench/data"
+      },
+      "status": "IDLE",
+      "schedule": {
+        "manual": true,
+        "runMissed": true
+      },
+      "lastSnapshot": {
+        "id": "a9b5a00bafa892fba06c91da561aa2d7",
+        "source": {
+          "host": "bench-mac",
+          "userName": "bench",
+          "path": "/Users/bench/bench/data"
+        },
+        "description": "",
+        "startTime": "2026-10-22T14:28:29.236261Z",
+        "endTime": "2026-10-22T14:28:54.490302Z",
+        "stats": {
+          "totalSize": 107583965315,
+          "excludedTotalSize": 0,
+          "fileCount": 3052,
+          "cachedFiles": 0,
+          "nonCachedFiles": 3003,
+          "dirCount": 124,
+          "excludedFileCount": 0,
+          "excludedDirCount": 0,
+          "ignoredErrorCount": 0,
+          "errorCount": 1
+        },
+        "rootEntry": {
+          "name": "data",
+          "type": "d",
+          "mode": "0755",
+          "mtime": "2026-10-22T14:22:09.697986813Z",
+          "uid": 501,
+          "obj": "kf242c301993458e50f700ac51eaf0d6b",
+          "summ": {
+            "size": 107583965315,
+            "files": 3002,
+            "symlinks": 1,
+            "dirs": 124,
+            "maxTime": "2026-10-22T14:22:09.697968313Z",
+            "numFailed": 1,
+            "errors": [
+              {
+                "path": "unreadable/mode000.txt",
+                "error": "unable to open file: unable to open local file: open /Users/bench/bench/data/unreadable/mode000.txt: permission denied"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "source": {
+        "host": "bench-mac",
+        "userName": "bench",
+        "path": "/Users/bench/bench/data-cancel"
+      },
+      "status": "PAUSED",
+      "schedule": {
+        "manual": true,
+        "runMissed": true
+      },
+      "lastSnapshot": {
+        "id": "686993139901e2f2db2a207d4ca0bfcc",
+        "source": {
+          "host": "bench-mac",
+          "userName": "bench",
+          "path": "/Users/bench/bench/data-cancel"
+        },
+        "description": "",
+        "startTime": "2026-10-22T14:32:26.206757Z",
+        "endTime": "2026-10-22T14:32:27.644924Z",
+        "stats": {
+          "totalSize": 314572800,
+          "excludedTotalSize": 0,
+          "fileCount": 1,
+          "cachedFiles": 0,
+          "nonCachedFiles": 1,
+          "dirCount": 1,
+          "excludedFileCount": 0,
+          "excludedDirCount": 0,
+          "ignoredErrorCount": 0,
+          "errorCount": 0
+        },
+        "rootEntry": {
+          "name": "data-cancel",
+          "type": "d",
+          "mode": "0755",
+          "mtime": "2026-10-22T14:31:25.906023134Z",
+          "uid": 501,
+          "obj": "kc842653960b965c5502ca5dfa508fb40",
+          "summ": {
+            "size": 314572800,
+            "files": 1,
+            "symlinks": 0,
+            "dirs": 1,
+            "maxTime": "2026-10-22T14:31:27.031256829Z",
+            "numFailed": 0
+          }
+        }
+      }
+    },
+    {
+      "source": {
+        "host": "bench-mac",
+        "userName": "bench",
+        "path": "/Users/bench/bench/data-throttle"
+      },
+      "status": "IDLE",
+      "schedule": {
+        "manual": true,
+        "runMissed": true
+      },
+      "lastSnapshot": {
+        "id": "4dcc3e3967956778c7f1313738158fe3",
+        "source": {
+          "host": "bench-mac",
+          "userName": "bench",
+          "path": "/Users/bench/bench/data-throttle"
+        },
+        "description": "",
+        "startTime": "2026-10-22T14:30:06.48165Z",
+        "endTime": "2026-10-22T14:30:22.342251Z",
+        "stats": {
+          "totalSize": 419430400,
+          "excludedTotalSize": 0,
+          "fileCount": 1,
+          "cachedFiles": 0,
+          "nonCachedFiles": 1,
+          "dirCount": 1,
+          "excludedFileCount": 0,
+          "excludedDirCount": 0,
+          "ignoredErrorCount": 0,
+          "errorCount": 0
+        },
+        "rootEntry": {
+          "name": "data-throttle",
+          "type": "d",
+          "mode": "0755",
+          "mtime": "2026-10-22T14:29:52.737907335Z",
+          "uid": 501,
+          "obj": "k1f4f12bb4ad547617cf288100d1c260d",
+          "summ": {
+            "size": 419430400,
+            "files": 1,
+            "symlinks": 0,
+            "dirs": 1,
+            "maxTime": "2026-10-22T14:29:54.161791464Z",
+            "numFailed": 0
+          }
+        }
+      }
+    }
+  ]
+}

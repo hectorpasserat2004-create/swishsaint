@@ -22,7 +22,7 @@ enum ForkDefaultsTests {
         suite.expect(Set(ForkDefaults.registered.keys).isDisjoint(with: Defaults.registeredDefaults.keys),
                      "no fork setting shadows an official one")
         // Settings added since the fork never had a pre-fork name.
-        let addedSinceFork: Set<String> = [ForkDefaultsKey.cancelEnabled, ForkDefaultsKey.gridModifierKeys,
+        let addedBeforeMacBackup: Set<String> = [ForkDefaultsKey.cancelEnabled, ForkDefaultsKey.gridModifierKeys,
                                            ForkDefaultsKey.strongerModifierKeys, ForkDefaultsKey.previewAtPointer,
                                            ForkDefaultsKey.sizeCycleEnabled,
                                            ForkDefaultsKey.dictationEnabled, ForkDefaultsKey.dictationTrigger,
@@ -48,6 +48,7 @@ enum ForkDefaultsTests {
                                            ForkDefaultsKey.meetingsSummarize,
                                            ForkDefaultsKey.meetingsNudge, ForkDefaultsKey.meetingsLookback,
                                            ForkDefaultsKey.meetingsIslandAppointments]
+        let addedSinceFork = addedBeforeMacBackup.union(ForkMacBackupDefaults.registered.keys)
         suite.expect(Set(ForkDefaults.legacyKeys.values) == Set(ForkDefaults.registered.keys).subtracting(addedSinceFork)
                         && ForkDefaults.legacyKeys.count == ForkDefaults.registered.count - addedSinceFork.count,
                      "every setting of the pre-fork test builds has its new name, and only those")

@@ -72,6 +72,12 @@ struct ForkTests {
             ("fork-meetings-w2-f", { ForkMeetingW2FTests.run(suite) }),
             ("fork-meetings-island-page", { ForkMeetingIslandPageTests.run(suite) }),
             ("fork-calendar-appointments", { ForkCalendarAppointmentsTests.run(suite) }),
+            ("fork-macbackup-core", { ForkMacBackupCoreTests.run(suite) }),
+            ("fork-macbackup-engine", { ForkMacBackupEngineTests.run(suite) }),
+            ("fork-macbackup-agent", { ForkMacBackupAgentTests.run(suite) }),
+            ("fork-macbackup-island", { ForkMacBackupIslandTests.run(suite) }),
+            ("fork-macbackup-settings", { ForkMacBackupSettingsTests.run(suite) }),
+            ("fork-macbackup-window", { ForkMacBackupWindowTests.run(suite) }),
         ]
         var selected = Set<String>()
         var listOnly = false

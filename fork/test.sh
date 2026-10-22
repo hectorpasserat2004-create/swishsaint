@@ -101,6 +101,11 @@ FORK_SOURCES=(
     Sources/Vorssaint/Fork/Update/ForkUpdateStrings.swift
     Sources/Vorssaint/Fork/Update/ForkUpdateSupport.swift
 )
+# Mac Backup: its pure files are found by folder (Core/ and each work package's Pure/), so
+# its packages never edit this list. An empty folder adds nothing.
+shopt -s nullglob
+FORK_SOURCES+=(Sources/Vorssaint/Fork/MacBackup/Core/*.swift Sources/Vorssaint/Fork/MacBackup/*/Pure/*.swift)
+shopt -u nullglob
 
 # La liste officielle : les lignes Sources/… du bloc TEST_SOURCES=( … ) de build.sh.
 OFFICIAL_SOURCES=()
