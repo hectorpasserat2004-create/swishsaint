@@ -109,8 +109,9 @@ struct ForkMacBackupIslandMessage<Actions: View>: View {
     }
 }
 
-/// A word on a small rounded button, filled in sarcelle for the step the
-/// card leads to, as the island's own card buttons are.
+/// A word on a pill, as the island's own pages draw their actions (the
+/// agents' cards, the timer's Start): a quiet wash for the others, the
+/// step the card leads to in sarcelle, its words in sarcelle too.
 struct ForkMacBackupIslandButton: View {
     var symbol: String? = nil
     let title: String
@@ -121,25 +122,42 @@ struct ForkMacBackupIslandButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 5) {
-                if let symbol {
-                    Image(systemName: symbol)
-                        .font(.system(size: 10, weight: .bold))
-                }
-                Text(title)
-                    .lineLimit(1)
-                    .fixedSize()
-            }
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(prominent && enabled ? Color.black : Color.white.opacity(enabled ? 1 : 0.45))
-            .padding(.horizontal, 10)
-            .frame(minHeight: 28)
-            .background(prominent && enabled ? AnyShapeStyle(Color.teal) : AnyShapeStyle(Color.white.opacity(0.1)),
-                        in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            ForkMacBackupIslandPill(symbol: symbol, title: title, prominent: prominent && enabled)
         }
-        .buttonStyle(NotchButtonStyle(cornerRadius: 8))
+        .buttonStyle(NotchButtonStyle(cornerRadius: 14))
         .help(label ?? title)
         .accessibilityLabel(label ?? title)
+    }
+}
+
+/// The pill's face, shared with the pause menu's label.
+struct ForkMacBackupIslandPill: View {
+    var symbol: String? = nil
+    let title: String
+    var prominent = false
+    var chevron = false
+
+    var body: some View {
+        HStack(spacing: 4) {
+            if let symbol {
+                Image(systemName: symbol)
+                    .font(.system(size: 10, weight: .semibold))
+                    .accessibilityHidden(true)
+            }
+            Text(title)
+                .lineLimit(1)
+                .fixedSize()
+            if chevron {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+                    .accessibilityHidden(true)
+            }
+        }
+        .font(.system(size: 12, weight: .semibold))
+        .foregroundStyle(prominent ? Color.teal : Color.white.opacity(0.85))
+        .padding(.horizontal, 12)
+        .frame(height: 28)
+        .background(prominent ? Color.teal.opacity(0.2) : Color.white.opacity(0.1), in: Capsule(style: .continuous))
+        .contentShape(Capsule(style: .continuous))
     }
 }

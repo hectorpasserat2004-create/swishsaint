@@ -73,6 +73,8 @@ struct ForkMacBackupIslandHeroRing: View {
                     .animation(reduceMotion ? nil : .linear(duration: 1.1).repeatForever(autoreverses: false),
                                value: turning)
                     .onAppear { turning = !reduceMotion }
+                    // Back to bytes and turning again (the next source): it turns anew.
+                    .onDisappear { turning = false }
             }
             Group {
                 if let value {
@@ -136,7 +138,6 @@ struct ForkMacBackupIslandChain: View {
     @Binding var hovered: String?
     let open: () -> Void
     @ObservedObject private var l10n = L10n.shared
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let text = ForkMacBackupStrings.strings(l10n.language)
@@ -164,10 +165,7 @@ struct ForkMacBackupIslandChain: View {
                         .frame(width: named ? 6 : 8, height: 1)
                 }
                 HStack(spacing: 4) {
-                    Circle()
-                        .fill(node.state.color)
-                        .frame(width: 7, height: 7)
-                        .animation(reduceMotion ? nil : .smooth(duration: 0.2), value: node.state)
+                    ForkMacBackupIslandChainDot(state: node.state)
                     if named {
                         Text(node.displayTitle(text))
                             .font(.system(size: 10, weight: .medium))
@@ -193,6 +191,27 @@ struct ForkMacBackupIslandChain: View {
         var parts = [node.displayTitle(text), node.state.title(text)]
         if let latency = node.latencyMs, node.state != .broken { parts.append("\(latency) ms") }
         return parts.joined(separator: " · ")
+    }
+}
+
+/// One node's dot: its colour fades in 0.2 s; a node that breaks pulses
+/// twice to be seen (not with Reduce Motion).
+struct ForkMacBackupIslandChainDot: View {
+    let state: ForkMacBackupPresentation.NodeState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var pulses = 0
+
+    var body: some View {
+        Circle()
+            .fill(state.color)
+            .frame(width: 7, height: 7)
+            .animation(reduceMotion ? nil : .smooth(duration: 0.2), value: state)
+            .phaseAnimator([1.0, 1.6, 1.0, 1.6, 1.0], trigger: pulses) { dot, scale in
+                dot.scaleEffect(scale)
+            } animation: { _ in .easeInOut(duration: 0.16) }
+            .onChange(of: state) { old, new in
+                if new == .broken, old != .broken, !reduceMotion { pulses += 1 }
+            }
     }
 }
 

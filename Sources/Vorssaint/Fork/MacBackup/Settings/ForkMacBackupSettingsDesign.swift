@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Martial
 
+import AppKit
 import SwiftUI
 
 /// The Settings package's visual vocabulary: teal for the backup (plan §2),
@@ -127,7 +128,18 @@ struct ForkMacBackupProofLadder: View {
     let shared: ForkMacBackupStrings
     var showsLabels = true
 
+    /// Each step as wide as the widest word, so long ones (Russian,
+    /// German) never run into their neighbours.
+    private var column: CGFloat {
+        guard showsLabels else { return 52 }
+        let font = NSFont.systemFont(ofSize: 9.5)
+        let widest = ForkMacBackupProofLevel.allCases
+            .map { ($0.title(shared) as NSString).size(withAttributes: [.font: font]).width }.max() ?? 0
+        return max(52, (widest + 10).rounded(.up))
+    }
+
     var body: some View {
+        let column = self.column
         HStack(alignment: .top, spacing: 0) {
             ForEach(ForkMacBackupProofLevel.allCases, id: \.self) { step in
                 let reached = level.map { step <= $0 } ?? false
@@ -150,7 +162,7 @@ struct ForkMacBackupProofLadder: View {
                             .fixedSize()
                     }
                 }
-                .frame(minWidth: 52)
+                .frame(width: column)
             }
         }
         .accessibilityElement(children: .ignore)

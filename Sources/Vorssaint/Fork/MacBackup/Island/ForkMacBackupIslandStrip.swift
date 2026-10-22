@@ -4,19 +4,6 @@
 import AppKit
 import SwiftUI
 
-/// What one frame of the closed island's backup draws, held by
-/// `NotchStripHold` while the activity leaves.
-struct ForkMacBackupIslandSnapshot: Equatable {
-    let state: ForkMacBackupPresentation
-    let finishing: Bool
-
-    var glyph: ForkMacBackupIslandRules.Glyph {
-        ForkMacBackupIslandRules.glyph(phase: state.phase, finishing: finishing)
-    }
-
-    var progress: Double? { ForkMacBackupIslandRules.ringProgress(state, finishing: finishing) }
-}
-
 /// The closed island while a backup, a restore or a verification runs, an
 /// official live activity like Keep Awake's (`NotchKeepAwakeStrip`): left of
 /// the camera a sarcelle ring around its arrow (up for a backup, down for a
@@ -67,7 +54,8 @@ struct ForkMacBackupIslandStrip: View {
     private var text: ForkMacBackupStrings { ForkMacBackupStrings.strings(l10n.language) }
 
     var body: some View {
-        let current = forced ?? ForkMacBackupIslandSnapshot(state: status.presentation, finishing: model.finishing)
+        let current = forced ?? ForkMacBackupIslandSnapshot(state: status.presentation, finishing: model.finishing,
+                                                               checked: model.checked)
         NotchStripHold(current, shows: forced != nil || model.showsActivity) { snapshot in
             strip(snapshot)
         }
@@ -138,10 +126,25 @@ struct ForkMacBackupIslandStrip: View {
         let side = NotchCapsuleLayout.side(geometry)
         let layout = NotchCapsuleLayout.self
         return HStack(spacing: layout.spacing) {
-            mark(snapshot, side: layout.symbolWidth)
-                .frame(width: layout.symbolWidth)
+            // With the meter beside it the mark need not fill too, as the
+            // downloads' arrow does not: the ring only turns while no share is known.
+            Group {
+                if snapshot.progress != nil {
+                    Image(systemName: snapshot.glyph.capsuleSymbol)
+                        .font(.system(size: layout.symbolSize, weight: .medium))
+                        .foregroundStyle(Color.teal)
+                        .id(snapshot.glyph)
+                        .transition(.blurReplace)
+                } else {
+                    mark(snapshot, side: layout.symbolWidth)
+                }
+            }
+            .frame(width: layout.symbolWidth)
+            .animation(reduceMotion ? nil : .smooth(duration: 0.3), value: snapshot.glyph)
+            .accessibilityHidden(true)
             if let fraction = snapshot.progress {
-                NotchMeter(value: fraction, height: layout.meterHeight, tint: .teal)
+                NotchMeter(value: fraction, height: layout.meterHeight,
+                           tint: ForkMacBackupIslandRules.readingIsSlowed(snapshot.state) ? .orange : .teal)
                     .frame(width: layout.downloadMeterWidth)
                     .animation(reduceMotion ? nil : .smooth(duration: 0.3), value: fraction)
                     .padding(.leading, layout.groupSpacing - layout.spacing)
@@ -251,7 +254,10 @@ struct ForkMacBackupIslandMark: View {
                     .foregroundStyle(Color.teal)
             } else {
                 ZStack {
+                    // A fresh gauge each time it turns again (the next
+                    // source), so its turning starts anew.
                     ForkMeetingIslandGauge(progress: progress, side: side, tint: .teal)
+                        .id(progress == nil)
                     Image(systemName: glyph.symbol)
                         .font(.system(size: max(6, side * 0.42), weight: .bold))
                         .foregroundStyle(.white)

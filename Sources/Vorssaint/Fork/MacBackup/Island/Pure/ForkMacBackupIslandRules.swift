@@ -17,6 +17,10 @@ enum ForkMacBackupIslandRules {
     /// activity leaves and the end-of-run notice takes the island.
     static let finishHold: TimeInterval = 1.4
 
+    /// How long the ring takes to fill (its `.smooth(0.3)`, and a breath)
+    /// before it turns into the checkmark, within `finishHold`.
+    static let fillHold: TimeInterval = 0.35
+
     /// Whether the closed island lists the backup among its activities:
     /// the feature on, the setting « while one runs », and a backup, a
     /// restore or a verification running (or just finished, for the ring's
@@ -55,6 +59,16 @@ enum ForkMacBackupIslandRules {
             case .done: return "checkmark"
             }
         }
+
+        /// The filled mark the capsule shows beside its meter.
+        var capsuleSymbol: String {
+            switch self {
+            case .upload: return "arrow.up.circle.fill"
+            case .download: return "arrow.down.circle.fill"
+            case .verify: return "checkmark.shield.fill"
+            case .done: return "checkmark.circle.fill"
+            }
+        }
     }
 
     static func glyph(phase: ForkMacBackupPhase, finishing: Bool) -> Glyph {
@@ -68,8 +82,20 @@ enum ForkMacBackupIslandRules {
 
     /// The ring's share: full once finished, the real share while bytes
     /// move, nil (a turning arc) while nothing honest can be said.
+    /// Every byte is sent while the run concludes: the ring stays full
+    /// rather than turning again between the last percent and the checkmark.
     static func ringProgress(_ state: ForkMacBackupPresentation, finishing: Bool) -> Double? {
-        finishing ? 1 : state.fraction
+        finishing || state.phase == .concluding ? 1 : share(state)
+    }
+
+    /// How far the operation is: its bytes, or for a verification (which
+    /// counts files, not bytes) the files checked.
+    static func share(_ state: ForkMacBackupPresentation) -> Double? {
+        if let fraction = state.fraction { return fraction }
+        guard state.phase == .verifying, let progress = state.progress, let total = progress.filesTotal, total > 0 else {
+            return nil
+        }
+        return min(1, max(0, Double(progress.files) / Double(total)))
     }
 
     /// The right wing: the percentage or the time left, as chosen
@@ -78,8 +104,9 @@ enum ForkMacBackupIslandRules {
     /// guess nor a word too long for the wing.
     static func reading(_ state: ForkMacBackupPresentation, text: ForkMacBackupStrings, locale: Locale,
                         reading: ForkMacBackupReading, finishing: Bool) -> String {
-        if finishing { return ForkMacBackupFormat.percent(1, locale: locale) }
+        if finishing || state.phase == .concluding { return ForkMacBackupFormat.percent(1, locale: locale) }
         if state.fraction != nil { return state.compactValue(text, locale: locale, reading: reading) }
+        if let share = share(state) { return ForkMacBackupFormat.percent(share, locale: locale) }
         if let bytes = state.progress?.bytesDone, bytes > 0 { return ForkMacBackupFormat.bytes(bytes, locale: locale) }
         return "…"
     }
@@ -121,6 +148,33 @@ enum ForkMacBackupIslandRules {
         case .verifying: return .verifying
         case .maintaining: return .maintaining
         }
+    }
+
+    /// The section card's title where its ring already says the number:
+    /// « Protégé » beside « 2 h », « Sauvegarde » around « 42 % », never the
+    /// same figure twice. Nil: the state's own headline.
+    static func heroTitle(_ state: ForkMacBackupPresentation, text: ForkMacBackupStrings) -> String? {
+        switch state.phase {
+        case .ready, .finished(.nothingToDo):
+            return state.protectedSince == nil ? nil : text.protected
+        case .uploading where state.fraction != nil: return bare(text.running)
+        case .slowed where state.fraction != nil: return bare(text.slowed)
+        default: return nil
+        }
+    }
+
+    /// « Partielle · 3 fichiers » after its word: « 3 fichiers », the
+    /// partial notice's detail, in the section's own words.
+    static func count(_ phrase: String) -> String {
+        guard let range = phrase.range(of: " · ") else { return phrase }
+        return String(phrase[range.upperBound...])
+    }
+
+    /// « Sauvegarde · %@ » without its figure: « Sauvegarde ».
+    static func bare(_ format: String) -> String {
+        var words = format.replacingOccurrences(of: "%@", with: "")
+        while let last = words.last, last == " " || last == "·" || last == "\u{00A0}" { words.removeLast() }
+        return words
     }
 
     /// The one button beside the camera.
@@ -206,8 +260,9 @@ enum ForkMacBackupIslandRules {
         }
     }
 
-    /// « aujourd’hui 10:04 », « hier 19:14 », else « 16 oct., 19:14 », in
-    /// the locale's own clock.
+    /// « aujourd’hui à 10:04 », « hier à 19:14 », else « 16 oct., 19:14 »,
+    /// in the locale's own clock: the one way every Mac Backup screen says
+    /// when (the island, the Settings page).
     static func when(_ date: Date, now: Date, locale: Locale, calendar: Calendar = .current) -> String {
         if calendar.isDate(date, inSameDayAs: now)
             || calendar.date(byAdding: .day, value: -1, to: now).map({ calendar.isDate(date, inSameDayAs: $0) }) == true {
@@ -217,9 +272,20 @@ enum ForkMacBackupIslandRules {
             formatter.dateStyle = .medium
             formatter.timeStyle = .short
             formatter.doesRelativeDateFormatting = true
+            // « Dernière : aujourd’hui à 10:04 », « Last: today at 10:04 ».
+            formatter.formattingContext = .middleOfSentence
             return formatter.string(from: date)
         }
         return ForkMacBackupFormat.dayAndTime(date, locale: locale, timeZone: calendar.timeZone)
+    }
+
+    /// « Prochaine vers 14:04 » for the Automatic rhythm, which only aims
+    /// at a time; « Prochaine à 14:00 » for set times or hours.
+    static func nextLine(_ next: Date, rhythm: ForkMacBackupPresentation.Rhythm, shared: ForkMacBackupStrings,
+                         around: String, locale: Locale) -> String {
+        let time = ForkMacBackupFormat.time(next, locale: locale)
+        if case .automatic = rhythm { return String(format: around, time) }
+        return String(format: shared.nextAt, time)
     }
 
     /// The section's height: compact (180 pt) unless « spacious » (264 pt).
@@ -229,23 +295,19 @@ enum ForkMacBackupIslandRules {
 
     // MARK: - The tile
 
-    /// The tile's reading: « 42 % » while something runs, « il y a 2 h » at
-    /// rest, nothing before the first backup.
+    /// The tile's reading: « 42 % » while something runs, as the closed
+    /// island shows it; nothing otherwise: the state lives in the section the
+    /// tile opens (decision 2 of 22/10), never a delay outside it.
     static func tileReading(_ state: ForkMacBackupPresentation, text: ForkMacBackupStrings, locale: Locale,
                             reading: ForkMacBackupReading, now: Date) -> String? {
-        if state.phase.showsInClosedIsland { return state.compactValue(text, locale: locale, reading: reading) }
-        switch state.phase {
-        case .off, .notConfigured: return nil
-        default: return state.lastBackup.map { ForkMacBackupFormat.relative($0.date, now: now, locale: locale) }
-        }
+        guard state.phase.showsInClosedIsland else { return nil }
+        return self.reading(state, text: text, locale: locale, reading: reading, finishing: false)
     }
 
-    /// The tile lights while something runs (white), or in red while the
-    /// chain is broken: the tile is inside the island, where the state may
-    /// show.
+    /// The tile lights while something runs, like the timer's; never in red:
+    /// a broken chain is told in the section only (decision 3 of 22/10).
     static func tileAccent(_ state: ForkMacBackupPresentation) -> (active: Bool, alert: Bool) {
-        let broken = state.hasBrokenNode || state.phase == .finished(.failed(.chainBroken))
-        return (state.phase.showsInClosedIsland || broken, broken && !state.phase.showsInClosedIsland)
+        (state.phase.showsInClosedIsland, false)
     }
 
     // MARK: - Notices
@@ -423,7 +485,8 @@ enum ForkMacBackupIslandRules {
                              locale: Locale, now: Date) -> String {
         var parts = [state.headline(text, language: language, locale: locale, now: now)]
         if case .ready = state.phase, state.protectedSince != nil, let next = state.nextRun, next > now {
-            parts.append(String(format: text.nextAt, ForkMacBackupFormat.time(next, locale: locale)))
+            parts.append(nextLine(next, rhythm: state.rhythm, shared: text,
+                                  around: ForkMacBackupSettingsStrings.strings(language).nextAround, locale: locale))
         }
         return parts.joined(separator: " · ")
     }

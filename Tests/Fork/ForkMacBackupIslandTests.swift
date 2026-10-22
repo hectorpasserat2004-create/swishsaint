@@ -15,6 +15,7 @@ enum ForkMacBackupIslandTests {
         readings(suite)
         section(suite)
         tile(suite)
+        timeline(suite)
         notices(suite)
         mascot(suite)
         cards(suite)
@@ -198,6 +199,18 @@ enum ForkMacBackupIslandTests {
                         && ForkMacBackupIslandRules.sectionHeight("compact") == 180
                         && ForkMacBackupIslandRules.sectionHeight(nil) == 180,
                      "the section is 180 pt, or 264 pt spacious")
+        let bare = AppLanguage.allCases.map { ForkMacBackupIslandRules.bare(ForkMacBackupStrings.strings($0).running) }
+        suite.expect(bare.allSatisfy { !$0.isEmpty && !$0.contains("%") && !$0.hasSuffix("·") && !$0.hasSuffix(" ") }
+                        && ForkMacBackupIslandRules.bare(ForkMacBackupStrings.fr.running) == "Sauvegarde",
+                     "the card's title without its figure, in every language: \(bare)")
+        let counts = AppLanguage.allCases.map { ForkMacBackupIslandRules.count(ForkMacBackupStrings.strings($0).partial(3, language: $0)) }
+        suite.expect(counts.allSatisfy { $0.contains("3") && !$0.contains("·") } && counts[AppLanguage.allCases.firstIndex(of: .fr)!] == "3 fichiers",
+                     "the partial notice says how many files, as the section does: \(counts)")
+        let frText = ForkMacBackupStrings.fr
+        suite.expect(ForkMacBackupIslandRules.heroTitle(ForkMacBackupPresentation.preview(.protected, now: now), text: frText) == "Protégé"
+                        && ForkMacBackupIslandRules.heroTitle(ForkMacBackupPresentation.preview(.running42, now: now), text: frText) == "Sauvegarde"
+                        && ForkMacBackupIslandRules.heroTitle(ForkMacBackupPresentation.preview(.scanning, now: now), text: frText) == nil,
+                     "the ring says the figure, the title never repeats it")
 
         let fr = locale("fr_FR")
         let today = ForkMacBackupIslandRules.when(now.addingTimeInterval(-2 * hour), now: now, locale: fr, calendar: calendar)
@@ -210,9 +223,10 @@ enum ForkMacBackupIslandTests {
         let text = ForkMacBackupStrings.strings(.fr)
         let fr = locale("fr_FR")
         let rest = ForkMacBackupPresentation.preview(.protected, now: now)
-        let reading = ForkMacBackupIslandRules.tileReading(rest, text: text, locale: fr, reading: .percent, now: now)
-        suite.expect(reading?.contains("2") == true && reading?.lowercased().contains("il y a") == true,
-                     "the tile reads « il y a 2 h » at rest: \(String(describing: reading))")
+        suite.expect(ForkMacBackupIslandRules.tileReading(rest, text: text, locale: fr, reading: .percent, now: now) == nil
+                        && ForkMacBackupIslandRules.tileReading(ForkMacBackupPresentation.preview(.failedChainBroken, now: now),
+                                                                text: text, locale: fr, reading: .percent, now: now) == nil,
+                     "at rest the tile only names the section: the state lives inside it (decision 2)")
         let running = ForkMacBackupIslandRules.tileReading(ForkMacBackupPresentation.preview(.running42, now: now),
                                                            text: text, locale: fr, reading: .percent, now: now)
         suite.expect(running?.hasPrefix("42") == true, "« 42 % » while it runs")
@@ -222,8 +236,60 @@ enum ForkMacBackupIslandTests {
         let broken = ForkMacBackupIslandRules.tileAccent(ForkMacBackupPresentation.preview(.failedChainBroken, now: now))
         let busy = ForkMacBackupIslandRules.tileAccent(ForkMacBackupPresentation.preview(.running42, now: now))
         let calm = ForkMacBackupIslandRules.tileAccent(rest)
-        suite.expect(broken.active && broken.alert && busy.active && !busy.alert && !calm.active,
-                     "the tile lights while running, in red while the chain is broken")
+        suite.expect(!broken.active && !broken.alert && busy.active && !busy.alert && !calm.active,
+                     "the tile lights while running, never in red: no alert outside the section (decision 3)")
+    }
+
+    // MARK: Timeline
+
+    /// One run as the agent publishes it, second by second: the closed
+    /// island shows it from the first step to the checkmark, its ring never
+    /// turns again nor empties once bytes move, and its reading never goes
+    /// back to bytes or an ellipsis between the last percent and the end.
+    private static func timeline(_ suite: TestSuite) {
+        let text = ForkMacBackupStrings.strings(.fr)
+        let fr = locale("fr_FR")
+        let total: Int64 = 3_100_000_000
+        func state(_ phase: ForkMacBackupPhase, _ done: Int64? = nil, known: Bool = true) -> ForkMacBackupPresentation {
+            ForkMacBackupPresentation(phase: phase, progress: done.map {
+                ForkMacBackupPresentation.Progress(bytesDone: $0, bytesTotal: known ? total : nil, bytesUploaded: $0 / 2,
+                                                   files: 10, filesTotal: nil, bytesPerSecond: nil, eta: nil,
+                                                   currentPath: nil, errors: 0)
+            })
+        }
+        let steps: [(ForkMacBackupPresentation, Bool)] = [
+            (state(.checkingChain), false), (state(.preparing), false), (state(.scanning, 200_000_000, known: false), false),
+            (state(.uploading, 300_000_000), false), (state(.uploading, 1_300_000_000), false),
+            (state(.uploading, 3_090_000_000), false), (state(.concluding, 3_100_000_000, known: false), false),
+            (state(.finished(.complete)), true),
+        ]
+        let shows = steps.map { ForkMacBackupIslandRules.showsActivity(enabled: true, setting: .running, phase: $0.0.phase,
+                                                                         finishing: $0.1) }
+        suite.expect(shows.allSatisfy { $0 }
+                        && !ForkMacBackupIslandRules.showsActivity(enabled: true, setting: .running,
+                                                                   phase: .finished(.complete), finishing: false),
+                     "the closed island shows the run from its first step to the checkmark, then lets it go: \(shows)")
+        let rings = steps.map { ForkMacBackupIslandRules.ringProgress($0.0, finishing: $0.1) }
+        let moving = rings.drop { $0 == nil }
+        suite.expect(rings.prefix(3).allSatisfy { $0 == nil } && !moving.contains { $0 == nil }
+                        && zip(moving, moving.dropFirst()).allSatisfy { ($0 ?? 0) <= ($1 ?? 0) } && rings.last == 1,
+                     "the ring turns until bytes move, then only fills: \(rings)")
+        let readings = steps.map { ForkMacBackupIslandRules.reading($0.0, text: text, locale: fr, reading: .percent,
+                                                                      finishing: $0.1) }
+        suite.expect(readings.dropFirst(3).allSatisfy { $0.hasSuffix("%") } && readings[2].contains("Mo")
+                        && readings[0] == "…",
+                     "an ellipsis, the bytes read while scanning, then only percentages to the end: \(readings)")
+        let verifying = ForkMacBackupPresentation.preview(.verifying, now: now)
+        let verifyReading = ForkMacBackupIslandRules.reading(verifying, text: text, locale: fr, reading: .percent, finishing: false)
+        suite.expect(ForkMacBackupIslandRules.ringProgress(verifying, finishing: false) != nil && verifyReading.hasSuffix("%"),
+                     "a verification counts files: its ring and reading say how far, never an ellipsis: \(verifyReading)")
+        suite.expect(ForkMacBackupIslandRules.fillHold < ForkMacBackupIslandRules.finishHold
+                        && ForkMacBackupIslandRules.fillHold >= 0.3,
+                     "the ring fills (0.3 s) before it turns into the checkmark, within the hold")
+        suite.expect(ForkMacBackupIslandSnapshot(state: steps[7].0, finishing: true, checked: false).glyph == .upload
+                        && ForkMacBackupIslandSnapshot(state: steps[7].0, finishing: true, checked: true).glyph == .done
+                        && ForkMacBackupIslandSnapshot(state: steps[7].0, finishing: false, checked: true).glyph == .upload,
+                     "the arrow stays while the ring fills, then the checkmark")
     }
 
     // MARK: Notices

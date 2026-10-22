@@ -79,7 +79,7 @@ struct ForkMacBackupFileTable: NSViewRepresentable {
             var width: CGFloat {
                 switch self {
                 case .name: return 250
-                case .status: return 120
+                case .status: return 160
                 case .size: return 80
                 case .modified: return 140
                 }

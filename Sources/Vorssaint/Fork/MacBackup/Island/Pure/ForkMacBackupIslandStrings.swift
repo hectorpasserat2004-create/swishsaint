@@ -129,7 +129,7 @@ struct ForkMacBackupIslandStrings {
 
 extension ForkMacBackupIslandStrings {
     static let enUS = ForkMacBackupIslandStrings(
-        sectionSummary: "Your backup on demand: progress, chain and proofs",
+        sectionSummary: "The backup under way, the last one and its proof.",
         emptyMessage: "Protect this Mac with backups to your own storage.",
         filesRead: "%@ files read",
         errorsNone: "no errors",
@@ -194,7 +194,7 @@ extension ForkMacBackupIslandStrings {
     )
 
     static let fr = ForkMacBackupIslandStrings(
-        sectionSummary: "Votre sauvegarde à la demande\u{00A0}: progression, chaîne et preuves",
+        sectionSummary: "La sauvegarde en cours, la dernière et sa preuve.",
         emptyMessage: "Protégez ce Mac avec des sauvegardes sur votre propre stockage.",
         filesRead: "%@ fichiers lus",
         errorsNone: "aucune erreur",
@@ -259,7 +259,7 @@ extension ForkMacBackupIslandStrings {
     )
 
     static let ptBR = ForkMacBackupIslandStrings(
-        sectionSummary: "Seu backup sob demanda: progresso, cadeia e provas",
+        sectionSummary: "O backup em andamento, o último e sua prova.",
         emptyMessage: "Proteja este Mac com backups no seu próprio armazenamento.",
         filesRead: "%@ arquivos lidos",
         errorsNone: "nenhum erro",
@@ -324,7 +324,7 @@ extension ForkMacBackupIslandStrings {
     )
 
     static let tr = ForkMacBackupIslandStrings(
-        sectionSummary: "İstendiğinde yedeklemeniz: ilerleme, zincir ve kanıtlar",
+        sectionSummary: "Süren yedekleme, sonuncusu ve kanıtı.",
         emptyMessage: "Bu Mac’i kendi depolamanıza yedeklemelerle koruyun.",
         filesRead: "%@ dosya okundu",
         errorsNone: "hata yok",
@@ -389,7 +389,7 @@ extension ForkMacBackupIslandStrings {
     )
 
     static let ru = ForkMacBackupIslandStrings(
-        sectionSummary: "Ваша копия по запросу: ход, цепочка и доказательства",
+        sectionSummary: "Текущее копирование, последняя копия и её подтверждение.",
         emptyMessage: "Защитите этот Mac копиями в собственном хранилище.",
         filesRead: "Прочитано файлов: %@",
         errorsNone: "без ошибок",
@@ -454,7 +454,7 @@ extension ForkMacBackupIslandStrings {
     )
 
     static let es = ForkMacBackupIslandStrings(
-        sectionSummary: "Tu copia a demanda: progreso, cadena y pruebas",
+        sectionSummary: "La copia en curso, la última y su prueba.",
         emptyMessage: "Protege este Mac con copias en tu propio almacenamiento.",
         filesRead: "%@ archivos leídos",
         errorsNone: "sin errores",
@@ -519,7 +519,7 @@ extension ForkMacBackupIslandStrings {
     )
 
     static let sk = ForkMacBackupIslandStrings(
-        sectionSummary: "Vaša záloha na požiadanie: priebeh, reťazec a dôkazy",
+        sectionSummary: "Prebiehajúca záloha, posledná a jej dôkaz.",
         emptyMessage: "Chráňte tento Mac zálohami na vlastné úložisko.",
         filesRead: "Prečítané súbory: %@",
         errorsNone: "bez chýb",
@@ -584,7 +584,7 @@ extension ForkMacBackupIslandStrings {
     )
 
     static let de = ForkMacBackupIslandStrings(
-        sectionSummary: "Deine Sicherung auf Abruf: Fortschritt, Kette und Nachweise",
+        sectionSummary: "Die laufende Sicherung, die letzte und ihr Nachweis.",
         emptyMessage: "Schütze diesen Mac mit Sicherungen auf deinem eigenen Speicher.",
         filesRead: "%@ Dateien gelesen",
         errorsNone: "keine Fehler",
@@ -649,7 +649,7 @@ extension ForkMacBackupIslandStrings {
     )
 
     static let it = ForkMacBackupIslandStrings(
-        sectionSummary: "Il tuo backup su richiesta: avanzamento, catena e prove",
+        sectionSummary: "Il backup in corso, l’ultimo e la sua prova.",
         emptyMessage: "Proteggi questo Mac con backup sul tuo spazio di archiviazione.",
         filesRead: "%@ file letti",
         errorsNone: "nessun errore",
@@ -714,7 +714,7 @@ extension ForkMacBackupIslandStrings {
     )
 
     static let ja = ForkMacBackupIslandStrings(
-        sectionSummary: "必要なときにバックアップを確認：進行状況、経路、証明",
+        sectionSummary: "実行中のバックアップ、前回のバックアップとその証明。",
         emptyMessage: "自分のストレージへのバックアップでこのMacを保護します。",
         filesRead: "%@ ファイルを読み込み済み",
         errorsNone: "エラーなし",
@@ -779,7 +779,7 @@ extension ForkMacBackupIslandStrings {
     )
 
     static let ko = ForkMacBackupIslandStrings(
-        sectionSummary: "필요할 때 보는 백업: 진행 상황, 경로, 증명",
+        sectionSummary: "진행 중인 백업, 마지막 백업과 그 증명.",
         emptyMessage: "내 저장소로 백업해 이 Mac을 보호하세요.",
         filesRead: "파일 %@개 읽음",
         errorsNone: "오류 없음",
@@ -844,7 +844,7 @@ extension ForkMacBackupIslandStrings {
     )
 
     static let uk = ForkMacBackupIslandStrings(
-        sectionSummary: "Ваша копія на вимогу: перебіг, ланцюжок і докази",
+        sectionSummary: "Поточне копіювання, остання копія та її підтвердження.",
         emptyMessage: "Захистіть цей Mac копіями у власному сховищі.",
         filesRead: "Прочитано файлів: %@",
         errorsNone: "без помилок",
@@ -909,7 +909,7 @@ extension ForkMacBackupIslandStrings {
     )
 
     static let zhHans = ForkMacBackupIslandStrings(
-        sectionSummary: "按需查看备份：进度、链路和证明",
+        sectionSummary: "正在进行的备份、上一次备份及其证明。",
         emptyMessage: "备份到你自己的存储，保护这台 Mac。",
         filesRead: "已读取 %@ 个文件",
         errorsNone: "没有错误",
@@ -974,7 +974,7 @@ extension ForkMacBackupIslandStrings {
     )
 
     static let zhTW = ForkMacBackupIslandStrings(
-        sectionSummary: "隨時查看備份：進度、鏈路與證明",
+        sectionSummary: "正在進行的備份、上一次備份及其證明。",
         emptyMessage: "備份到你自己的儲存空間，保護這台 Mac。",
         filesRead: "已讀取 %@ 個檔案",
         errorsNone: "沒有錯誤",
@@ -1039,7 +1039,7 @@ extension ForkMacBackupIslandStrings {
     )
 
     static let zhHK = ForkMacBackupIslandStrings(
-        sectionSummary: "隨時查看備份：進度、鏈路與證明",
+        sectionSummary: "正在進行的備份、上一次備份及其證明。",
         emptyMessage: "備份到你自己的儲存空間，保護這部 Mac。",
         filesRead: "已讀取 %@ 個檔案",
         errorsNone: "沒有錯誤",

@@ -55,7 +55,8 @@ struct ForkMacBackupStatusCard: View {
             .controlSize(.regular)
         }
         .padding(.vertical, 4)
-        // Begun and ended by the same view whatever the phase did meanwhile.
+        // Balanced as the phase changes under it: a run that starts or ends
+        // while the card shows takes or gives back the live lease.
         .modifier(ForkMacBackupLiveLease(status: context.status, active: presentation.phase.showsInClosedIsland))
     }
 
@@ -79,7 +80,8 @@ struct ForkMacBackupStatusCard: View {
                 line("clock", String(format: shared.lastBackup, shared.never))
             }
             if let next = presentation.nextRun ?? nextFromPhase {
-                line("calendar", String(format: text.nextAround, ForkMacBackupFormat.time(next, locale: locale)))
+                line("calendar", ForkMacBackupIslandRules.nextLine(next, rhythm: presentation.rhythm, shared: shared,
+                                                                   around: text.nextAround, locale: locale))
             }
         }
     }
@@ -164,25 +166,10 @@ struct ForkMacBackupStatusCard: View {
         }
     }
 
-    /// « aujourd'hui 10:04 », « hier 22:10 », else the day and the time.
+    /// The island's way to say when (« aujourd’hui à 10:04 »), so both
+    /// screens say it alike.
     static func when(_ date: Date, now: Date, locale: Locale) -> String {
-        var calendar = Calendar.current
-        calendar.locale = locale
-        if calendar.isDate(date, inSameDayAs: now) || calendar.isDate(date, inSameDayAs: now.addingTimeInterval(-86_400)) {
-            let day = calendar.isDate(date, inSameDayAs: now)
-                ? Self.dayName(offset: 0, locale: locale) : Self.dayName(offset: -1, locale: locale)
-            return day + " " + ForkMacBackupFormat.time(date, locale: locale)
-        }
-        return ForkMacBackupDay.text(date, locale: locale, now: now) + " " + ForkMacBackupFormat.time(date, locale: locale)
-    }
-
-    /// « aujourd'hui », « hier » in the locale's words.
-    private static func dayName(offset: Int, locale: Locale) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.locale = locale
-        formatter.dateTimeStyle = .named
-        formatter.formattingContext = .middleOfSentence
-        return formatter.localizedString(from: DateComponents(day: offset))
+        ForkMacBackupIslandRules.when(date, now: now, locale: locale)
     }
 
     static func tomorrowMorning(_ now: Date) -> Date {
