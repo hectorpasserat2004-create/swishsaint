@@ -288,7 +288,13 @@ struct ForkMacBackupAgentSettings: Equatable {
             ForkMacBackupRetention.Preset(rawValue: string(ForkDefaultsKey.macBackupRetentionPreset)) ?? .fallback,
             custom: string(ForkDefaultsKey.macBackupRetentionCustom))
         repository = json(ForkMacBackupRepository.self, ForkDefaultsKey.macBackupRepository)
-        sources = json([ForkMacBackupSource].self, ForkDefaultsKey.macBackupSources) ?? []
+        // The rules are the person's settings, not the copies kept with each
+        // source: an imported settings backup restores these two keys only.
+        let storedPresets = value(ForkDefaultsKey.macBackupPresets) as? String
+        let storedRules = value(ForkDefaultsKey.macBackupRules) as? String
+        sources = (json([ForkMacBackupSource].self, ForkDefaultsKey.macBackupSources) ?? []).map {
+            $0.applying(presets: storedPresets, rules: storedRules)
+        }
         profile = json(ForkMacBackupProfile.self, ForkDefaultsKey.macBackupProfile)
         priority = Priority(rawValue: string(ForkDefaultsKey.macBackupPriority)) ?? .low
         watchdog = TimeInterval(int(ForkDefaultsKey.macBackupWatchdogMinutes, 2...240, fallback: 10) * 60)

@@ -38,6 +38,7 @@ enum ForkMacBackupAgentTests {
         proofStore(suite)
         journal(suite)
         priorities(suite)
+        importedRules(suite)
         prescanPlan(suite)
         materialize(suite)
         strings(suite)
@@ -1208,6 +1209,37 @@ enum ForkMacBackupAgentTests {
         suite.expect(background.serverSpawn == .utility
                         && ForkMacBackupKopiaInvocation.Priority.normal.serverSpawn == .normal,
                      "a server is never spawned in a background class it could not leave for « Sauvegarder maintenant »")
+    }
+
+    /// Rules imported with the settings backup (the two keys) reach the agent, not the per-source copies.
+    private static func importedRules(_ suite: TestSuite) {
+        var all: [String: Any] = [ForkDefaultsKey.macBackupEnabled: true]
+        all[ForkDefaultsKey.macBackupRepository] = try! ForkMacBackupJSON.encoder.encode(repository)
+        // The machine state still carries the old copies.
+        all[ForkDefaultsKey.macBackupSources] = try! ForkMacBackupJSON.encoder.encode([
+            ForkMacBackupSource(path: "/Users/test", presets: [.trash], customRules: ["old.tmp"]),
+            ForkMacBackupSource(path: "/Volumes/Data", presets: [.trash], customRules: ["old.tmp"])])
+        all[ForkDefaultsKey.macBackupPresets] = "caches,logs"
+        all[ForkDefaultsKey.macBackupRules] = "[\"node_modules\", \" *.iso \", \"\"]"
+        let imported = ForkMacBackupAgentSettings { all[$0] }
+        suite.expect(imported.sources.count == 2
+                        && imported.sources.allSatisfy { $0.presets == ForkMacBackupPreset.parse("caches,logs") }
+                        && imported.sources.allSatisfy { $0.customRules == ["node_modules", "*.iso"] },
+                     "the agent reads the presets and rules from the keys the Settings write and the import restores")
+        all[ForkDefaultsKey.macBackupRules] = ""
+        all[ForkDefaultsKey.macBackupPresets] = ""
+        let cleared = ForkMacBackupAgentSettings { all[$0] }
+        suite.expect(cleared.sources.allSatisfy { $0.presets.isEmpty && $0.customRules.isEmpty },
+                     "emptied in the Settings, emptied for the agent: no stale per-source copy")
+        all[ForkDefaultsKey.macBackupPresets] = nil
+        let fallback = ForkMacBackupAgentSettings { all[$0] }
+        suite.expect(fallback.sources.allSatisfy { $0.presets == ForkMacBackupPreset.defaultApplied },
+                     "an unset key reads as the registered default")
+        suite.expect(imported.sources != ForkMacBackupAgentSettings { key in
+            var other = all
+            other[ForkDefaultsKey.macBackupRules] = "[\"node_modules\"]"
+            return other[key]
+        }.sources, "a change of the rules key changes the agent's sources, which makes it re-apply the policy on reload")
     }
 
     private static func prescanPlan(_ suite: TestSuite) {

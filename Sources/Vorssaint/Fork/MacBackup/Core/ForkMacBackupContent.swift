@@ -117,6 +117,25 @@ struct ForkMacBackupSource: Codable, Equatable, Identifiable {
         self.customRules = customRules
     }
 
+    /// `fork.macbackup.rules`: a JSON array of strings; empty or damaged: none.
+    /// The one reader, for the Settings and for the agent.
+    static func customRules(fromStored text: String?) -> [String] {
+        guard let text, !text.isEmpty,
+              let rules = try? JSONDecoder().decode([String].self, from: Data(text.utf8)) else { return [] }
+        return rules.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+    }
+
+    /// The source with the rules the person's settings give every source:
+    /// `fork.macbackup.presets` and `fork.macbackup.rules`, the keys the
+    /// Settings write and the settings import restores. The per-source
+    /// copies in the machine state are only a cache of them.
+    func applying(presets storedPresets: String?, rules storedRules: String?) -> ForkMacBackupSource {
+        var source = self
+        source.presets = ForkMacBackupPreset.parse(storedPresets ?? ForkMacBackupPreset.storageValue(ForkMacBackupPreset.defaultApplied))
+        source.customRules = Self.customRules(fromStored: storedRules)
+        return source
+    }
+
     /// The source as people name it (« Dossier personnel », « Documents »).
     func displayName(_ text: ForkMacBackupStrings, home: String = NSHomeDirectory()) -> String {
         ForkMacBackupFormat.sourceName(path, text: text, home: home)
