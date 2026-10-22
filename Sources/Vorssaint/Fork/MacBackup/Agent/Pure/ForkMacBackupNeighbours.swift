@@ -161,24 +161,36 @@ enum ForkMacBackupOtherEngine {
     }
 }
 
-/// Sparse disk images (decision 1 of 22/10): ≥ 10 GB announced, less than
-/// half written. Pure.
-enum ForkMacBackupSparseImages {
-    static func isSparse(logical: Int64, allocated: Int64) -> Bool {
-        logical >= ForkMacBackupAgentTuning.sparseMinimumBytes && allocated * 2 < logical
+/// The run's extra rules for one source, from the Engine's pre-scan
+/// (`ForkMacBackupContentScan.scan`): the sparse disk images (decision 1 of
+/// 22/10, preset `sparseDiskImages`), the cloud-only files in `.local`
+/// iCloud mode (reading them would download them, plan §4.4), and iCloud
+/// Drive itself in `.exclude` mode. Pure.
+enum ForkMacBackupRunRules {
+    /// What the pre-scan walks with: the source's own rules (an excluded
+    /// folder is never entered).
+    static func matcher(for source: ForkMacBackupSource) -> ForkMacBackupIgnoreMatcher {
+        ForkMacBackupIgnoreMatcher(rules: source.ignoreRules)
     }
 
-    /// The anchored ignore rule of `path` in `source`; nil outside it. The
-    /// pattern characters of the name are escaped.
-    static func rule(for path: String, in source: String) -> String? {
-        let root = source.hasSuffix("/") ? String(source.dropLast()) : source
-        guard path.hasPrefix(root + "/") else { return nil }
-        let relative = String(path.dropFirst(root.count))
-        var escaped = ""
-        for character in relative {
-            if "*?[]\\".contains(character) { escaped.append("\\") }
-            escaped.append(character)
+    static func extra(for source: ForkMacBackupSource, usage: ForkMacBackupDiskUsage, iCloud: ForkMacBackupICloudMode,
+                      home: String) -> [String] {
+        var rules = ForkMacBackupContentScan.runRules(
+            sparseImages: source.presets.contains(.sparseDiskImages) ? usage.sparseImages : [],
+            dataless: iCloud == .local ? usage.dataless : [])
+        if iCloud == .exclude, let rule = iCloudDriveRule(source: source.path, home: home), !rules.contains(rule) {
+            rules.append(rule)
         }
-        return escaped
+        return rules
+    }
+
+    /// `~/Library/Mobile Documents/` as a rule of `source`; nil when the
+    /// source does not hold it.
+    static func iCloudDriveRule(source: String, home: String) -> String? {
+        let drive = ForkMacBackupSourcePath.normalized(home) + "/Library/Mobile Documents"
+        let root = ForkMacBackupSourcePath.normalized(source)
+        let prefix = root == "/" ? "/" : root + "/"
+        guard drive.hasPrefix(prefix) else { return nil }
+        return ForkMacBackupContentScan.ignoreRule(relativePath: String(drive.dropFirst(prefix.count)), isDirectory: true)
     }
 }

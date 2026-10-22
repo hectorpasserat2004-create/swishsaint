@@ -280,8 +280,12 @@ final class ForkMacBackupDemoEngine: ForkMacBackupEngineDriving {
                     try? Data("Demo: \(item.relativePath)\n".utf8).write(to: url)
                 }
             }
+            // As the engine: the item itself for one, the folder for several.
+            let landed = request.items.count == 1
+                ? (folder as NSString).appendingPathComponent((request.items[0].relativePath as NSString).lastPathComponent)
+                : folder
             completion(.success(ForkMacBackupRestoreReport(files: Int64(request.items.count), bytes: total, failures: [],
-                                                           destinationPath: folder)))
+                                                           destinationPath: landed)))
         }
         DispatchQueue.main.async { tick() }
         return handle

@@ -42,62 +42,6 @@ struct ForkMacBackupDistinctVersion: Equatable, Identifiable {
     }
 }
 
-/// Where a restore goes and under which names (plan §6.3). Pure: the file
-/// system is asked through closures, so the rules are tested alone.
-enum ForkMacBackupRestoreNaming {
-    /// « Restauré — 22 oct. 2026 à 10.04 »: a Finder name, so no « : »
-    /// (the Finder shows it as « / ») and no « / ».
-    static func folderName(prefix: String, date: Date, locale: Locale, timeZone: TimeZone = .autoupdatingCurrent) -> String {
-        var style = Date.FormatStyle(date: .abbreviated, time: .shortened, locale: locale)
-        style.timeZone = timeZone
-        return finderSafe(prefix + " — " + date.formatted(style))
-    }
-
-    /// A name the Finder and the file system both take.
-    static func finderSafe(_ name: String) -> String {
-        var text = name.replacingOccurrences(of: ":", with: ".").replacingOccurrences(of: "/", with: "-")
-        // Narrow and thin no-break spaces of some locales' clocks stay
-        // readable as plain spaces in a file name.
-        text = text.replacingOccurrences(of: "\u{202F}", with: " ").replacingOccurrences(of: "\u{2009}", with: " ")
-        while text.hasPrefix(".") { text.removeFirst() }
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "-" : String(trimmed.prefix(240))
-    }
-
-    /// `base`, else « base 2 », « base 3 »… the first that `exists` says is free.
-    static func uniqueFolder(_ base: String, exists: (String) -> Bool) -> String {
-        guard exists(base) else { return base }
-        var number = 2
-        while exists("\(base) \(number)") { number += 1 }
-        return "\(base) \(number)"
-    }
-
-    /// « Keep both »: « rapport.pdf » becomes « rapport (restauré).pdf »,
-    /// then « rapport (restauré 2).pdf »… A folder, a name without
-    /// extension or a dot file keeps its whole name before the suffix.
-    static func keepBothName(_ name: String, isDirectory: Bool, word: String, exists: (String) -> Bool) -> String {
-        guard exists(name) else { return name }
-        let (stem, ext) = split(name, isDirectory: isDirectory)
-        func candidate(_ number: Int) -> String {
-            let tag = number == 1 ? "(\(word))" : "(\(word) \(number))"
-            return ext.isEmpty ? "\(stem) \(tag)" : "\(stem) \(tag).\(ext)"
-        }
-        var number = 1
-        while exists(candidate(number)) { number += 1 }
-        return candidate(number)
-    }
-
-    /// The name and its last extension; none for a folder, a dot file or
-    /// a name ending with a dot.
-    static func split(_ name: String, isDirectory: Bool) -> (stem: String, ext: String) {
-        guard !isDirectory, let dot = name.lastIndex(of: "."), dot != name.startIndex,
-              name.index(after: dot) != name.endIndex else { return (name, "") }
-        let ext = String(name[name.index(after: dot)...])
-        guard !ext.contains(" ") else { return (name, "") }
-        return (String(name[..<dot]), ext)
-    }
-}
-
 /// The checks before a restore starts (plan §6.3 step 3).
 enum ForkMacBackupRestoreCheck {
     /// The margin kept on the destination: 10 % over what is restored.

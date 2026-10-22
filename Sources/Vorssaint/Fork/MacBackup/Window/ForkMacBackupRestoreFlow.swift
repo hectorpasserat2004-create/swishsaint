@@ -68,8 +68,11 @@ final class ForkMacBackupRestoreFlow: ObservableObject, Identifiable {
     @Published private(set) var progress: ForkMacBackupRestoreProgress?
     @Published private(set) var outcome: Outcome?
 
-    /// The history line, once it ended.
-    var onFinish: ((ForkMacBackupRunRecord) -> Void)?
+    /// The restore began, with its first figures (the island follows it).
+    var onStart: ((ForkMacBackupRestoreProgress) -> Void)?
+    var onProgress: ((ForkMacBackupRestoreProgress) -> Void)?
+    /// The history line once it ended, and where the files landed.
+    var onFinish: ((ForkMacBackupRunRecord, ForkMacBackupRestoreReport?) -> Void)?
 
     init(engine: ForkMacBackupEngineDriving, snapshot: ForkMacBackupSnapshotItem, key: ForkMacBackupSourceKey,
          items: [ForkMacBackupBrowseEntry], isOtherMac: Bool, language: AppLanguage, activeSources: [String],
@@ -201,10 +204,15 @@ final class ForkMacBackupRestoreFlow: ObservableObject, Identifiable {
         }
         step = .progress
         startedAt = Date()
-        progress = ForkMacBackupRestoreProgress(bytesDone: 0, bytesTotal: size.bytes, files: 0, filesTotal: size.files,
-                                                errors: 0)
+        let first = ForkMacBackupRestoreProgress(bytesDone: 0, bytesTotal: size.bytes, files: 0, filesTotal: size.files,
+                                                 errors: 0)
+        progress = first
+        onStart?(first)
         handle = engine.restore(request, progress: { [weak self] progress in
-            self?.progress = progress
+            // A figure may still arrive after the end: the result stands.
+            guard let self, self.step == .progress else { return }
+            self.progress = progress
+            self.onProgress?(progress)
         }, completion: { [weak self] result in
             self?.finish(result)
         })
@@ -223,8 +231,10 @@ final class ForkMacBackupRestoreFlow: ObservableObject, Identifiable {
         let outcome: Outcome
         var record = ForkMacBackupRunRecord(kind: .restore, trigger: .window, start: startedAt ?? Date(), end: Date(),
                                             outcome: .complete)
+        var landed: ForkMacBackupRestoreReport?
         switch result {
         case .success(let report):
+            landed = report
             outcome = report.failures.isEmpty ? .complete(report) : .partial(report)
             record.bytesRead = report.bytes
             record.outcome = report.failures.isEmpty ? .complete : .partial
@@ -239,10 +249,13 @@ final class ForkMacBackupRestoreFlow: ObservableObject, Identifiable {
         }
         self.outcome = outcome
         step = .result
-        onFinish?(record)
+        onFinish?(record, landed)
     }
 
     /// Where the restored files are, for « Afficher dans le Finder ».
+    /// Where the restored files are, as the engine reports it: the item
+    /// itself for one (under its « keep both » name when it had to), their
+    /// folder for several.
     var resultURL: URL? {
         switch outcome {
         case .complete(let report), .partial(let report):
@@ -254,24 +267,11 @@ final class ForkMacBackupRestoreFlow: ObservableObject, Identifiable {
 
     func showInFinder() {
         guard let url = resultURL else { return }
-        if destination == .original, items.count == 1 {
-            let item = URL(fileURLWithPath: ForkMacBackupFolderPath.absolute(items[0].relativePath, in: key.path))
-            NSWorkspace.shared.activateFileViewerSelecting([item])
-        } else {
-            NSWorkspace.shared.activateFileViewerSelecting([url])
-        }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
     func openResult() {
         guard let url = resultURL else { return }
-        if items.count == 1 {
-            let inside = url.appendingPathComponent(items[0].name)
-            let item = destination == .original
-                ? URL(fileURLWithPath: ForkMacBackupFolderPath.absolute(items[0].relativePath, in: key.path))
-                : inside
-            NSWorkspace.shared.open(FileManager.default.fileExists(atPath: item.path) ? item : url)
-        } else {
-            NSWorkspace.shared.open(url)
-        }
+        NSWorkspace.shared.open(url)
     }
 }

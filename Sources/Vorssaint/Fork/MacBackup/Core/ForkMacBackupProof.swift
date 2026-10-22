@@ -121,8 +121,9 @@ struct ForkMacBackupFailure: Codable, Equatable {
 }
 
 /// What is proven about one snapshot (`proofs.json`, the window's
-/// inspector). Sizes are the snapshot's own, with sparse images excluded
-/// by default, so they read as real sizes.
+/// inspector). `bytes` is Kopia's own (logical) size; `realBytes` the size
+/// on disk the agent's pre-scan measured for that run (decision 1 of
+/// 22/10): every view shows `diskBytes`.
 struct ForkMacBackupSnapshotProof: Codable, Equatable {
     var manifestID: String
     var sourcePath: String
@@ -130,6 +131,9 @@ struct ForkMacBackupSnapshotProof: Codable, Equatable {
     var endTime: Date
     var level: ForkMacBackupProofLevel
     var bytes: Int64
+    /// Allocated bytes of what the run kept (`totalFileAllocatedSize`); nil
+    /// when not measured (a snapshot of another Mac, an older one).
+    var realBytes: Int64?
     var files: Int64
     /// Real read errors (they make it partial).
     var failures: [ForkMacBackupFailure]
@@ -166,6 +170,9 @@ struct ForkMacBackupSnapshotProof: Codable, Equatable {
     }
 
     var isPartial: Bool { !failures.isEmpty || unnamedFailureCount > 0 }
+
+    /// The size to show: the real one when measured, else Kopia's.
+    var diskBytes: Int64 { realBytes ?? bytes }
 
     /// Every file not read, named or not.
     var failureCount: Int { failures.count + unnamedFailureCount }

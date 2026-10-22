@@ -6,53 +6,6 @@ import Foundation
 // The Settings package's pure helpers: what its screens compute without a
 // view, a disk or a process, so `fork/test.sh` tests them.
 
-// MARK: - Keys
-
-/// Keys of WP Settings that Core does not declare.
-extension ForkDefaultsKey {
-    // Machine state (never registered, never exported).
-
-    /// `ForkMacBackupKit.fingerprint` of the repository the last kit was made
-    /// for: another one means « Kit à refaire ».
-    static let macBackupKitFingerprint = "fork.macbackup.kitFingerprint"
-    /// Profiles imported on this Mac, JSON `[ForkMacBackupProfile]`, for the
-    /// chain header's menu.
-    static let macBackupKnownProfiles = "fork.macbackup.knownProfiles"
-
-    // Settings the page shows that Core has not registered yet (asked for at
-    // the integration): read with `ForkMacBackupSettingsKeys.fallbacks`.
-
-    /// `low` (background priority) or `normal`.
-    static let macBackupPriority = "fork.macbackup.priority"
-    /// Minutes without progress before the watchdog cancels and retries.
-    static let macBackupWatchdogMinutes = "fork.macbackup.timeout.watchdogMinutes"
-    /// Seconds to open the repository before giving up.
-    static let macBackupRepositoryTimeout = "fork.macbackup.timeout.repositorySeconds"
-    /// Seconds a chain probe may take.
-    static let macBackupProbeTimeout = "fork.macbackup.timeout.probeSeconds"
-}
-
-enum ForkMacBackupSettingsKeys {
-    /// The settings above with their defaults, until Core registers them.
-    static let fallbacks: [String: Any] = [
-        ForkDefaultsKey.macBackupPriority: "low",
-        ForkDefaultsKey.macBackupWatchdogMinutes: 10,
-        ForkDefaultsKey.macBackupRepositoryTimeout: 60,
-        ForkDefaultsKey.macBackupProbeTimeout: 5,
-    ]
-
-    /// This package's machine state.
-    static let machineKeys = [ForkDefaultsKey.macBackupKitFingerprint, ForkDefaultsKey.macBackupKnownProfiles]
-
-    static func int(_ key: String, in defaults: UserDefaults) -> Int {
-        (defaults.object(forKey: key) as? Int) ?? (fallbacks[key] as? Int) ?? 0
-    }
-
-    static func string(_ key: String, in defaults: UserDefaults) -> String {
-        defaults.string(forKey: key) ?? (fallbacks[key] as? String) ?? ""
-    }
-}
-
 // MARK: - Times of day
 
 /// « 13:00,21:00 » (`fork.macbackup.schedule.times`): minutes after

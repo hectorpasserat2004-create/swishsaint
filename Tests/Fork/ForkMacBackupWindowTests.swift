@@ -420,7 +420,7 @@ enum ForkMacBackupWindowTests {
         let rules = ["/.Trash/", "/Library/Caches/", "node_modules/", "*.log", "Virtual Machines.localized/",
                      "/Library/Containers/com.utmapp.UTM/", "!keep.log", "# a comment", "build/"]
         func rule(_ path: String, _ isDirectory: Bool = false) -> String? {
-            ForkMacBackupIgnoreRules.excludingRule(for: path, isDirectory: isDirectory, rules: rules)
+            ForkMacBackupIgnoreMatcher(rules: rules).excludingRule(for: path, isDirectory: isDirectory)
         }
         suite.expect(rule(".Trash/a.txt") == "/.Trash/" && rule("Documents/.Trash/a.txt") == nil,
                      "a leading slash anchors at the source's root")
@@ -433,8 +433,8 @@ enum ForkMacBackupWindowTests {
                         && rule("Library/Containers/com.apple.Notes/x") == nil, "a deep anchored rule")
         suite.expect(rule("Documents/Virtual Machines.localized/Win.vm/disk") == "Virtual Machines.localized/",
                      "names with spaces and dots")
-        suite.expect(ForkMacBackupIgnoreRules.excludingRule(for: "build/keep.log", isDirectory: false,
-                                                            rules: ["build/", "!build/keep.log"]) == "build/",
+        suite.expect(ForkMacBackupIgnoreMatcher(rules: ["build/", "!build/keep.log"]).excludingRule(for: "build/keep.log",
+                                                                                                   isDirectory: false) == "build/",
                      "a file is never taken back out of a folder left out")
         suite.expect(rule("") == nil && rule("Documents/a.pdf") == nil, "the root and ordinary files are kept")
     }

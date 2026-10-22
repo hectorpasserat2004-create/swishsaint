@@ -208,7 +208,7 @@ enum ForkMacBackupPresenter {
             rhythm = .automatic(about: ForkMacBackupCostSupport.automaticInterval(context.runs, now: now))
         }
         let lastSent = context.runs.last { $0.kind == .backup && $0.outcome != .nothingToDo }?.bytesSent
-        let protectedSizes = settings.sources.compactMap { context.proofs.last(of: $0.path)?.bytes }
+        let protectedSizes = settings.sources.compactMap { context.proofs.last(of: $0.path)?.diskBytes }
         let capacity = ForkMacBackupPresentation.Capacity(
             protectedBytes: protectedSizes.isEmpty ? nil : protectedSizes.reduce(0, +),
             lastSentBytes: lastSent, repositoryBytes: context.repositoryBytes, nasFreeBytes: nil,

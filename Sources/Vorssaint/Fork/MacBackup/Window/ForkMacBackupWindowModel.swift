@@ -509,9 +509,23 @@ final class ForkMacBackupWindowModel: ObservableObject {
         loadVersionCount(entry)
     }
 
+    /// The versions of a file of `key`: that Mac's and that account's
+    /// snapshots only (another Mac may back up the same path).
+    private func versions(of entry: ForkMacBackupBrowseEntry, in key: ForkMacBackupSourceKey, engine: ForkMacBackupEngineDriving,
+                          completion: @escaping (ForkMacBackupEngineResult<[ForkMacBackupFileVersion]>) -> Void) {
+        let source = ForkMacBackupSource(path: key.path)
+        if let extras = engine as? ForkMacBackupEngineExtras {
+            extras.versions(of: entry.relativePath, in: source,
+                            owner: ForkMacBackupRepository.Identity(userName: key.userName, hostName: key.host),
+                            completion: completion)
+        } else {
+            engine.versions(of: entry.relativePath, in: source, completion: completion)
+        }
+    }
+
     private func loadVersionCount(_ entry: ForkMacBackupBrowseEntry) {
         guard versionCounts[entry.relativePath] == nil, let engine, let key = selectedKey else { return }
-        engine.versions(of: entry.relativePath, in: ForkMacBackupSource(path: key.path)) { [weak self] result in
+        versions(of: entry, in: key, engine: engine) { [weak self] result in
             guard case .success(let versions) = result else { return }
             self?.versionCounts[entry.relativePath] = ForkMacBackupDistinctVersion.distinct(versions).count
         }
@@ -521,7 +535,7 @@ final class ForkMacBackupWindowModel: ObservableObject {
         guard let engine, let key = selectedKey, !entry.isDirectory else { return }
         let sheet = ForkMacBackupVersionsModel(entry: entry)
         versionsSheet = sheet
-        engine.versions(of: entry.relativePath, in: ForkMacBackupSource(path: key.path)) { [weak self, weak sheet] result in
+        versions(of: entry, in: key, engine: engine) { [weak self, weak sheet] result in
             guard let self, let sheet else { return }
             switch result {
             case .success(let versions):
@@ -689,7 +703,20 @@ final class ForkMacBackupWindowModel: ObservableObject {
                                             activeSources: ledger.sources.map(\.path)
                                                 + status.presentation.sources.map(\.path))
         if original { flow.destination = .original }
-        flow.onFinish = { [weak self] record in self?.record(record) }
+        // Restores run here, in the app: the status model lays their
+        // progress over the agent's state (the island's activity), the
+        // island's card « Afficher dans le Finder / Ouvrir » ends them.
+        var token: UUID?
+        flow.onStart = { [weak self] progress in token = self?.status.restoreStarted(progress) }
+        flow.onProgress = { [weak self] progress in
+            if let token { self?.status.restoreProgressed(token, progress) }
+        }
+        flow.onFinish = { [weak self] record, report in
+            guard let self else { return }
+            self.record(record)
+            if let report { ForkMacBackupIsland.restoreFinished(report) }
+            if let token { self.status.restoreEnded(token) }
+        }
         restoreFlow = flow
     }
 
@@ -722,13 +749,9 @@ final class ForkMacBackupWindowModel: ObservableObject {
     }
 
     /// Where the one item of a restore landed.
+    /// The engine reports the item itself for a one-item restore.
     static func restoredItem(named name: String, report: ForkMacBackupRestoreReport, folder: URL) -> URL {
-        let destination = URL(fileURLWithPath: report.destinationPath.isEmpty ? folder.path : report.destinationPath)
-        let inside = destination.appendingPathComponent(name)
-        if FileManager.default.fileExists(atPath: inside.path) { return inside }
-        let direct = folder.appendingPathComponent(name)
-        if FileManager.default.fileExists(atPath: direct.path) { return direct }
-        return destination
+        report.destinationPath.isEmpty ? folder.appendingPathComponent(name) : URL(fileURLWithPath: report.destinationPath)
     }
 
     func toggleQuickLook() {
@@ -791,8 +814,9 @@ final class ForkMacBackupWindowModel: ObservableObject {
                 completion(error)
             case .success(let restored):
                 let folder = url.deletingLastPathComponent()
+                let word = ForkMacBackupEngineStrings.strings(self?.language ?? .enUS).restoredSuffix
                 let name = ForkMacBackupRestoreNaming.keepBothName(url.lastPathComponent, isDirectory: entry.isDirectory,
-                                                                   word: self?.text.restoredWord ?? "restored") {
+                                                                   word: word) {
                     FileManager.default.fileExists(atPath: folder.appendingPathComponent($0).path)
                 }
                 do {
@@ -859,7 +883,7 @@ final class ForkMacBackupWindowModel: ObservableObject {
         }
         guard let source = ForkMacBackupFileVerdict.source(of: path, in: sources),
               let relative = ForkMacBackupFolderPath.relative(path, to: source.path),
-              ForkMacBackupIgnoreRules.excludingRule(for: relative, isDirectory: isDirectory, rules: source.ignoreRules) == nil,
+              ForkMacBackupIgnoreMatcher(rules: source.ignoreRules).excludingRule(for: relative, isDirectory: isDirectory) == nil,
               let key = localSources.first(where: { $0.path == source.path }),
               let snapshot = snapshots[key]?.last, let root = snapshot.rootObjectID, let engine else {
             finish(nil, engine != nil && !localSources.isEmpty)

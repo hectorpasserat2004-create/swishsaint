@@ -457,25 +457,6 @@ final class ForkMacBackupSettingsContext: ObservableObject {
     }
 }
 
-/// A flag set once, read from any thread.
-final class ForkMacBackupFlag: @unchecked Sendable {
-    private let lock = NSLock()
-    private var value = false
-
-    var isSet: Bool { lock.withLock { value } }
-
-    func set() { lock.withLock { value = true } }
-
-    /// Sets it; true only for the first caller.
-    func setOnce() -> Bool {
-        lock.withLock {
-            guard !value else { return false }
-            value = true
-            return true
-        }
-    }
-}
-
 // MARK: - Live services
 
 extension ForkMacBackupSettingsServices {

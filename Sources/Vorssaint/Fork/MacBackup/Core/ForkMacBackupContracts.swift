@@ -47,6 +47,25 @@ protocol ForkMacBackupCancellable: AnyObject {
     func cancel()
 }
 
+/// A flag set once, read from any thread.
+final class ForkMacBackupFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = false
+
+    var isSet: Bool { lock.withLock { value } }
+
+    func set() { lock.withLock { value = true } }
+
+    /// Sets it; true only for the first caller.
+    func setOnce() -> Bool {
+        lock.withLock {
+            guard !value else { return false }
+            value = true
+            return true
+        }
+    }
+}
+
 /// The secrets handed to Kopia for one call, through its environment
 /// (`KOPIA_PASSWORD`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`), never on
 /// its command line. Never Codable, never logged.

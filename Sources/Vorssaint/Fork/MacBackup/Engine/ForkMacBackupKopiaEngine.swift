@@ -45,7 +45,7 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
     // Owned by `work`.
     private(set) var repository: ForkMacBackupRepository?
     private var credentials: ForkMacBackupCredentials?
-    private(set) var identity: ForkMacBackupRepository.Identity?
+    var identity: ForkMacBackupRepository.Identity?
     private var server: ForkMacBackupKopiaServer?
     private var api: ForkMacBackupKopiaAPI?
 
@@ -58,9 +58,21 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
         self.binaryProvider = binary
     }
 
+    /// Also applied at once to the running server (macOS background state
+    /// on or off, `setpriority(PRIO_DARWIN_PROCESS)`), so a « Sauvegarder
+    /// maintenant » runs at normal speed and a scheduled run stays quiet.
     var priority: ForkMacBackupKopiaInvocation.Priority {
         get { lock.withLock { priorityValue } }
-        set { lock.withLock { priorityValue = newValue } }
+        set {
+            let pid: Int32? = lock.withLock {
+                priorityValue = newValue
+                return role == .owner ? ownerServerPID : nil
+            }
+            if let pid, pid > 0 {
+                _ = setpriority(PRIO_DARWIN_PROCESS, id_t(pid), newValue == .background ? PRIO_DARWIN_BG : 0)
+            }
+            work.async { [weak self] in self?.server?.priority = newValue }
+        }
     }
 
     /// Safe from any queue (a cached value, refreshed at every server
@@ -819,21 +831,7 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
         }
     }
 
-    // MARK: - Retention, maintenance info, estimate
-
-    func retentionPreview(of source: ForkMacBackupSource, retention: ForkMacBackupRetention,
-                          completion: @escaping (ForkMacBackupEngineResult<[ForkMacBackupRetentionReplay.Verdict]>) -> Void) {
-        let task = task(completion)
-        work.async { [self] in
-            listManifests(sourcePath: source.path, incomplete: true, task: task) { manifests in
-                let identity = self.identity
-                let own = manifests.filter { identity == nil
-                    || ($0.source?.userName == identity?.userName && $0.source?.host == identity?.hostName) }
-                task.finish(.success(ForkMacBackupRetentionReplay.evaluate(own.compactMap(ForkMacBackupRetentionReplay.Snapshot.init),
-                                                                            retention: retention)))
-            }
-        }
-    }
+    // MARK: - Maintenance info
 
     func maintenanceInfo(completion: @escaping (ForkMacBackupEngineResult<ForkMacBackupMaintenanceInfo>) -> Void) {
         let task = task(completion)
@@ -852,28 +850,6 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
             }
             task.attach(handle)
         }
-    }
-
-    @discardableResult
-    func estimate(_ source: ForkMacBackupSource, rules: ForkMacBackupPolicyRules,
-                  completion: @escaping (ForkMacBackupEngineResult<ForkMacBackupEstimate>) -> Void) -> ForkMacBackupCancellable {
-        let task = task(completion)
-        work.async { [self] in
-            let body = ForkMacBackupEstimate.request(root: ForkMacBackupSourcePath.normalized(source.path), rules: rules)
-            requestDecoding(ForkMacBackupKopia.TaskInfo.self, "POST", "/api/v1/estimate", json: body, auth: .ui) { result in
-                switch result {
-                case .failure(let error): task.finish(.failure(error))
-                case .success(let info):
-                    self.followTask(info.id, task: task, progress: { _ in }) { info in
-                        guard info.knownStatus == .success else {
-                            return task.finish(.failure(.kopia(exitCode: 1, message: info.errorMessage ?? info.status ?? "")))
-                        }
-                        task.finish(.success(ForkMacBackupEstimate(task: info)))
-                    }
-                }
-            }
-        }
-        return task
     }
 
     /// Polls `/api/v1/tasks/{id}` every half second until it ends; a

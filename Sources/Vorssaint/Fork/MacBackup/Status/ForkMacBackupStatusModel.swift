@@ -37,6 +37,12 @@ final class ForkMacBackupStatusModel: ObservableObject {
     private var liveViewers = 0
     private var leaseTimer: Timer?
     private var started = false
+    /// The agent's own state, as last read.
+    private var agentPresentation: ForkMacBackupPresentation = .unknown
+    /// A restore the window runs in this process (restores never go through
+    /// the agent): its progress is laid over the agent's state while it
+    /// runs, so the island shows « Restauration » like a backup.
+    private var restore: (id: UUID, progress: ForkMacBackupRestoreProgress?)?
 
     /// How often the live-progress lease is renewed while a view shows it.
     static let leaseInterval: TimeInterval = 5
@@ -108,6 +114,8 @@ final class ForkMacBackupStatusModel: ObservableObject {
         liveViewers = 0
         started = false
         agentAlive = false
+        restore = nil
+        agentPresentation = .unknown
         if presentation.phase != .off { presentation = ForkMacBackupPresentation(phase: .off, updatedAt: Date()) }
         // The switch itself is a setting the agent follows.
         if wasStarted { notify_post(notify.settings) }
@@ -124,13 +132,60 @@ final class ForkMacBackupStatusModel: ObservableObject {
             DispatchQueue.main.async {
                 guard let self, self.started else { return }
                 if let file {
-                    if self.presentation != file.presentation { self.presentation = file.presentation }
+                    self.agentPresentation = file.presentation
+                    self.publishMerged()
                     self.stateWrittenAt = file.writtenAt
                     self.agentBuild = file.agentBuild
                 }
                 if self.agentAlive != alive { self.agentAlive = alive }
             }
         }
+    }
+
+    // MARK: Restores (in the app)
+
+    /// The window started a restore; returns its token.
+    @discardableResult
+    func restoreStarted(_ progress: ForkMacBackupRestoreProgress? = nil) -> UUID {
+        let id = UUID()
+        guard !isPreview, started else { return id }
+        restore = (id, progress)
+        publishMerged()
+        return id
+    }
+
+    func restoreProgressed(_ id: UUID, _ progress: ForkMacBackupRestoreProgress) {
+        guard restore?.id == id else { return }
+        restore?.progress = progress
+        publishMerged()
+    }
+
+    /// The restore ended (the island's card is already up): the agent's
+    /// state comes back, which ends the island's restore activity.
+    func restoreEnded(_ id: UUID) {
+        guard restore?.id == id else { return }
+        restore = nil
+        publishMerged()
+    }
+
+    /// The agent's state, with the app's restore over it unless the agent
+    /// is busy itself (one activity in the closed island at a time).
+    static func merged(_ agent: ForkMacBackupPresentation, restore: ForkMacBackupRestoreProgress??,
+                       now: Date = Date()) -> ForkMacBackupPresentation {
+        guard let restore, agent.phase != .off, !agent.phase.isBackingUp, agent.phase != .verifying else { return agent }
+        var merged = agent
+        merged.phase = .restoring
+        merged.progress = restore.map {
+            ForkMacBackupPresentation.Progress(bytesDone: $0.bytesDone, bytesTotal: $0.bytesTotal, files: $0.files,
+                                               filesTotal: $0.filesTotal, errors: $0.errors)
+        } ?? ForkMacBackupPresentation.Progress()
+        merged.updatedAt = now
+        return merged
+    }
+
+    private func publishMerged() {
+        let value = Self.merged(agentPresentation, restore: restore.map { $0.progress })
+        if presentation != value { presentation = value }
     }
 
     // MARK: Commands

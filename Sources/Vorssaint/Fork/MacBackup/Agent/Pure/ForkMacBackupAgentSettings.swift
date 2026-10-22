@@ -35,6 +35,7 @@ enum ForkMacBackupAgentTuning {
     // MARK: Run
 
     /// No progress for this long: cancel with a checkpoint, then retry (§3.8).
+    /// The person's `fork.macbackup.timeout.watchdogMinutes` replaces it.
     static let watchdog: TimeInterval = 10 * 60
     /// A cancel that does not end within this long is given up.
     static let cancelGrace: TimeInterval = 3 * 60
@@ -78,10 +79,11 @@ enum ForkMacBackupAgentTuning {
     static let updateWaitLimit: TimeInterval = 30 * 60
     /// …and a hold older than this is stale (the update failed or was dropped).
     static let updateHoldLifetime: TimeInterval = 20 * 60
-    /// The sparse images found are remembered this long.
-    static let sparseScanLifetime: TimeInterval = 6 * 3_600
-    /// A file this large and less than half written is a sparse disk image (decision 1).
-    static let sparseMinimumBytes: Int64 = 10_000_000_000
+    /// A source's pre-scan (real size, sparse images, cloud-only files) is
+    /// trusted this long.
+    static let prescanLifetime: TimeInterval = 6 * 3_600
+    /// `maintenance info` is read this often (Kopia's server runs it).
+    static let maintenanceRecheck: TimeInterval = 6 * 3_600
 
     // MARK: Journals
 
@@ -123,6 +125,12 @@ struct ForkMacBackupAgentSettings: Equatable {
         case never
         case ac
         case always
+    }
+
+    /// `fork.macbackup.priority`: how hard a scheduled backup may use the Mac.
+    enum Priority: String, CaseIterable {
+        case low
+        case normal
     }
 
     /// « 13:00 » as hour and minute.
@@ -193,6 +201,13 @@ struct ForkMacBackupAgentSettings: Equatable {
     var repository: ForkMacBackupRepository?
     var sources: [ForkMacBackupSource]
     var profile: ForkMacBackupProfile?
+    var priority: Priority
+    /// No progress for this long: the watchdog cancels and retries.
+    var watchdog: TimeInterval
+    /// The chain check (connect, repository status) gives up after this long.
+    var repositoryTimeout: TimeInterval
+    /// A Tailscale probe gives up after this long.
+    var probeTimeout: TimeInterval
 
     /// A repository and at least one source.
     var isConfigured: Bool { repository != nil && !sources.isEmpty }
@@ -270,6 +285,19 @@ struct ForkMacBackupAgentSettings: Equatable {
         repository = json(ForkMacBackupRepository.self, ForkDefaultsKey.macBackupRepository)
         sources = json([ForkMacBackupSource].self, ForkDefaultsKey.macBackupSources) ?? []
         profile = json(ForkMacBackupProfile.self, ForkDefaultsKey.macBackupProfile)
+        priority = Priority(rawValue: string(ForkDefaultsKey.macBackupPriority)) ?? .low
+        watchdog = TimeInterval(int(ForkDefaultsKey.macBackupWatchdogMinutes, 2...240, fallback: 10) * 60)
+        repositoryTimeout = TimeInterval(int(ForkDefaultsKey.macBackupRepositoryTimeout, 10...600, fallback: 60))
+        probeTimeout = TimeInterval(int(ForkDefaultsKey.macBackupProbeTimeout, 1...60, fallback: 5))
+    }
+
+    /// The engine's priority for a run: « Sauvegarder maintenant » and the
+    /// other buttons run normal, the planner's runs as the person chose.
+    func enginePriority(for trigger: ForkMacBackupTrigger) -> ForkMacBackupKopiaInvocation.Priority {
+        switch trigger {
+        case .island, .settings, .commandBar, .window: return .normal
+        case .scheduled, .catchUp, .early, .agent: return priority == .low ? .background : .utility
+        }
     }
 
     /// The maximum interval of the Automatic rhythm for this power source.

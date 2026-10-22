@@ -44,10 +44,17 @@ enum ForkMacBackupVersionsPlan {
     }
 
     /// The manifests of one source worth walking: complete ones, the path's
-    /// own source (Kopia also lists a parent source's, SPIKES §4).
-    static func manifests(of sourcePath: String,
+    /// own source (Kopia also lists a parent source's, SPIKES §4) of `owner`
+    /// only (another Mac or account may back up the same path); nil: any.
+    static func manifests(of sourcePath: String, owner: ForkMacBackupRepository.Identity? = nil,
                           in manifests: [ForkMacBackupKopia.SnapshotManifest]) -> [ForkMacBackupKopia.SnapshotManifest] {
-        manifests.filter { $0.source?.path == sourcePath && $0.incomplete == nil && $0.rootEntry?.obj != nil }
+        manifests.filter { manifest in
+            guard manifest.source?.path == sourcePath, manifest.incomplete == nil, manifest.rootEntry?.obj != nil else {
+                return false
+            }
+            guard let owner else { return true }
+            return manifest.source?.host == owner.hostName && manifest.source?.userName == owner.userName
+        }
     }
 }
 

@@ -112,6 +112,14 @@ enum ForkMacBackupAgentTests {
         return ForkMacBackupKopia.decode(ForkMacBackupKopia.SnapshotManifest.self, from: Data(text.utf8))!
     }
 
+    /// Whether `actions` ask how `source`'s snapshot ended.
+    private static func concludes(_ actions: [ForkMacBackupMachine.Action], _ source: ForkMacBackupSource) -> Bool {
+        actions.contains { action in
+            if case .conclude(let concluded, _, _) = action { return concluded == source }
+            return false
+        }
+    }
+
     private static func sources(path: String = "/Users/test", uploading: Bool, hashed: Int64 = 0,
                                 estimate: Int64 = 0, uploaded: Int64 = 0, files: Int64 = 0,
                                 last: (start: Date, end: Date)? = nil) -> ForkMacBackupKopia.SourcesResponse {
@@ -505,7 +513,7 @@ enum ForkMacBackupAgentTests {
                         && live.progress?.bytesUploaded == 200_000_000,
                      "uploading: real fraction, 10 s mean rate, ETA once the estimate held 30 s, the folder walked")
         actions = machine.handle(.progress(sources(uploading: false)), now: at.addingTimeInterval(1))
-        suite.expect(actions.contains(.listSnapshots(source)) && machine.phase(now: at) == .concluding,
+        suite.expect(concludes(actions, source) && machine.phase(now: at) == .concluding,
                      "the source idle again: the manifest is looked for")
         let complete = manifest(id: "m1", start: t0.addingTimeInterval(1), end: at)
         actions = machine.handle(.listed(source, .success([complete])), now: at.addingTimeInterval(2))
@@ -529,7 +537,7 @@ enum ForkMacBackupAgentTests {
         _ = machine.handle(.policyApplied(source, .matched), now: t0)
         var actions = machine.handle(.snapshotTriggered(source, .kopia(exitCode: 1, message: "Found 1 fatal error(s)")),
                                      now: t0.addingTimeInterval(30))
-        suite.expect(actions.contains(.listSnapshots(source)), "Kopia's exit 1 is not a failure by itself")
+        suite.expect(concludes(actions, source), "Kopia's exit 1 is not a failure by itself")
         actions = machine.handle(.listed(source, .success([manifest(id: "p1", start: t0, end: t0.addingTimeInterval(30),
                                                                     errors: ["a.txt", "b.txt"])])),
                                  now: t0.addingTimeInterval(31))
@@ -566,7 +574,7 @@ enum ForkMacBackupAgentTests {
         _ = machine.handle(.snapshotTriggered(source, nil), now: t0)
         actions = machine.handle(.progress(sources(uploading: false, last: (t0.addingTimeInterval(0.1), t0.addingTimeInterval(0.4)))),
                                  now: t0.addingTimeInterval(1))
-        suite.expect(actions.contains(.listSnapshots(source)),
+        suite.expect(concludes(actions, source),
                      "a third-of-a-second snapshot is seen by its new manifest, not by an upload")
 
         // Two sources, one after the other.
@@ -1058,14 +1066,24 @@ enum ForkMacBackupAgentTests {
     }
 
     private static func sparseImages(_ suite: TestSuite) {
-        suite.expect(ForkMacBackupSparseImages.isSparse(logical: 1_000_000_000_000, allocated: 4_000_000_000)
-                        && !ForkMacBackupSparseImages.isSparse(logical: 20_000_000_000, allocated: 15_000_000_000)
-                        && !ForkMacBackupSparseImages.isSparse(logical: 9_000_000_000, allocated: 0),
-                     "sparse: ≥ 10 GB announced and less than half written (Docker.raw yes, a full 20 GB video no)")
-        suite.expect(ForkMacBackupSparseImages.rule(for: home + "/VMs/kali [x].ext4", in: home) == "/VMs/kali \\[x\\].ext4"
-                        && ForkMacBackupSparseImages.rule(for: home + "/a.img", in: home + "/") == "/a.img"
-                        && ForkMacBackupSparseImages.rule(for: "/elsewhere/a.img", in: home) == nil,
-                     "its rule is anchored at the source and escapes pattern characters")
+        var usage = ForkMacBackupDiskUsage()
+        usage.sparseImages = [.init(relativePath: "VMs/kali [x].ext4", logicalBytes: 1_000_000_000_000, allocatedBytes: 4_000_000_000)]
+        usage.dataless = ["Library/Mobile Documents/com~apple~CloudDocs/film.mov", "Library/Mobile Documents/x/"]
+        let source = ForkMacBackupSource(path: home)
+        suite.expect(ForkMacBackupRunRules.extra(for: source, usage: usage, iCloud: .local, home: home)
+                        == ["/VMs/kali \\[x].ext4", "/Library/Mobile Documents/com~apple~CloudDocs/film.mov",
+                            "/Library/Mobile Documents/x/"],
+                     "the run's rules: the sparse images and, in local mode, the cloud-only files (escaped, anchored)")
+        suite.expect(ForkMacBackupRunRules.extra(for: ForkMacBackupSource(path: home, presets: []), usage: usage,
+                                                 iCloud: .materialize, home: home).isEmpty,
+                     "the sparse images stay when their preset is off; nothing cloud-only when iCloud downloads")
+        suite.expect(ForkMacBackupRunRules.extra(for: source, usage: ForkMacBackupDiskUsage(), iCloud: .exclude, home: home)
+                        == ["/Library/Mobile Documents/"]
+                        && ForkMacBackupRunRules.iCloudDriveRule(source: home + "/Library", home: home) == "/Mobile Documents/"
+                        && ForkMacBackupRunRules.iCloudDriveRule(source: home + "/Documents", home: home) == nil,
+                     "iCloud left out: iCloud Drive's folder, wherever the source starts")
+        suite.expect(ForkMacBackupRunRules.matcher(for: source).excludes("Library/Caches", isDirectory: true),
+                     "the pre-scan never enters what the source's rules leave out")
     }
 
     // MARK: Cost, proofs, journal, strings

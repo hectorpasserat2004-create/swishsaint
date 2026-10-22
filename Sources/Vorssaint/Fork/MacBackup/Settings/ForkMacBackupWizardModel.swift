@@ -364,7 +364,7 @@ final class ForkMacBackupWizardModel: ObservableObject {
         } else {
             set(.tailscale, .skipped)
         }
-        let timeout = TimeInterval(ForkMacBackupSettingsKeys.int(ForkDefaultsKey.macBackupProbeTimeout, in: context.defaults))
+        let timeout = TimeInterval(context.defaults.integer(forKey: ForkDefaultsKey.macBackupProbeTimeout))
         context.services.probeServer(repository.endpoint.host, repository.endpoint.port ?? 443, max(2, timeout)) { [weak self] result in
             guard let self else { return }
             switch result {

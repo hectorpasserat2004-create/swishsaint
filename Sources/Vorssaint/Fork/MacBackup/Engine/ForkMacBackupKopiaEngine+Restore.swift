@@ -32,17 +32,52 @@ extension ForkMacBackupKopiaEngine {
 
     // MARK: Versions
 
+    /// This Mac's versions (the repository's client identity).
     func versions(of relativePath: String, in source: ForkMacBackupSource,
                   completion: @escaping (ForkMacBackupEngineResult<[ForkMacBackupFileVersion]>) -> Void) {
         let task = task(completion)
         work.async { [self] in
-            let path = ForkMacBackupSourcePath.normalized(source.path)
-            listManifests(sourcePath: path, incomplete: false, task: task) { manifests in
-                let wanted = ForkMacBackupVersionsPlan.manifests(of: path, in: manifests)
-                self.resolveAll(wanted, relativePath: relativePath, index: 0, found: [], cache: [:], task: task) { found in
-                    task.finish(.success(ForkMacBackupVersionsPlan.distinct(found)))
-                }
+            currentIdentity { identity in
+                guard let identity else { return task.finish(.failure(.notConnected)) }
+                self.collectVersions(of: relativePath, in: source, owner: identity, task: task)
             }
+        }
+    }
+
+    /// The versions of `owner`'s file (another Mac's in the window).
+    func versions(of relativePath: String, in source: ForkMacBackupSource, owner: ForkMacBackupRepository.Identity,
+                  completion: @escaping (ForkMacBackupEngineResult<[ForkMacBackupFileVersion]>) -> Void) {
+        let task = task(completion)
+        work.async { [self] in
+            collectVersions(of: relativePath, in: source, owner: owner, task: task)
+        }
+    }
+
+    private func collectVersions(of relativePath: String, in source: ForkMacBackupSource,
+                                 owner: ForkMacBackupRepository.Identity,
+                                 task: ForkMacBackupEngineTask<[ForkMacBackupFileVersion]>) {
+        let path = ForkMacBackupSourcePath.normalized(source.path)
+        listManifests(sourcePath: path, incomplete: false, task: task) { manifests in
+            let wanted = ForkMacBackupVersionsPlan.manifests(of: path, owner: owner, in: manifests)
+            self.resolveAll(wanted, relativePath: relativePath, index: 0, found: [], cache: [:], task: task) { found in
+                task.finish(.success(ForkMacBackupVersionsPlan.distinct(found)))
+            }
+        }
+    }
+
+    /// Who this Mac is in the repository: the owner's connected identity;
+    /// for the app's client, the agent's server says it
+    /// (`control/sources`: `localUsername@localHost`). On `work`.
+    func currentIdentity(_ completion: @escaping (ForkMacBackupRepository.Identity?) -> Void) {
+        dispatchPrecondition(condition: .onQueue(work))
+        if let known = identity ?? repository?.clientIdentity { return completion(known) }
+        requestDecoding(ForkMacBackupKopia.SourcesResponse.self, "GET", "/api/v1/control/sources", auth: .control) { [weak self] result in
+            guard let self else { return completion(nil) }
+            guard case .success(let sources) = result, let user = sources.localUsername, let host = sources.localHost,
+                  !user.isEmpty, !host.isEmpty else { return completion(nil) }
+            let found = ForkMacBackupRepository.Identity(userName: user, hostName: host)
+            self.identity = found
+            completion(found)
         }
     }
 
@@ -122,7 +157,7 @@ extension ForkMacBackupKopiaEngine {
                 guard let manifest = manifests.first(where: { $0.id == request.manifestID }) else {
                     return task.finish(.failure(.other("snapshot not found")))
                 }
-                let steps = ForkMacBackupRestorePlan.steps(request) { FileManager.default.fileExists(atPath: $0) }
+                let steps = ForkMacBackupRestorePlan.steps(request, word: self.restoredSuffix) { FileManager.default.fileExists(atPath: $0) }
                 self.resolveSteps(steps, manifest: manifest, index: 0, resolved: [], task: task) { resolved in
                     let run = RestoreRun(request: request, manifest: manifest, steps: resolved,
                                          staging: self.paths.root.appendingPathComponent("restore", isDirectory: true)
@@ -406,6 +441,7 @@ extension ForkMacBackupKopiaEngine {
         let existingFacts: ForkMacBackupRestorePlan.FileFacts? = exists
             ? .init(size: mismatched ? -1 : Int64(existing.st_size), modified: Self.modified(existing)) : nil
         let decision = ForkMacBackupRestorePlan.decision(rule: mismatched ? .keepBoth : rule, name: target.lastPathComponent,
+                                                         isDirectory: stagedIsDirectory,
                                                          restored: restoredFacts, existing: existingFacts,
                                                          suffix: suffix, isTaken: { name in
             manager.fileExists(atPath: target.deletingLastPathComponent().appendingPathComponent(name).path)

@@ -8,9 +8,9 @@ import Foundation
 /// handles it (engine not installed, agent not running).
 ///
 /// Both engines also conform to `ForkMacBackupEngineExtras`
-/// (`engine as? ForkMacBackupEngineExtras`): conclusion of a run, real bytes
-/// sent, retention preview, maintenance schedule, estimate, server PID,
-/// shutdown.
+/// (`engine as? ForkMacBackupEngineExtras`): server start and stop, live
+/// bytes sent, priority, server PID, conclusion of a run, failure lists,
+/// maintenance schedule, versions of another Mac's file.
 enum ForkMacBackupEngineFactory {
     /// The app's client of the agent's `kopia server` (`run/server.json`):
     /// progress, browse, versions, restore, and the wizard's probe

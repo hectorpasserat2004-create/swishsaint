@@ -80,6 +80,8 @@ struct ForkMacBackupMachine {
         var proof: ForkMacBackupSnapshotProof?
         var failure: ForkMacBackupRunFailure?
         var counters = Counters()
+        /// The server's snapshot task (its « Uploaded Bytes », its log).
+        var taskID: String?
     }
 
     struct Run: Equatable {
@@ -144,8 +146,14 @@ struct ForkMacBackupMachine {
         case policyApplied(ForkMacBackupSource, PolicyOutcome)
         case snapshotTriggered(ForkMacBackupSource, ForkMacBackupEngineError?)
         case progress(ForkMacBackupKopia.SourcesResponse)
+        /// The current source's live counters (`liveProgress`), with the
+        /// bytes really sent and the server's task; nil: unknown to the server.
+        case live(ForkMacBackupKopia.SourceStatus?, uploaded: Int64?, taskID: String?)
         case progressFailed(ForkMacBackupEngineError)
+        /// The engine without `conclude`: the manifests listed after the run.
         case listed(ForkMacBackupSource, ForkMacBackupEngineResult<[ForkMacBackupKopia.SnapshotManifest]>)
+        /// The engine's conclusion (manifest found again, failures complete).
+        case concluded(ForkMacBackupSource, ForkMacBackupEngineResult<ForkMacBackupRunConclusion>)
         /// The upload limit wanted now (planner); nil: none.
         case limit(Int64?)
         /// Whether the keep-awake policy allows the assertion now.
@@ -167,7 +175,8 @@ struct ForkMacBackupMachine {
         case applyPolicy(ForkMacBackupSource)
         case triggerSnapshot(ForkMacBackupSource)
         case cancelSnapshot(ForkMacBackupSource)
-        case listSnapshots(ForkMacBackupSource)
+        /// Read how the source's snapshot ended (`conclude`, else `listSnapshots`).
+        case conclude(ForkMacBackupSource, startedAt: Date, taskID: String?)
         case setThrottle(Int64?)
         case keepAwake(Bool)
         case runStarted(id: UUID, trigger: ForkMacBackupTrigger, due: Date?)
@@ -211,6 +220,8 @@ struct ForkMacBackupMachine {
     private(set) var pendingVerify: (level: ForkMacBackupVerifyLevel, trigger: ForkMacBackupTrigger)?
     /// The source rules could not be written: no backup until the settings change.
     private(set) var rulesProblem = false
+    /// `fork.macbackup.timeout.watchdogMinutes`.
+    private(set) var watchdog = ForkMacBackupAgentTuning.watchdog
     private var finishedExpired = false
 
     init() {}
@@ -300,9 +311,13 @@ struct ForkMacBackupMachine {
         case .chainChecked(let error, let nodeID): return chainChecked(error, nodeID: nodeID, now: now)
         case .policyApplied(let source, let outcome): return policyApplied(source, outcome, now: now)
         case .snapshotTriggered(let source, let error): return snapshotTriggered(source, error, now: now)
-        case .progress(let response): return progress(response, now: now)
+        case .progress(let response):
+            guard let current = run?.current else { return [] }
+            return live(response.source(path: current.source.path), uploaded: nil, taskID: nil, now: now)
+        case .live(let status, let uploaded, let taskID): return live(status, uploaded: uploaded, taskID: taskID, now: now)
         case .progressFailed(let error): return progressFailed(error, now: now)
         case .listed(let source, let result): return listed(source, result, now: now)
+        case .concluded(let source, let result): return concluded(source, result, now: now)
         case .limit(let value): return setLimit(value)
         case .keepAwakeAllowed(let allowed):
             keepAwakeAllowed = allowed
@@ -336,6 +351,7 @@ struct ForkMacBackupMachine {
         let changedSources = sources != settings.sources
         enabled = settings.enabled
         configured = settings.isConfigured
+        watchdog = settings.watchdog
         sources = settings.sources
         iCloud = settings.iCloud
         // New rules may fix what could not be written.
@@ -448,7 +464,7 @@ struct ForkMacBackupMachine {
             if case .kopia(let code, _) = error, code == 1 {
                 run.step = .concluding
                 self.run = run
-                return [.listSnapshots(source), .publish]
+                return [concludeAction(run), .publish]
             }
             run.sources[run.index].failure = error.runFailure
             run.abortMessage = message(of: error)
@@ -461,21 +477,24 @@ struct ForkMacBackupMachine {
         return [.publish]
     }
 
-    private mutating func progress(_ response: ForkMacBackupKopia.SourcesResponse, now: Date) -> [Action] {
+    private mutating func live(_ status: ForkMacBackupKopia.SourceStatus?, uploaded: Int64?, taskID: String?,
+                               now: Date) -> [Action] {
         guard var run, let current = run.current else { return [] }
         run.pollFailures = 0
+        if let taskID, !taskID.isEmpty { run.sources[run.index].taskID = taskID }
+        if let uploaded { run.sources[run.index].counters.uploaded = max(current.counters.uploaded, uploaded) }
         guard [.starting, .scanning, .uploading].contains(run.step) else {
             self.run = run
             return []
         }
-        let status = response.source(path: current.source.path)
         var actions: [Action] = []
         if let status, status.isUploading, let upload = status.upload {
             let before = run.step
             var counters = Counters()
             counters.done = upload.bytesDone
             counters.total = upload.estimate
-            counters.uploaded = upload.uploadedBytes ?? 0
+            // The control API's own count stays 0 in v0.23.1: the task's is the real one.
+            counters.uploaded = max(run.sources[run.index].counters.uploaded, upload.uploadedBytes ?? 0)
             counters.files = upload.filesDone
             counters.filesTotal = (upload.estimatedFiles ?? 0) > 0 ? upload.estimatedFiles : nil
             counters.errors = Int((upload.errors ?? 0) + (upload.ignoredErrors ?? 0))
@@ -508,7 +527,7 @@ struct ForkMacBackupMachine {
             }
             run.step = .concluding
             self.run = run
-            return [.listSnapshots(current.source), .publish]
+            return [concludeAction(run), .publish]
         }
         if run.stopping != nil {
             self.run = run
@@ -557,6 +576,38 @@ struct ForkMacBackupMachine {
                 run.sources[run.index].failure = .noSnapshot
             }
         }
+        return advance(run, now: now)
+    }
+
+    private mutating func concluded(_ source: ForkMacBackupSource,
+                                    _ result: ForkMacBackupEngineResult<ForkMacBackupRunConclusion>,
+                                    now: Date) -> [Action] {
+        guard var run, let current = run.current, current.source == source, run.step == .concluding else { return [] }
+        switch result {
+        case .failure(let error):
+            run.sources[run.index].failure = error.runFailure
+            run.abortMessage = message(of: error)
+        case .success(let conclusion):
+            if let sent = conclusion.uploadedBytes {
+                run.sources[run.index].counters.uploaded = max(current.counters.uploaded, sent)
+                run.bytesSent = max(run.bytesSent, run.sources.reduce(0) { $0 + $1.counters.uploaded })
+            }
+            if let taskID = conclusion.taskID { run.sources[run.index].taskID = taskID }
+            run.sources[run.index].proof = conclusion.proof
+            switch conclusion.outcome {
+            case .complete, .partial:
+                break
+            case .canceled, .failed:
+                // Canceled or checkpoint only: no complete walk, no resume.
+                run.sources[run.index].failure = .noSnapshot
+            }
+        }
+        return advance(run, now: now)
+    }
+
+    /// The current source is concluded: the next one, or the end.
+    private mutating func advance(_ concludedRun: Run, now: Date) -> [Action] {
+        var run = concludedRun
         run.sources[run.index].listed = true
         if run.index + 1 < run.sources.count {
             run.index += 1
@@ -568,6 +619,11 @@ struct ForkMacBackupMachine {
         }
         self.run = run
         return finish(abort: nil, now: now)
+    }
+
+    private func concludeAction(_ run: Run) -> Action {
+        let current = run.sources[run.index]
+        return .conclude(current.source, startedAt: current.startedAt ?? run.start, taskID: current.taskID)
     }
 
     private mutating func setLimit(_ value: Int64?) -> [Action] {
@@ -683,7 +739,7 @@ struct ForkMacBackupMachine {
     private mutating func endStopped(now: Date) -> [Action] {
         guard let run, let reason = run.stopping else { return [] }
         if reason == .watchdog {
-            self.run?.abortMessage = "no progress for \(Int(ForkMacBackupAgentTuning.watchdog / 60)) min"
+            self.run?.abortMessage = "no progress for \(Int(watchdog / 60)) min"
             return finish(abort: .stalled, now: now)
         }
         let proofs = run.sources.compactMap(\.proof)
@@ -715,7 +771,7 @@ struct ForkMacBackupMachine {
             return actions
         }
         if [.scanning, .uploading, .starting].contains(run.step),
-           now.timeIntervalSince(run.lastProgressAt) >= ForkMacBackupAgentTuning.watchdog {
+           now.timeIntervalSince(run.lastProgressAt) >= watchdog {
             actions += stop(.watchdog, now: now)
         }
         return actions

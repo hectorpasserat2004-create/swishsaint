@@ -485,15 +485,15 @@ enum ForkMacBackupSettingsTests {
                         && ForkMacBackupLocalIdentity.hostName(from: "  ") == "mac",
                      "a host name the way Kopia writes it")
 
-        let defaults = UserDefaults(suiteName: "vorss.tests.fork.macbackup.settings") ?? .standard
-        defaults.removePersistentDomain(forName: "vorss.tests.fork.macbackup.settings")
-        suite.expect(ForkMacBackupSettingsKeys.int(ForkDefaultsKey.macBackupWatchdogMinutes, in: defaults) == 10
-                        && ForkMacBackupSettingsKeys.string(ForkDefaultsKey.macBackupPriority, in: defaults) == "low",
-                     "the settings Core has not registered yet read their fallbacks")
-        suite.expect(!ForkMacBackupSettingsKeys.machineKeys.contains { ForkMacBackupDefaults.registered[$0] != nil }
-                        && ForkMacBackupSettingsKeys.machineKeys.allSatisfy { $0.hasPrefix("fork.macbackup.") },
-                     "this package's machine state is never registered")
-        defaults.removePersistentDomain(forName: "vorss.tests.fork.macbackup.settings")
+        let registered = ForkMacBackupDefaults.registered
+        suite.expect(registered[ForkDefaultsKey.macBackupWatchdogMinutes] as? Int == 10
+                        && registered[ForkDefaultsKey.macBackupPriority] as? String == "low"
+                        && registered[ForkDefaultsKey.macBackupRepositoryTimeout] as? Int == 60
+                        && registered[ForkDefaultsKey.macBackupProbeTimeout] as? Int == 5,
+                     "the page's agent settings are registered by Core, read by the agent")
+        suite.expect([ForkDefaultsKey.macBackupKitFingerprint, ForkDefaultsKey.macBackupKnownProfiles].allSatisfy {
+            ForkMacBackupDefaults.machineKeys.contains($0) && registered[$0] == nil
+        }, "this package's machine state is never registered")
     }
 
     private static func manifest(_ id: String, user: String?, host: String, start: String?) -> ForkMacBackupKopia.SnapshotManifest {
@@ -525,7 +525,7 @@ enum ForkMacBackupSettingsTests {
                         && hits("**/target", "a/b/target", directory: true),
                      "ignore rules match like Kopia's gitignore syntax")
         suite.expect(rule("") == nil && rule("# comment") == nil && rule("!keep") == nil && rule("/") == nil,
-                     "blank lines, comments, negations and a bare slash are not rules")
+                     "blank lines, comments, negations (read by the matcher) and a bare slash are not rules")
 
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("fork-macbackup-settings-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: root) }
@@ -583,11 +583,6 @@ enum ForkMacBackupSettingsTests {
         let stopped = ForkMacBackupContentScanner.scan(sources: [root.path], settings: settings, home: root.path,
                                                        isCancelled: { true })
         suite.expect(stopped.complete || stopped.includedFiles <= 2, "a scan can be stopped")
-        suite.expect(ForkMacBackupContentScanner.isSparse(logical: 20_000_000_000, allocated: 2_000_000_000, minimum: 10_000_000_000)
-                        && !ForkMacBackupContentScanner.isSparse(logical: 20_000_000_000, allocated: 15_000_000_000,
-                                                                 minimum: 10_000_000_000)
-                        && !ForkMacBackupContentScanner.isSparse(logical: 9_000_000_000, allocated: 0, minimum: 10_000_000_000),
-                     "sparse means ≥ 10 GB announced and less than half written (decision 1)")
         if let data = try? ForkMacBackupJSON.encoder.encode(preview) {
             suite.expect(ForkMacBackupContentPreview.decode(data) == preview, "a preview is cached as JSON")
         }

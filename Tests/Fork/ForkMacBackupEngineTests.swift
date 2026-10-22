@@ -531,22 +531,19 @@ enum ForkMacBackupEngineTests {
                                                          .init(objectID: "o2", relativePath: "Photos", isDirectory: true),
                                                          .init(objectID: "o3", relativePath: "Other/report.pdf", isDirectory: false)]
         let apart = P.steps(.init(manifestID: "m", sourcePath: "/Users/t", items: items, destination: .folder(path: "/Users/t/Downloads/R"),
-                                  skipOwners: false, ignorePermissionErrors: false),
+                                  skipOwners: false, ignorePermissionErrors: false), word: "restauré",
                             exists: { $0 == "/Users/t/Downloads/R/Photos" })
-        suite.expect(apart.map(\.target) == ["/Users/t/Downloads/R/report.pdf", "/Users/t/Downloads/R/Photos 2", "/Users/t/Downloads/R/report 2.pdf"]
+        suite.expect(apart.map(\.target) == ["/Users/t/Downloads/R/report.pdf", "/Users/t/Downloads/R/Photos (restauré)",
+                                             "/Users/t/Downloads/R/report (restauré).pdf"]
                         && apart.allSatisfy { $0.kind == .direct && !$0.overwrite },
                      "into a folder apart: never over something there, nor over each other")
         let original = P.steps(.init(manifestID: "m", sourcePath: "/Users/t", items: items, destination: .original(.keepBoth),
-                                     skipOwners: false, ignorePermissionErrors: false), exists: { _ in true })
+                                     skipOwners: false, ignorePermissionErrors: false), word: "restored", exists: { _ in true })
         suite.expect(original.first?.target == "/Users/t/Docs/report.pdf" && original.allSatisfy { $0.kind == .staged(.keepBoth) },
                      "keep both: staged, then merged by the engine")
         let all = P.steps(.init(manifestID: "m", sourcePath: "/Users/t", items: items, destination: .original(.replaceAll),
-                                skipOwners: false, ignorePermissionErrors: false), exists: { _ in true })
+                                skipOwners: false, ignorePermissionErrors: false), word: "restored", exists: { _ in true })
         suite.expect(all.allSatisfy { $0.kind == .direct && $0.overwrite }, "replace all: Kopia overwrites")
-        suite.expect(P.suffixed("report.pdf", " (restauré)") == "report (restauré).pdf" && P.suffixed("Photos", " 2") == "Photos 2"
-                        && P.suffixed(".bashrc", " (restored)") == ".bashrc (restored)"
-                        && P.suffixed("archive.tar.gz", " 2") == "archive.tar 2.gz",
-                     "a suffix goes before the extension; a dot file keeps its name whole")
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let restored = P.FileFacts(size: 10, modified: now)
         let taken: (String) -> Bool = { $0 == "a (restored).txt" }
@@ -626,10 +623,15 @@ enum ForkMacBackupEngineTests {
         let matcher = ForkMacBackupIgnoreMatcher(rules: rules + ["weird*/x/", "/a\\*b/"])
         suite.expect(matcher.excludes(".Trash", isDirectory: true) && matcher.excludes("Library/Caches", isDirectory: true)
                         && !matcher.excludes("Library/Caches", isDirectory: false) && matcher.excludes("dev/app/node_modules", isDirectory: true)
-                        && matcher.excludes("logs/today.log", isDirectory: false) && !matcher.excludes("logs/today.log", isDirectory: true)
+                        && matcher.excludes("logs/today.log", isDirectory: false) && matcher.excludes("logs/old.log", isDirectory: true)
                         && !matcher.excludes("Documents/Library/Caches", isDirectory: true) && matcher.excludes("a*b", isDirectory: true)
-                        && !matcher.excludes("weirdo/x", isDirectory: true),
-                     "the presets' rules sized before Kopia runs: anchored, by name, by suffix; other patterns left to Kopia")
+                        && !matcher.excludes("ab", isDirectory: true) && matcher.excludes("weirdo/x", isDirectory: true)
+                        && !matcher.excludes("a/weirdo/x", isDirectory: true),
+                     "the rules read as Kopia reads them: anchored, by name, by suffix, wildcards, escapes")
+        let negated = ForkMacBackupIgnoreMatcher(rules: ["*.log", "!keep.log", "build/"])
+        suite.expect(!negated.excludes("logs/keep.log", isDirectory: false) && negated.excludes("logs/x.log", isDirectory: false)
+                        && negated.excludingRule(for: "build/keep.log", isDirectory: false) == "build/",
+                     "« ! » takes a file back, never out of a folder left out")
 
         // A real scan of a temporary folder with a 11 GB sparse file.
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("fork-macbackup-engine-\(getpid())", isDirectory: true)
@@ -706,15 +708,6 @@ enum ForkMacBackupEngineTests {
                         && info?.isOwned(by: .init(userName: "bench", hostName: "bench-mac")) == true,
                      "maintenance info (bench): owner, intervals, next runs, last run")
         suite.expect(ForkMacBackupMaintenanceInfo.decode(Data("{\"owner\":\"x\"}".utf8)) == nil, "not maintenance info: nil")
-        let task = ForkMacBackupKopia.decode(ForkMacBackupKopia.TaskInfo.self, from: fixture("engine-server-ui-estimate-task-result.json") ?? Data())
-        suite.expect(task.map(ForkMacBackupEstimate.init(task:)) == ForkMacBackupEstimate(files: 3001, directories: 123, logicalBytes: 67_722,
-                                                                                          excludedFiles: 1, excludedDirectories: 1,
-                                                                                          excludedLogicalBytes: 209_715_200, errors: 0),
-                     "the server's estimate (bench)")
-        let request = ForkMacBackupEstimate.request(root: "/Users/t", rules: .init(ignoreRules: ["*.log"], ignoreCacheDirs: true))
-        let override = (request["policyOverride"] as? [String: Any])?["files"] as? [String: Any]
-        suite.expect(request["root"] as? String == "/Users/t" && override?["ignore"] as? [String] == ["*.log"]
-                        && override?["ignoreCacheDirs"] as? Bool == true, "the estimate takes the unsaved rules as an override")
         let restoreTask = ForkMacBackupKopia.decode(ForkMacBackupKopia.TaskInfo.self, from: fixture("engine-server-ui-restore-task-result.json") ?? Data())
         suite.expect(restoreTask?.counter("Restored Files") == 3000 && restoreTask?.knownStatus == .success,
                      "a restore task's counters (bench)")

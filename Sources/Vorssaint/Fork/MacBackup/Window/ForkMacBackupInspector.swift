@@ -143,7 +143,7 @@ struct ForkMacBackupInspector: View {
             }
             facts([
                 (text.files, proof.files.formatted(.number.locale(locale))),
-                (text.realSize, ForkMacBackupFormat.bytes(proof.bytes, locale: locale)),
+                (text.realSize, ForkMacBackupFormat.bytes(proof.diskBytes, locale: locale)),
                 (text.sent, run.map { ForkMacBackupFormat.bytes($0.bytesSent, locale: locale) } ?? shared.unknown),
                 (text.duration, (run?.duration ?? proof.startTime.map { proof.endTime.timeIntervalSince($0) })
                     .map { ForkMacBackupFormat.duration($0, locale: locale) } ?? shared.unknown),

@@ -3,55 +3,6 @@
 
 import Foundation
 
-/// Kopia's ignore rules (gitignore syntax), read the way Kopia reads them,
-/// to say which rule left a file out (plan §6.4). A leading « / » anchors a
-/// rule at the source's root, a trailing « / » takes folders only, a rule
-/// without an inner « / » matches a name at any depth, « ! » takes a file
-/// back (never out of a folder already left out).
-enum ForkMacBackupIgnoreRules {
-    /// The rule that leaves `relativePath` out, or nil when it is kept.
-    static func excludingRule(for relativePath: String, isDirectory: Bool, rules: [String]) -> String? {
-        let parts = ForkMacBackupFolderPath.components(relativePath)
-        guard !parts.isEmpty else { return nil }
-        for depth in 1...parts.count {
-            let candidate = Array(parts.prefix(depth))
-            let candidateIsDirectory = depth < parts.count || isDirectory
-            var excludedBy: String?
-            for rule in rules {
-                let trimmed = rule.trimmingCharacters(in: .whitespaces)
-                guard !trimmed.isEmpty, !trimmed.hasPrefix("#") else { continue }
-                let negated = trimmed.hasPrefix("!")
-                let body = negated ? String(trimmed.dropFirst()) : trimmed
-                guard matches(body, components: candidate, isDirectory: candidateIsDirectory) else { continue }
-                excludedBy = negated ? nil : trimmed
-            }
-            if let excludedBy { return excludedBy }
-        }
-        return nil
-    }
-
-    static func matches(_ rule: String, components: [String], isDirectory: Bool) -> Bool {
-        var pattern = rule
-        var directoryOnly = false
-        if pattern.hasSuffix("/") {
-            directoryOnly = true
-            pattern.removeLast()
-        }
-        var anchored = false
-        if pattern.hasPrefix("/") {
-            anchored = true
-            pattern.removeFirst()
-        }
-        if pattern.contains("/") { anchored = true }
-        guard !pattern.isEmpty, !(directoryOnly && !isDirectory), let name = components.last else { return false }
-        if anchored {
-            let flags = pattern.contains("**") ? Int32(0) : FNM_PATHNAME
-            return fnmatch(pattern, components.joined(separator: "/"), flags) == 0
-        }
-        return fnmatch(pattern, name, 0) == 0
-    }
-}
-
 /// « Ce fichier est-il sauvegardé ? » (plan §6.4): the answer for a file
 /// dropped on the window or picked in the Finder.
 enum ForkMacBackupFileVerdict: Equatable {
@@ -92,8 +43,8 @@ enum ForkMacBackupFileVerdict: Equatable {
                        found: Found?, lookedUp: Bool, nextBackup: Date?) -> ForkMacBackupFileVerdict {
         guard let source = source(of: path, in: sources),
               let relative = ForkMacBackupFolderPath.relative(path, to: source.path) else { return .outsideSources }
-        if let rule = ForkMacBackupIgnoreRules.excludingRule(for: relative, isDirectory: isDirectory,
-                                                              rules: source.ignoreRules) {
+        if let rule = ForkMacBackupIgnoreMatcher(rules: source.ignoreRules).excludingRule(for: relative,
+                                                                                        isDirectory: isDirectory) {
             return .excluded(rule: rule)
         }
         if let found {

@@ -3,9 +3,10 @@
 
 import Foundation
 
-/// What the Engine offers beyond the frozen `ForkMacBackupEngineDriving`,
-/// for the Agent (conclusion, live bytes, cost, retention preview,
-/// maintenance schedule) and the Settings (estimate). Both engines of the
+/// What the Engine offers beyond the frozen `ForkMacBackupEngineDriving`:
+/// the Agent's server start and stop, live bytes, priority, cost,
+/// conclusion and failure lists, maintenance schedule, and the Window's
+/// versions of another Mac's file. Both engines of the
 /// factory conform: `engine as? ForkMacBackupEngineExtras`. Same threading
 /// rules as the protocol it refines: callbacks on the engine's callback
 /// queue, exactly one completion per call, `.canceled` after a cancel.
@@ -41,20 +42,13 @@ protocol ForkMacBackupEngineExtras: ForkMacBackupEngineDriving {
     func failures(of manifest: ForkMacBackupKopia.SnapshotManifest, taskID: String?,
                   completion: @escaping (ForkMacBackupEngineResult<[ForkMacBackupFailure]>) -> Void)
 
-    /// What `retention` would keep and delete for `source`, before it is
-    /// applied (incomplete snapshots included).
-    func retentionPreview(of source: ForkMacBackupSource, retention: ForkMacBackupRetention,
-                          completion: @escaping (ForkMacBackupEngineResult<[ForkMacBackupRetentionReplay.Verdict]>) -> Void)
+    /// The distinct versions of `relativePath` as `owner` backed it up
+    /// (the frozen `versions(of:in:)` is this Mac's own).
+    func versions(of relativePath: String, in source: ForkMacBackupSource, owner: ForkMacBackupRepository.Identity,
+                  completion: @escaping (ForkMacBackupEngineResult<[ForkMacBackupFileVersion]>) -> Void)
 
     /// `maintenance info --json`: owner, intervals, next runs.
     func maintenanceInfo(completion: @escaping (ForkMacBackupEngineResult<ForkMacBackupMaintenanceInfo>) -> Void)
-
-    /// The server's estimate of `source` under `rules` (not saved): counts
-    /// and logical bytes, included and excluded.
-    @discardableResult
-    func estimate(_ source: ForkMacBackupSource, rules: ForkMacBackupPolicyRules,
-                  completion: @escaping (ForkMacBackupEngineResult<ForkMacBackupEstimate>) -> Void)
-        -> ForkMacBackupCancellable
 
     /// Stops the server and forgets the secrets (feature off, agent quit).
     func shutdown(completion: @escaping () -> Void)
@@ -124,46 +118,6 @@ struct ForkMacBackupMaintenanceInfo: Equatable {
                                             nextFull: ForkMacBackupKopia.date(raw.schedule?.nextFullMaintenance),
                                             lastRun: last?.0,
                                             lastRunSucceeded: lastRun.map { $0.allSatisfy(\.1) })
-    }
-}
-
-/// The server's estimate (`POST /api/v1/estimate`). Kopia's sizes are
-/// LOGICAL (a sparse image counts whole): the UI shows the allocated sizes
-/// of `ForkMacBackupContentScan` and uses these for the counts.
-struct ForkMacBackupEstimate: Equatable {
-    var files: Int64
-    var directories: Int64
-    var logicalBytes: Int64
-    var excludedFiles: Int64
-    var excludedDirectories: Int64
-    /// Excluded files' bytes only (an excluded folder's are not added,
-    /// SPIKES §2.7).
-    var excludedLogicalBytes: Int64
-    var errors: Int64
-
-    init(files: Int64, directories: Int64, logicalBytes: Int64, excludedFiles: Int64, excludedDirectories: Int64,
-         excludedLogicalBytes: Int64, errors: Int64) {
-        self.files = files
-        self.directories = directories
-        self.logicalBytes = logicalBytes
-        self.excludedFiles = excludedFiles
-        self.excludedDirectories = excludedDirectories
-        self.excludedLogicalBytes = excludedLogicalBytes
-        self.errors = errors
-    }
-
-    /// From the estimate task's counters.
-    init(task: ForkMacBackupKopia.TaskInfo) {
-        self.init(files: task.counter("Files") ?? 0, directories: task.counter("Directories") ?? 0,
-                  logicalBytes: task.counter("Bytes") ?? 0, excludedFiles: task.counter("Excluded Files") ?? 0,
-                  excludedDirectories: task.counter("Excluded Directories") ?? 0,
-                  excludedLogicalBytes: task.counter("Excluded Bytes") ?? 0, errors: task.counter("Errors") ?? 0)
-    }
-
-    /// `POST /api/v1/estimate`'s body: the rules as a policy override.
-    static func request(root: String, rules: ForkMacBackupPolicyRules, examples: Int = 3) -> [String: Any] {
-        ["root": root, "maxExamplesPerBucket": examples,
-         "policyOverride": ["files": ["ignore": rules.ignoreRules, "ignoreCacheDirs": rules.ignoreCacheDirs] as [String: Any]]]
     }
 }
 

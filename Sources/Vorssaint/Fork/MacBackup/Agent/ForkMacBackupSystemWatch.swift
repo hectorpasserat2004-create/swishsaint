@@ -255,11 +255,11 @@ final class ForkMacBackupSystemWatch {
 
     /// Runs `tailscale status --json` (5 s at most) off the queue and hands
     /// whether `peer` is online back on `queue`; nil without Tailscale.
-    func probePeer(_ peer: ForkMacBackupRepository.Peer, completion: @escaping (Bool?) -> Void) {
+    func probePeer(_ peer: ForkMacBackupRepository.Peer, timeout: TimeInterval, completion: @escaping (Bool?) -> Void) {
         let queue = self.queue
         DispatchQueue.global(qos: .utility).async {
             let command = ForkMacBackupTailscale.command { FileManager.default.isExecutableFile(atPath: $0) }
-            let status = command.flatMap { Self.run($0.path, $0.arguments, environment: $0.environment, timeout: 5) }
+            let status = command.flatMap { Self.run($0.path, $0.arguments, environment: $0.environment, timeout: timeout) }
                 .flatMap(ForkMacBackupTailscale.decode)
             let online = command == nil ? nil : ForkMacBackupTailscale.peerOnline(peer, status: status)
             queue.async { completion(online) }

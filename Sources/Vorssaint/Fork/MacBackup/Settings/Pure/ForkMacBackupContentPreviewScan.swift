@@ -1,55 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Martial
 
-import Darwin
 import Foundation
-
-/// One ignore rule, in Kopia's gitignore syntax, relative to a source's
-/// root: `name` matches at any depth, `/name` only at the root, `a/b` from
-/// the root too, a trailing `/` only folders, `*` and `?` as in the shell.
-struct ForkMacBackupIgnoreRule: Equatable {
-    let text: String
-    let pattern: String
-    let anchored: Bool
-    let directoryOnly: Bool
-    /// For an anchored rule: how many path components it spans.
-    let depth: Int
-    let crossesFolders: Bool
-
-    init?(_ text: String) {
-        var pattern = text.trimmingCharacters(in: .whitespaces)
-        guard !pattern.isEmpty, !pattern.hasPrefix("#"), !pattern.hasPrefix("!") else { return nil }
-        self.text = pattern
-        directoryOnly = pattern.hasSuffix("/")
-        while pattern.hasSuffix("/") { pattern.removeLast() }
-        var anchored = false
-        if pattern.hasPrefix("/") {
-            anchored = true
-            while pattern.hasPrefix("/") { pattern.removeFirst() }
-        }
-        if pattern.hasPrefix("**/") {
-            pattern.removeFirst(3)
-            anchored = false
-        }
-        if pattern.contains("/") { anchored = true }
-        guard !pattern.isEmpty else { return nil }
-        self.pattern = pattern
-        self.anchored = anchored
-        crossesFolders = pattern.contains("**")
-        depth = pattern.split(separator: "/").count
-    }
-
-    /// `relativePath` has no leading slash; `name` is its last component.
-    func matches(relativePath: String, name: String, depth pathDepth: Int, isDirectory: Bool) -> Bool {
-        if directoryOnly && !isDirectory { return false }
-        if anchored {
-            if crossesFolders { return fnmatch(pattern, relativePath, 0) == 0 }
-            guard pathDepth == depth else { return false }
-            return fnmatch(pattern, relativePath, FNM_PATHNAME) == 0
-        }
-        return fnmatch(pattern, name, 0) == 0
-    }
-}
 
 /// What « Aperçu » measured (plan §4.3): real sizes on disk only (decision 1
 /// of 22/10), per preset and per free rule, whether on or off, so every
@@ -121,18 +73,22 @@ struct ForkMacBackupContentPreview: Codable, Equatable {
     }
 }
 
-/// Walks the sources once and measures every rule (plan §4.3). Foundation
-/// only, on the caller's queue (a utility one), cancellable.
+/// « Aperçu »: walks the sources once with the engine's walker
+/// (`ForkMacBackupContentScan.walk`, real sizes, cloud-only folders never
+/// entered) and measures EVERY rule, on or off, with the engine's rule
+/// matcher and sparse-image test. Foundation only, on the caller's queue
+/// (a utility one), cancellable.
 enum ForkMacBackupContentScanner {
     struct Settings {
         var presets: [ForkMacBackupPreset]
         var customRules: [String]
         var iCloud: ForkMacBackupICloudMode
-        /// Decision 1 of 22/10: ≥ 10 GB announced, less than half written.
-        var sparseMinimum: Int64 = 10_000_000_000
+        /// Decision 1 of 22/10: ≥ 10 GB announced, less than half written
+        /// (smaller in the tests only).
+        var sparseMinimum: Int64
 
         init(presets: [ForkMacBackupPreset], customRules: [String], iCloud: ForkMacBackupICloudMode,
-             sparseMinimum: Int64 = 10_000_000_000) {
+             sparseMinimum: Int64 = ForkMacBackupContentScan.sparseMinimumLogicalBytes) {
             self.presets = presets
             self.customRules = customRules
             self.iCloud = iCloud
@@ -144,12 +100,6 @@ enum ForkMacBackupContentScanner {
         var files: Int64
         var bytes: Int64
         var path: String
-    }
-
-    /// A file is a sparse disk image when it announces at least `minimum`
-    /// and holds less than half of it.
-    static func isSparse(logical: Int64, allocated: Int64, minimum: Int64) -> Bool {
-        logical >= minimum && allocated * 2 < logical
     }
 
     private struct Matcher {
@@ -200,80 +150,62 @@ enum ForkMacBackupContentScanner {
         var seen: Int64 = 0
         var complete = true
 
-        // The enumerator hands resolved paths (/var → /private/var): both
-        // spellings of the home and of each root are recognised.
-        let homes = Set([home, realPath(home)])
+        // The walker hands resolved paths (/var → /private/var): both
+        // spellings of the home are recognised.
+        let homes = Set([home, ForkMacBackupContentScan.realPath(home)])
         func display(_ path: String) -> String {
             for candidate in homes where path.hasPrefix(candidate + "/") { return "~" + path.dropFirst(candidate.count) }
             return path
         }
 
-        let keys: [URLResourceKey] = [.isDirectoryKey, .isSymbolicLinkKey, .isRegularFileKey,
-                                      .totalFileAllocatedSizeKey, .fileAllocatedSizeKey, .fileSizeKey]
-        outer: for source in sources {
+        for source in sources {
             let root = URL(fileURLWithPath: source, isDirectory: true).standardizedFileURL
-            let roots = [root.path, realPath(root.path)]
-            guard let enumerator = FileManager.default.enumerator(
-                at: root, includingPropertiesForKeys: keys, options: [],
-                errorHandler: { _, _ in
-                    unreadable += 1
-                    return true
-                }) else { continue }
+            let rootPath = root.path
             // The groups each open folder level hands down to its contents.
             var inherited: [Set<String>] = [[]]
-            for case let url as URL in enumerator {
+            let walked = ForkMacBackupContentScan.walk(root: root, isCanceled: {
                 seen += 1
-                if seen % 2_000 == 0 {
-                    if isCancelled() {
-                        complete = false
-                        break outer
-                    }
-                    progress?(Progress(files: seen, bytes: included + excluded, path: url.path))
-                }
-                let level = enumerator.level
-                guard level >= 1 else { continue }
-                let path = url.path
-                guard let rootPath = roots.first(where: { path.hasPrefix($0 + "/") }) else { continue }
-                let relative = String(path.dropFirst(rootPath.count + 1))
-                let name = url.lastPathComponent
-                guard let values = try? url.resourceValues(forKeys: Set(keys)) else { continue }
-                let isLink = values.isSymbolicLink ?? false
-                let isDirectory = (values.isDirectory ?? false) && !isLink
-
+                guard seen % 2_000 == 0 else { return false }
+                return isCancelled()
+            }) { entry in
+                if seen % 2_000 == 0 { progress?(Progress(files: seen, bytes: included + excluded, path: entry.url.path)) }
+                let level = entry.depth
+                guard level >= 1 else { return .enter }
                 if inherited.count > level { inherited.removeLast(inherited.count - level) }
                 var groups = inherited.last ?? []
                 for matcher in matchers where !groups.contains(matcher.id) {
                     var hit = matcher.rules.contains {
-                        $0.matches(relativePath: relative, name: name, depth: level, isDirectory: isDirectory)
+                        $0.matches(relativePath: entry.relativePath, name: entry.name, depth: level, isDirectory: entry.isDirectory)
                     }
-                    if !hit, matcher.usesCacheTag, isDirectory {
-                        hit = FileManager.default.fileExists(atPath: path + "/CACHEDIR.TAG")
+                    if !hit, matcher.usesCacheTag, entry.isDirectory {
+                        hit = FileManager.default.fileExists(atPath: entry.url.path + "/CACHEDIR.TAG")
                     }
                     guard hit else { continue }
                     groups.insert(matcher.id)
                     var tally = tallies[matcher.id] ?? Tally()
                     tally.matches += 1
-                    if tally.examples.count < 5 { tally.examples.append(display(path)) }
+                    if tally.examples.count < 5 { tally.examples.append(display(rootPath + "/" + entry.relativePath)) }
                     tallies[matcher.id] = tally
                 }
-                if isDirectory {
+                if entry.isDirectory {
                     while inherited.count <= level { inherited.append([]) }
                     inherited[level] = groups
-                    continue
+                    return .enter
                 }
 
-                let allocated = Int64(values.totalFileAllocatedSize ?? values.fileAllocatedSize ?? 0)
-                let logical = Int64(values.fileSize ?? 0)
-                if !isLink, relative.hasPrefix("Library/Mobile Documents/"), isDataless(path) {
+                let allocated = entry.allocatedBytes
+                let logical = entry.logicalBytes
+                if !entry.isSymbolicLink, entry.relativePath.hasPrefix("Library/Mobile Documents/"), entry.isDataless {
                     cloudOnlyFiles += 1
                     cloudOnlyBytes += logical
                 }
-                if !isLink, isSparse(logical: logical, allocated: allocated, minimum: settings.sparseMinimum) {
-                    sparse.append(.init(path: display(path), logicalBytes: logical, allocatedBytes: allocated))
+                if entry.isRegularFile, logical >= settings.sparseMinimum, allocated * 2 < logical {
+                    sparse.append(.init(path: display(rootPath + "/" + entry.relativePath), logicalBytes: logical,
+                                        allocatedBytes: allocated))
                     groups.insert(sparseID)
                     var tally = tallies[sparseID] ?? Tally()
                     tally.matches += 1
-                    if tally.examples.count < 5 { tally.examples.append(display(path)) }
+                    if tally.examples.count < 5 { tally.examples.append(display(rootPath + "/" + entry.relativePath)) }
                     tallies[sparseID] = tally
                 }
                 for id in groups {
@@ -289,7 +221,7 @@ enum ForkMacBackupContentScanner {
                 } else {
                     included += allocated
                     includedFiles += 1
-                    let components = relative.split(separator: "/", maxSplits: 2)
+                    let components = entry.relativePath.split(separator: "/", maxSplits: 2)
                     if components.count >= 2 {
                         firstLevel[display(rootPath + "/" + components[0]), default: 0] += allocated
                     }
@@ -297,6 +229,12 @@ enum ForkMacBackupContentScanner {
                         secondLevel[display(rootPath + "/" + components[0] + "/" + components[1]), default: 0] += allocated
                     }
                 }
+                return .enter
+            }
+            unreadable += Int(walked.unreadable)
+            if walked.canceled {
+                complete = false
+                break
             }
         }
 
@@ -316,20 +254,5 @@ enum ForkMacBackupContentScanner {
             sparse: sparse.sorted { $0.logicalBytes > $1.logicalBytes },
             topFolders: top(firstLevel, 8) + top(secondLevel, 8), cloudOnlyFiles: cloudOnlyFiles,
             cloudOnlyBytes: cloudOnlyBytes, unreadable: unreadable, complete: complete)
-    }
-
-    /// The path with every link resolved, `/private` kept (unlike
-    /// `resolvingSymlinksInPath`, which strips it again).
-    static func realPath(_ path: String) -> String {
-        guard let resolved = realpath(path, nil) else { return path }
-        defer { free(resolved) }
-        return String(cString: resolved)
-    }
-
-    /// An iCloud file with no data on the Mac (`SF_DATALESS`).
-    static func isDataless(_ path: String) -> Bool {
-        var info = stat()
-        guard lstat(path, &info) == 0 else { return false }
-        return info.st_flags & 0x4000_0000 != 0
     }
 }

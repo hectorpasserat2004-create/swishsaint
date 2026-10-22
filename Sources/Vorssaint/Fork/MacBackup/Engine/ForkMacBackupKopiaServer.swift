@@ -47,6 +47,13 @@ final class ForkMacBackupKopiaServer {
         self.queue = queue
     }
 
+    /// Released (its engine dropped without `shutdown`): the child still
+    /// stops, through its stdin, so no `kopia server` outlives its owner.
+    deinit {
+        restart?.cancel()
+        process?.closeStdin()
+    }
+
     var isRunning: Bool { info != nil }
     var processIdentifier: Int32? { info?.pid }
 

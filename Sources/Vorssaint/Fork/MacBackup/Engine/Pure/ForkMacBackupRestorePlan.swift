@@ -77,23 +77,24 @@ enum ForkMacBackupRestorePlan {
         var overwrite: Bool
     }
 
-    /// The steps of a request; `exists` tells whether a path is taken (the
-    /// folder-apart naming).
-    static func steps(_ request: ForkMacBackupRestoreRequest, exists: (String) -> Bool) -> [Step] {
+    /// The steps of a request; `exists` tells whether a path is taken.
+    /// Into a folder apart, each item lands at `<folder>/<name>`, beside
+    /// what is already there under the « keep both » name (`word`:
+    /// « restauré »), never over it nor over another item.
+    static func steps(_ request: ForkMacBackupRestoreRequest, word: String, exists: (String) -> Bool) -> [Step] {
         var taken = Set<String>()
         return request.items.map { item in
             let relative = ForkMacBackupFailureList.normalize(item.relativePath)
             let name = relative.split(separator: "/").last.map(String.init) ?? displayName(request.sourcePath)
             switch request.destination {
             case .folder(let folder):
-                var candidate = (folder as NSString).appendingPathComponent(name)
-                var index = 2
-                while exists(candidate) || taken.contains(candidate) {
-                    candidate = (folder as NSString).appendingPathComponent(numbered(name, index))
-                    index += 1
+                let free = ForkMacBackupRestoreNaming.keepBothName(name, isDirectory: item.isDirectory, word: word) { candidate in
+                    let path = (folder as NSString).appendingPathComponent(candidate)
+                    return exists(path) || taken.contains(path)
                 }
-                taken.insert(candidate)
-                return Step(item: item, target: candidate, kind: .direct, overwrite: false)
+                let target = (folder as NSString).appendingPathComponent(free)
+                taken.insert(target)
+                return Step(item: item, target: target, kind: .direct, overwrite: false)
             case .original(let rule):
                 let target = relative.isEmpty ? request.sourcePath
                     : (request.sourcePath as NSString).appendingPathComponent(relative)
@@ -110,20 +111,6 @@ enum ForkMacBackupRestorePlan {
     private static func displayName(_ path: String) -> String {
         let name = (path as NSString).lastPathComponent
         return name.isEmpty ? "Backup" : name
-    }
-
-    /// « report.pdf » → « report 2.pdf »; « Photos » → « Photos 2 ».
-    static func numbered(_ name: String, _ index: Int) -> String {
-        suffixed(name, " \(index)")
-    }
-
-    /// « report.pdf » + « (restauré) » → « report (restauré).pdf ».
-    static func suffixed(_ name: String, _ suffix: String) -> String {
-        let ns = name as NSString
-        let ext = ns.pathExtension
-        let base = ns.deletingPathExtension
-        guard !ext.isEmpty, !base.isEmpty, !name.hasPrefix(".") || base.contains(".") else { return name + suffix }
-        return base + suffix + "." + ext
     }
 
     // MARK: Merging a staged restore
@@ -149,8 +136,9 @@ enum ForkMacBackupRestorePlan {
     /// « Replace if older » keeps a local file at least as recent as the
     /// backup's; « keep both » leaves an identical file alone (same size,
     /// same date to the second) and renames the restored copy otherwise.
-    static func decision(rule: ForkMacBackupRestoreRequest.Overwrite, name: String, restored: FileFacts,
-                         existing: FileFacts?, suffix: String, isTaken: (String) -> Bool) -> Decision {
+    static func decision(rule: ForkMacBackupRestoreRequest.Overwrite, name: String, isDirectory: Bool = false,
+                         restored: FileFacts, existing: FileFacts?, suffix: String,
+                         isTaken: (String) -> Bool) -> Decision {
         guard let existing else { return .move }
         let sameDate = abs(existing.modified.timeIntervalSince(restored.modified)) < 1
         switch rule {
@@ -160,13 +148,10 @@ enum ForkMacBackupRestorePlan {
             return existing.modified < restored.modified && !sameDate ? .replace : .keep
         case .keepBoth:
             if existing.size == restored.size && sameDate { return .keep }
-            var candidate = suffixed(name, " (\(suffix))")
-            var index = 2
-            while isTaken(candidate) {
-                candidate = suffixed(name, " (\(suffix) \(index))")
-                index += 1
-            }
-            return .moveRenamed(candidate)
+            // The name is taken by the file kept: the restored one goes beside it.
+            return .moveRenamed(ForkMacBackupRestoreNaming.keepBothName(name, isDirectory: isDirectory, word: suffix) {
+                $0 == name || isTaken($0)
+            })
         }
     }
 
@@ -191,5 +176,61 @@ enum ForkMacBackupRestorePlan {
             picked += Array(large.dropFirst(fromLarge).prefix(count - picked.count))
         }
         return picked
+    }
+}
+
+/// Where a restore goes and under which names (plan §6.3). Pure: the file
+/// system is asked through closures, so the rules are tested alone.
+enum ForkMacBackupRestoreNaming {
+    /// « Restauré — 22 oct. 2026 à 10.04 »: a Finder name, so no « : »
+    /// (the Finder shows it as « / ») and no « / ».
+    static func folderName(prefix: String, date: Date, locale: Locale, timeZone: TimeZone = .autoupdatingCurrent) -> String {
+        var style = Date.FormatStyle(date: .abbreviated, time: .shortened, locale: locale)
+        style.timeZone = timeZone
+        return finderSafe(prefix + " — " + date.formatted(style))
+    }
+
+    /// A name the Finder and the file system both take.
+    static func finderSafe(_ name: String) -> String {
+        var text = name.replacingOccurrences(of: ":", with: ".").replacingOccurrences(of: "/", with: "-")
+        // Narrow and thin no-break spaces of some locales' clocks stay
+        // readable as plain spaces in a file name.
+        text = text.replacingOccurrences(of: "\u{202F}", with: " ").replacingOccurrences(of: "\u{2009}", with: " ")
+        while text.hasPrefix(".") { text.removeFirst() }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "-" : String(trimmed.prefix(240))
+    }
+
+    /// `base`, else « base 2 », « base 3 »… the first that `exists` says is free.
+    static func uniqueFolder(_ base: String, exists: (String) -> Bool) -> String {
+        guard exists(base) else { return base }
+        var number = 2
+        while exists("\(base) \(number)") { number += 1 }
+        return "\(base) \(number)"
+    }
+
+    /// « Keep both »: « rapport.pdf » becomes « rapport (restauré).pdf »,
+    /// then « rapport (restauré 2).pdf »… A folder, a name without
+    /// extension or a dot file keeps its whole name before the suffix.
+    static func keepBothName(_ name: String, isDirectory: Bool, word: String, exists: (String) -> Bool) -> String {
+        guard exists(name) else { return name }
+        let (stem, ext) = split(name, isDirectory: isDirectory)
+        func candidate(_ number: Int) -> String {
+            let tag = number == 1 ? "(\(word))" : "(\(word) \(number))"
+            return ext.isEmpty ? "\(stem) \(tag)" : "\(stem) \(tag).\(ext)"
+        }
+        var number = 1
+        while exists(candidate(number)) { number += 1 }
+        return candidate(number)
+    }
+
+    /// The name and its last extension; none for a folder, a dot file or
+    /// a name ending with a dot.
+    static func split(_ name: String, isDirectory: Bool) -> (stem: String, ext: String) {
+        guard !isDirectory, let dot = name.lastIndex(of: "."), dot != name.startIndex,
+              name.index(after: dot) != name.endIndex else { return (name, "") }
+        let ext = String(name[name.index(after: dot)...])
+        guard !ext.contains(" ") else { return (name, "") }
+        return (String(name[..<dot]), ext)
     }
 }

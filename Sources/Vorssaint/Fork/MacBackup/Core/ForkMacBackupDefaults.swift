@@ -57,6 +57,15 @@ extension ForkDefaultsKey {
     static let macBackupIslandShowPending = "fork.macbackup.island.showPending"
     /// The section's size: `compact` (180 pt) or `spacious` (264 pt).
     static let macBackupIslandSize = "fork.macbackup.island.size"
+    /// How hard a scheduled backup may use the Mac: `low` (macOS background
+    /// priority) or `normal`. « Sauvegarder maintenant » always runs normal.
+    static let macBackupPriority = "fork.macbackup.priority"
+    /// Minutes without progress before the watchdog cancels and retries.
+    static let macBackupWatchdogMinutes = "fork.macbackup.timeout.watchdogMinutes"
+    /// Seconds to open the repository (the chain check) before giving up.
+    static let macBackupRepositoryTimeout = "fork.macbackup.timeout.repositorySeconds"
+    /// Seconds a chain probe (Tailscale, the server's port) may take.
+    static let macBackupProbeTimeout = "fork.macbackup.timeout.probeSeconds"
 
     /// `fork.macbackup.notify.<event>`: `ForkMacBackupNotifyChannel` per
     /// `ForkMacBackupNotifyEvent`.
@@ -82,6 +91,12 @@ extension ForkDefaultsKey {
     static let macBackupBranImportedAt = "fork.macbackup.branImportedAt"
     /// The offers already made on this Mac (comma-separated names).
     static let macBackupOffered = "fork.macbackup.offered"
+    /// `ForkMacBackupKit.fingerprint` of the repository the last kit was made
+    /// for: another one means « Kit à refaire ».
+    static let macBackupKitFingerprint = "fork.macbackup.kitFingerprint"
+    /// Profiles imported on this Mac, JSON `[ForkMacBackupProfile]`, for the
+    /// chain header's menu.
+    static let macBackupKnownProfiles = "fork.macbackup.knownProfiles"
 }
 
 /// `fork.macbackup.schedule.mode`.
@@ -157,6 +172,10 @@ enum ForkMacBackupDefaults {
             ForkDefaultsKey.macBackupIslandShowChain: true,
             ForkDefaultsKey.macBackupIslandShowPending: true,
             ForkDefaultsKey.macBackupIslandSize: "compact",
+            ForkDefaultsKey.macBackupPriority: "low",
+            ForkDefaultsKey.macBackupWatchdogMinutes: 10,
+            ForkDefaultsKey.macBackupRepositoryTimeout: 60,
+            ForkDefaultsKey.macBackupProbeTimeout: 5,
         ]
         for event in ForkMacBackupNotifyEvent.allCases {
             values[ForkDefaultsKey.macBackupNotify(event)] = event.defaultChannel.rawValue
@@ -170,5 +189,6 @@ enum ForkMacBackupDefaults {
         ForkDefaultsKey.macBackupAdapters, ForkDefaultsKey.macBackupEngineVersion,
         ForkDefaultsKey.macBackupKitCreatedAt, ForkDefaultsKey.macBackupKitRemindAt,
         ForkDefaultsKey.macBackupBranImportedAt, ForkDefaultsKey.macBackupOffered,
+        ForkDefaultsKey.macBackupKitFingerprint, ForkDefaultsKey.macBackupKnownProfiles,
     ]
 }

@@ -54,7 +54,7 @@ struct ForkMacBackupProofStore: Codable, Equatable {
 
     static func summary(_ proof: ForkMacBackupSnapshotProof) -> ForkMacBackupPresentation.SnapshotSummary {
         ForkMacBackupPresentation.SnapshotSummary(manifestID: proof.manifestID, date: proof.endTime, level: proof.level,
-                                                  failures: proof.failureCount, bytes: proof.bytes)
+                                                  failures: proof.failureCount, bytes: proof.diskBytes)
     }
 
     // MARK: Writing
@@ -112,6 +112,7 @@ struct ForkMacBackupProofStore: Codable, Equatable {
         guard let old = proofs[proof.manifestID] else { return proof }
         var merged = proof
         if proof.level >= .complete { merged.level = max(proof.level, old.level) }
+        merged.realBytes = proof.realBytes ?? old.realBytes
         merged.verifiedAt = old.verifiedAt
         merged.verifiedPercent = old.verifiedPercent
         merged.restoreTestedAt = old.restoreTestedAt
