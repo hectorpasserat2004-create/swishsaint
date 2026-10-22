@@ -88,15 +88,16 @@ extension ForkMeetingStore {
         let manager = FileManager.default
         var isDirectory: ObjCBool = false
         guard manager.fileExists(atPath: root.path, isDirectory: &isDirectory), isDirectory.boolValue,
-              let names = try? manager.contentsOfDirectory(atPath: root.path) else {
+              (try? manager.contentsOfDirectory(atPath: root.path)) != nil else {
             return LibraryScan(root: root, rootExists: false, entries: [], probes: [:])
         }
         var entries: [ForkMeetingLibraryEntry] = []
         var probes: [String: ForkMeetingProbeCache.Probe] = [:]
         var measured = Set<String>()
-        for name in names.sorted() where !name.hasPrefix(".") && only?.contains(name) != false {
+        // The root's meetings and those filed in its company folders.
+        for name in ForkMeetingCompanyFolder.meetings(in: root, only: only) {
             let folder = root.appendingPathComponent(name, isDirectory: true)
-            guard let first = libraryEntry(folder, writing: writing) else { continue }
+            guard let first = libraryEntry(folder, name: name, writing: writing) else { continue }
             var probe: ForkMeetingProbeCache.Probe?
             if probing, let playable = first.entry.playable {
                 let url = folder.appendingPathComponent(playable)
@@ -130,15 +131,15 @@ extension ForkMeetingStore {
         }
     }
 
-    private func libraryEntry(_ folder: URL, writing: Set<String>) -> FolderLook? {
+    /// - `name`: the folder's name in the library (`ForkMeetingCompanyFolder`).
+    private func libraryEntry(_ folder: URL, name: String, writing: Set<String>) -> FolderLook? {
         let manager = FileManager.default
-        let name = folder.lastPathComponent
         var isDirectory: ObjCBool = false
         guard manager.fileExists(atPath: folder.path, isDirectory: &isDirectory), isDirectory.boolValue,
               let inside = try? manager.contentsOfDirectory(atPath: folder.path) else { return nil }
         guard inside.contains(ForkMeetingFolder.sidecarName) else { return nil }
         let sidecar = ForkMeetingSidecar.read(at: folder.appendingPathComponent(ForkMeetingFolder.sidecarName))
-        let contents = ForkMeetingFolder.contents(of: inside, folderName: name,
+        let contents = ForkMeetingFolder.contents(of: inside, folderName: folder.lastPathComponent,
                                                   alsoNamed: (try? sidecar.get())?.recordedName(),
                                                   transcriptFiles: (try? sidecar.get())?.transcriptFiles ?? [])
         removeTranscriptDrafts(inside.filter(ForkMeetingTranscript.isDraft), in: folder)
@@ -286,29 +287,36 @@ extension ForkMeetingStore {
         }
     }
 
+    /// - `folderName`: the library's name, "acme.com/<meeting>" for a
+    ///   meeting filed in its company's folder: it is renamed there, its
+    ///   media after its own name.
     private func rename(_ folderName: String, in root: URL, title: String,
                         live: Bool) -> Result<RenameResult, LibraryFailure> {
         let manager = FileManager.default
         let folder = root.appendingPathComponent(folderName, isDirectory: true)
+        // Where the folder sits: the root, or its company's folder.
+        let company = ForkMeetingCompanyFolder.company(of: folderName)
+        let parent = company.map { root.appendingPathComponent($0, isDirectory: true) } ?? root
+        let leaf = ForkMeetingCompanyFolder.leaf(of: folderName)
         guard let names = try? manager.contentsOfDirectory(atPath: folder.path) else { return .failure(.gone) }
         let read = ForkMeetingSidecar.read(at: folder.appendingPathComponent(ForkMeetingFolder.sidecarName))
         let id = (try? read.get())?.id
         let plan: ForkMeetingRename.Plan
-        switch ForkMeetingRename.plan(title: title, folderName: folderName, sidecar: read, names: names,
+        switch ForkMeetingRename.plan(title: title, folderName: leaf, sidecar: read, names: names,
                                       live: isBusy(folder, live: live),
                                       occupant: ForkMeetingRename.occupant(
-                                          sameFolder: { Self.isSameFile(root.appendingPathComponent($0, isDirectory: true), folder) },
-                                          disk: { Self.occupant(of: root.appendingPathComponent($0, isDirectory: true), id: id) })) {
+                                          sameFolder: { Self.isSameFile(parent.appendingPathComponent($0, isDirectory: true), folder) },
+                                          disk: { Self.occupant(of: parent.appendingPathComponent($0, isDirectory: true), id: id) })) {
         case let .failure(refusal): return .failure(.renameRefused(refusal))
         case let .success(made): plan = made
         }
         var current = folderName
         var folderMoveFailed = false
         if let move = plan.folder {
-            let to = root.appendingPathComponent(move.to, isDirectory: true)
+            let to = parent.appendingPathComponent(move.to, isDirectory: true)
             do {
-                try manager.moveItem(at: root.appendingPathComponent(move.from, isDirectory: true), to: to)
-                current = move.to
+                try manager.moveItem(at: parent.appendingPathComponent(move.from, isDirectory: true), to: to)
+                current = ForkMeetingCompanyFolder.relative(move.to, company: company)
                 // Writes still addressed to the old name land here, for a
                 // while.
                 let old = Self.tablePath(folder), new = Self.tablePath(to)
@@ -336,7 +344,7 @@ extension ForkMeetingStore {
         }
         // The video's entry in Recent captures, when the meeting is listed
         // there, follows it.
-        let video = ForkMeetingFolder.contents(of: names, folderName: folderName,
+        let video = ForkMeetingFolder.contents(of: names, folderName: leaf,
                                                alsoNamed: (try? read.get())?.recordedName()).video
         if let video, current != folderName {
             let moved = mediaMoved.first { $0.from == video }?.to ?? video
@@ -361,6 +369,49 @@ extension ForkMeetingStore {
         }
         return .success(RenameResult(folderName: current, plan: plan, folderMoveFailed: folderMoveFailed,
                                      mediaKept: mediaKept, mediaMoved: mediaMoved, titleSaved: titleSaved))
+    }
+
+    // MARK: - Company folders
+
+    /// Files a complete meeting in its company's folder
+    /// (`ForkMeetingCompanyFolder.file`), after every write asked before:
+    /// where it is now, by its id, unless it is recorded or finished here or
+    /// elsewhere (`busy`: what the caller knows works on it, sends,
+    /// transcriptions). Writes still addressed to its old place follow it,
+    /// as after a rename. Off the store's queue: the folder where it is
+    /// now, or `nil` when it stayed.
+    func fileInCompany(_ folder: URL, id: UUID?, company: String, busy: Set<String> = []) -> URL? {
+        dispatchPrecondition(condition: .notOnQueue(queue))
+        let root = self.root()
+        return queue.sync { () -> URL? in
+            guard let found = locate(folder, id: id) else { return nil }
+            guard !busy.contains(found.standardizedFileURL.path), !isBusy(found, live: false) else {
+                Self.libraryLog.notice("not filed now, the meeting is at work: \(found.lastPathComponent, privacy: .private)")
+                return nil
+            }
+            switch ForkMeetingCompanyFolder.file(found, root: root, company: company) {
+            case let .filed(to):
+                // The video's entry in Recent captures, when listed there, follows it.
+                let names = (try? FileManager.default.contentsOfDirectory(atPath: to.path)) ?? []
+                let read = ForkMeetingSidecar.read(at: to.appendingPathComponent(ForkMeetingFolder.sidecarName))
+                if let video = ForkMeetingFolder.contents(of: names, folderName: to.lastPathComponent,
+                                                          alsoNamed: (try? read.get())?.recordedName()).video {
+                    recentCaptureMoved(found.appendingPathComponent(video), to.appendingPathComponent(video))
+                }
+                let old = Self.tablePath(found), new = Self.tablePath(to)
+                renameTable.record(from: old, to: new, file: Self.fileNumber(to.path))
+                queue.asyncAfter(deadline: .now() + ForkMeetingRenameTable.lifetime) { [self] in
+                    renameTable.forget(old, to: new)
+                }
+                Self.libraryLog.notice("filed in its company's folder")
+                return to
+            case .already:
+                return found
+            case let outcome:
+                Self.libraryLog.error("not filed: \(String(describing: outcome), privacy: .private)")
+                return nil
+            }
+        }
     }
 
     /// Drafts of a transcription cut short (the app quit while it wrote):
@@ -454,7 +505,7 @@ extension ForkMeetingStore {
                     let folder = root.appendingPathComponent(name, isDirectory: true)
                     // Judged again as the folder is now.
                     guard stop?.isCancelled != true, !writing.contains(folder.standardizedFileURL.path),
-                          let look = libraryEntry(folder, writing: writing),
+                          let look = libraryEntry(folder, name: name, writing: writing),
                           ForkMeetingRetention.verdict(look.entry, days: days, now: now, calendar: calendar) == .trash,
                           case .success = trash(name, in: root, live: false) else { return }
                     gone.add(name)

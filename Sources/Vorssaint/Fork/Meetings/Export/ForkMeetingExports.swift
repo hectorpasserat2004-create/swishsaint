@@ -412,6 +412,28 @@ final class ForkMeetingExports: ObservableObject {
         Set(pending.compactMap { $0.split(separator: "\n", maxSplits: 1).first.map(String.init) })
     }
 
+    /// The folders this app records or finishes now, and whether the
+    /// feature is on: for the filing in a company folder
+    /// (`ForkMeetingExports+Filing`).
+    var foldersWritten: Set<String> { writing() }
+    var isWantedNow: Bool { wanted() }
+
+    /// A meeting filed in its company's folder: what is known of it by its
+    /// old path follows it to the new one. Main thread.
+    func folderMoved(from old: URL, to new: URL) {
+        let from = old.standardizedFileURL.path, to = new.standardizedFileURL.path
+        guard from != to else { return }
+        if let value = results.removeValue(forKey: from) { results[to] = value }
+        if let value = castralRecords.removeValue(forKey: from) { castralRecords[to] = value }
+        if castralResting.remove(from) != nil { castralResting.insert(to) }
+        for config in configs {
+            let before = Self.key(old, config.id), after = Self.key(new, config.id)
+            if let value = refusals.removeValue(forKey: before) { refusals[after] = value }
+            if let value = castralSaid.removeValue(forKey: before) { castralSaid[after] = value }
+        }
+        refreshResults(new)
+    }
+
     func enqueue(_ folder: URL, _ config: ForkMeetingExporterConfig, automatic: Bool,
                  request: ForkCastralRequest? = nil) {
         let key = Self.key(folder, config.id)
@@ -547,7 +569,8 @@ final class ForkMeetingExports: ObservableObject {
     }
 
     /// The meeting's folder: `folder` while its `meeting.json` still has
-    /// this id, else the folder of the meetings folder that has it.
+    /// this id, else the folder of the meetings folder that has it, at its
+    /// root or filed in a company folder.
     static func folder(of id: UUID?, near folder: URL, root: URL) -> URL? {
         func holds(_ candidate: URL) -> Bool {
             guard let id, case let .success(sidecar) = ForkMeetingSidecar.read(
@@ -555,8 +578,8 @@ final class ForkMeetingExports: ObservableObject {
             return sidecar.id == id
         }
         if holds(folder) { return folder }
-        guard id != nil, let names = try? FileManager.default.contentsOfDirectory(atPath: root.path) else { return nil }
-        return names.lazy.filter { !$0.hasPrefix(".") }
+        guard id != nil else { return nil }
+        return ForkMeetingCompanyFolder.meetings(in: root).lazy
             .map { root.appendingPathComponent($0, isDirectory: true) }
             .first(where: holds)
     }

@@ -205,7 +205,7 @@ final class ForkMeetingLibraryModel: ObservableObject {
     /// title typed, then the window closed by a quit): committing the
     /// field renames it even with nothing typed.
     func folderLagsTitle(_ entry: ForkMeetingLibraryEntry) -> Bool {
-        ForkMeetingRename.folderLags(folderName: entry.folderName, startedAt: entry.startedAt, title: entry.title,
+        ForkMeetingRename.folderLags(folderName: entry.leafName, startedAt: entry.startedAt, title: entry.title,
                                      calendar: calendar)
     }
 
@@ -226,7 +226,10 @@ final class ForkMeetingLibraryModel: ObservableObject {
     func start(focus: URL? = nil) {
         isOpen = true
         root = store.root()
-        if let focus { selection = focus.standardizedFileURL.lastPathComponent }
+        if let focus {
+            // Filed in its company's folder: named with it in the list.
+            selection = ForkMeetingCompanyFolder.relativeName(of: focus, root: root) ?? focus.standardizedFileURL.lastPathComponent
+        }
         rewatch()
         refresh()
     }
@@ -293,7 +296,7 @@ final class ForkMeetingLibraryModel: ObservableObject {
             self.rootExists = scan.rootExists
             if let only = scan.only {
                 self.entries = ForkMeetingLibrary.merged(self.entries, scanned: only, with: scan.entries)
-                var probes = self.probes.filter { !only.contains($0.key) }
+                var probes = self.probes.filter { !ForkMeetingCompanyFolder.covers(only, $0.key) }
                 probes.merge(scan.probes) { _, new in new }
                 self.probes = probes
             } else {

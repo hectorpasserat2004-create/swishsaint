@@ -166,6 +166,22 @@ struct ForkCastralRow: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        // Each meeting in its company's folder, once the CRM settled it.
+        Toggle(isOn: Binding(get: { config.filesByCompany == true }, set: { on in
+            var next = config
+            next.filesByCompany = on ? true : nil
+            exports.update(next)
+            // The meetings already settled go now.
+            if on { DispatchQueue.main.async { exports.fileUnfiled() } }
+        })) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(text.castralFilesByCompany)
+                Text(text.castralFilesByCompanyCaption)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
         Text(audioCaption)
             .font(.caption)
             .foregroundStyle(.secondary)

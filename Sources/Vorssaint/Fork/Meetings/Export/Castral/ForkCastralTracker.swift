@@ -29,6 +29,9 @@ final class ForkCastralTracker {
         let exporter: ForkCastralExporter
         let began: Date
         var misses = 0
+        /// The meeting's id, from the first read: found again by it when its
+        /// folder moved (filed in its company's folder, renamed elsewhere).
+        var id: UUID?
     }
 
     /// Made by its exports (`castralTracker`), which it lives within.
@@ -52,10 +55,12 @@ final class ForkCastralTracker {
         }
     }
 
-    /// Main thread, at launch: what the last run left goes on.
+    /// Main thread, at launch: what the last run left goes on, and what it
+    /// left unfiled goes into its company's folder.
     func resumeAtLaunch() {
         dispatchPrecondition(condition: .onQueue(.main))
         guard wanted(), let config = exports.castralConfig else { return }
+        exports.fileUnfiled()
         queue.async { [self] in
             let unsettled = store.castralUnsettled().filter { $0.record.target == config.id }
             guard !unsettled.isEmpty else { return }
@@ -81,9 +86,16 @@ final class ForkCastralTracker {
             if resting { DispatchQueue.main.async { [exports] in exports.castralResting.insert(path) } }
         }
         guard wanted() else { return stop() }
-        guard case let .success(sidecar) = store.sidecar(in: follow.folder),
+        var read = store.sidecar(in: follow.folder)
+        if case .failure = read, let id = follow.id,
+           let found = ForkMeetingExports.folder(of: id, near: follow.folder, root: store.root()) {
+            follow.folder = found
+            read = store.sidecar(in: found)
+        }
+        guard case let .success(sidecar) = read,
               var record = ForkCastralRecord(json: sidecar.castral), record.target == follow.exporter.id,
               record.step == .started else { return stop() }
+        follow.id = sidecar.id
         if record.isSettled { return stop() }
         let client: ForkCastralClient
         do { client = try follow.exporter.credentials() } catch { return stop(resting: true) }
@@ -104,6 +116,8 @@ final class ForkCastralTracker {
                 if shown.stage == .failed, before != .failed, let config = exports.config(shown.target) {
                     exports.castralNoticed(folder, exports.title(config, .current), .failed)
                 }
+                // Settled: into its company's folder, when asked.
+                if shown.isSettled { exports.fileByCompany(folder) }
             }
             if record.isSettled { return stop() }
         case .failure(.token):

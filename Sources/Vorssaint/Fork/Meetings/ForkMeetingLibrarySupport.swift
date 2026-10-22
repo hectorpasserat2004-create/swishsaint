@@ -97,7 +97,7 @@ enum ForkMeetingAudioExport {
     /// The name the save panel suggests: the meeting's own, as its M4A
     /// would be called in its folder.
     static func suggestedName(_ entry: ForkMeetingLibraryEntry) -> String {
-        "\(entry.folderName).\(ForkMeetingFolder.audioExtension)"
+        "\(entry.leafName).\(ForkMeetingFolder.audioExtension)"
     }
 }
 
@@ -139,10 +139,12 @@ extension ForkMeetingLibrary {
     }
 
     /// The rows after a scan of `scanned` folders alone: theirs replaced
-    /// by what the scan found (none for a folder gone), the others kept.
+    /// by what the scan found (none for a folder gone), the others kept. A
+    /// company folder scanned stands for every meeting filed in it.
     static func merged(_ entries: [ForkMeetingLibraryEntry], scanned names: Set<String>,
                        with found: [ForkMeetingLibraryEntry]) -> [ForkMeetingLibraryEntry] {
-        (entries.filter { !names.contains($0.folderName) } + found).sorted { $0.folderName < $1.folderName }
+        (entries.filter { !ForkMeetingCompanyFolder.covers(names, $0.folderName) } + found)
+            .sorted { $0.folderName < $1.folderName }
     }
 }
 
@@ -160,6 +162,14 @@ extension ForkMeetingLibrary {
         let present = Set(after)
         if present.contains(selected) { return selected }
         if let new = renamed[selected], present.contains(new) { return new }
+        // Filed meanwhile in its company's folder, or moved from one to
+        // another: the same folder's name under another company.
+        let leaf = ForkMeetingCompanyFolder.leaf(of: selected)
+        if let filed = after.first(where: {
+            $0 != selected && ForkMeetingCompanyFolder.leaf(of: $0) == leaf && !before.contains($0)
+        }) {
+            return filed
+        }
         if let index = before.firstIndex(of: selected) {
             if let next = before[(index + 1)...].first(where: present.contains) { return next }
             if let previous = before[..<index].last(where: present.contains) { return previous }

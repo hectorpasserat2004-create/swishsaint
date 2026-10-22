@@ -169,6 +169,7 @@ struct ForkCastralExporter: ForkMeetingExporter {
         record.booking = choice.booking.id
         record.company = choice.booking.company?.id
         record.companyName = choice.booking.who
+        record.companyDomain = choice.booking.domain
         record.bookingStart = choice.booking.startAt
         record.rule = choice.rule
         record.format = sound.format

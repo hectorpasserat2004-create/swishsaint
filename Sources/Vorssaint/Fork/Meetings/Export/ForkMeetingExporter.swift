@@ -84,6 +84,11 @@ struct ForkMeetingExporterConfig: Equatable, Identifiable {
     var author: String?
     /// CRM: how many people speak, 2 to 6.
     var speakers: Int?
+    /// CRM: each meeting goes, once its appointment is known, in the folder
+    /// of its company's domain inside the meetings folder
+    /// (`ForkMeetingCompanyFolder`). Off unless asked: `nil`, never `false`,
+    /// so the list stays as it was written before.
+    var filesByCompany: Bool?
     /// Immich: the album the meeting's video joins, made when missing;
     /// none, the video only lands in the timeline.
     var album: String?
@@ -240,6 +245,7 @@ extension ForkMeetingExporterList {
 extension ForkMeetingExporterConfig: Codable {
     private enum CodingKeys: String, CodingKey {
         case id, kind, mode, includesMeetCode, includesNotes, includesSummary, folder, address, origin, album, author, speakers
+        case filesByCompany
     }
 
     /// Lenient: a missing or unknown mode is manual, a missing option off.
@@ -260,6 +266,7 @@ extension ForkMeetingExporterConfig: Codable {
         author = (try? container.decodeIfPresent(String.self, forKey: .author)) ?? nil
         speakers = ((try? container.decodeIfPresent(Int.self, forKey: .speakers)) ?? nil).map(ForkCastralContract.speakers)
         album = (try? container.decodeIfPresent(String.self, forKey: .album)) ?? nil
+        filesByCompany = ((try? container.decodeIfPresent(Bool.self, forKey: .filesByCompany)) ?? nil) == true ? true : nil
     }
 }
 
