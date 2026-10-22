@@ -1,0 +1,39 @@
+{
+  "Version": "1.104.2-t0000000000-g0000000000",
+  "TUN": true,
+  "BackendState": "Running",
+  "HaveNodeKey": true,
+  "AuthURL": "",
+  "TailscaleIPs": ["100.64.0.2"],
+  "Self": {
+    "ID": "nSELF000000CNTRL",
+    "PublicKey": "nodekey:0000000000000000000000000000000000000000000000000000000000000001",
+    "HostName": "test-mac",
+    "DNSName": "test-mac.example.ts.net.",
+    "OS": "macOS",
+    "Online": true
+  },
+  "Peer": {
+    "nodekey:0000000000000000000000000000000000000000000000000000000000000002": {
+      "ID": "nABC123CNTRL",
+      "PublicKey": "nodekey:0000000000000000000000000000000000000000000000000000000000000002",
+      "HostName": "minio",
+      "DNSName": "minio.example.ts.net.",
+      "OS": "linux",
+      "TailscaleIPs": ["100.64.0.7"],
+      "Online": true,
+      "Expired": false
+    },
+    "nodekey:0000000000000000000000000000000000000000000000000000000000000003": {
+      "ID": "nOFF456CNTRL",
+      "PublicKey": "nodekey:0000000000000000000000000000000000000000000000000000000000000003",
+      "HostName": "nas",
+      "DNSName": "nas.example.ts.net.",
+      "OS": "linux",
+      "TailscaleIPs": ["100.64.0.9"],
+      "Online": false
+    }
+  },
+  "MagicDNSSuffix": "example.ts.net",
+  "CurrentTailnet": {"Name": "example.org", "MagicDNSSuffix": "example.ts.net", "MagicDNSEnabled": true}
+}
