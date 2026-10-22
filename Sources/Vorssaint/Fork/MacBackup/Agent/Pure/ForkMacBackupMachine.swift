@@ -631,6 +631,9 @@ struct ForkMacBackupMachine {
             return []
         case .reloadSettings:
             return [.replan]
+        case .stopOtherEngine:
+            // The app stopped the other engine: check the repository again now.
+            return [.replan, .publish]
         }
     }
 

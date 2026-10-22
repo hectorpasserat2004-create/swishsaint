@@ -139,7 +139,7 @@ struct ForkMacBackupInspector: View {
                 Text(text.proof.uppercased())
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.secondary)
-                ForkMacBackupProofLadder(level: proof.level, isPartial: proof.isPartial, shared: shared, text: text)
+                ForkMacBackupWindowProofLadder(level: proof.level, isPartial: proof.isPartial, shared: shared, text: text)
             }
             facts([
                 (text.files, proof.files.formatted(.number.locale(locale))),

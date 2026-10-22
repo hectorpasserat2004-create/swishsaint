@@ -103,7 +103,7 @@ struct ForkMacBackupProofDots: View {
 }
 
 /// The ladder with its four names below, as large as the inspector wants it.
-struct ForkMacBackupProofLadder: View {
+struct ForkMacBackupWindowProofLadder: View {
     let level: ForkMacBackupProofLevel
     let isPartial: Bool
     let shared: ForkMacBackupStrings

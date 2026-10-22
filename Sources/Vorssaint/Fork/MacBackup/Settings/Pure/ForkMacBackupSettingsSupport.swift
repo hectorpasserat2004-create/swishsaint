@@ -304,20 +304,20 @@ enum ForkMacBackupChainDisplay {
 
 /// One Kopia identity found in a repository, with its snapshots (wizard,
 /// step 3: « whyteduke@macbook-pro · 29 snapshots »).
-struct ForkMacBackupMachine: Equatable, Identifiable {
+struct ForkMacBackupRepositoryMachine: Equatable, Identifiable {
     var identity: ForkMacBackupRepository.Identity
     var snapshots: Int
     var latest: Date?
 
     var id: String { identity.description }
 
-    static func machines(in manifests: [ForkMacBackupKopia.SnapshotManifest]) -> [ForkMacBackupMachine] {
-        var found: [String: ForkMacBackupMachine] = [:]
+    static func machines(in manifests: [ForkMacBackupKopia.SnapshotManifest]) -> [ForkMacBackupRepositoryMachine] {
+        var found: [String: ForkMacBackupRepositoryMachine] = [:]
         for manifest in manifests {
             guard let user = manifest.source?.userName, let host = manifest.source?.host,
                   !user.isEmpty, !host.isEmpty else { continue }
             let identity = ForkMacBackupRepository.Identity(userName: user, hostName: host)
-            var machine = found[identity.description] ?? ForkMacBackupMachine(identity: identity, snapshots: 0)
+            var machine = found[identity.description] ?? ForkMacBackupRepositoryMachine(identity: identity, snapshots: 0)
             machine.snapshots += 1
             if let date = manifest.startDate, machine.latest.map({ date > $0 }) ?? true { machine.latest = date }
             found[identity.description] = machine
@@ -328,7 +328,7 @@ struct ForkMacBackupMachine: Equatable, Identifiable {
     }
 
     /// The identity to continue by default: the one of this Mac's name.
-    static func suggested(_ machines: [ForkMacBackupMachine], localHost: String, localUser: String)
+    static func suggested(_ machines: [ForkMacBackupRepositoryMachine], localHost: String, localUser: String)
         -> ForkMacBackupRepository.Identity? {
         let host = localHost.lowercased()
         if let same = machines.first(where: { $0.identity.hostName.lowercased() == host

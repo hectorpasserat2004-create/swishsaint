@@ -377,8 +377,9 @@ final class ForkMacBackupIslandModel: ObservableObject {
         case .open(let path):
             NotchService.shared.perform { NSWorkspace.shared.open(URL(fileURLWithPath: path)) }
         case .stopBran:
-            // The agent alone drives the engines: it stops the other one.
-            status.send(.stopOtherEngine, origin: .island)
+            // Bran's own agent is stopped here; ours then plans again at once
+            // instead of waiting for the other engine to show up as gone.
+            ForkMacBackupLiveServices.stopBran { _ in self.status.send(.stopOtherEngine, origin: .island) }
         case .later:
             break
         }

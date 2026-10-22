@@ -463,7 +463,7 @@ struct ForkMacBackupWizard: View {
         }
     }
 
-    private func machineLine(_ machine: ForkMacBackupMachine) -> String {
+    private func machineLine(_ machine: ForkMacBackupRepositoryMachine) -> String {
         var line = machine.identity.description + " · " + text.snapshotCount(machine.snapshots, language: l10n.language)
         if let latest = machine.latest {
             line += " · " + ForkMacBackupFormat.relative(latest, now: model.context.services.now(), locale: locale)

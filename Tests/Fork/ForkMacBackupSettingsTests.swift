@@ -473,12 +473,12 @@ enum ForkMacBackupSettingsTests {
                          manifest("b", user: "tester", host: "test-mac-2", start: "2026-10-22T10:00:00Z"),
                          manifest("c", user: "friend", host: "old-air", start: "2026-09-01T10:00:00Z"),
                          manifest("d", user: nil, host: "x", start: nil)]
-        let machines = ForkMacBackupMachine.machines(in: manifests)
+        let machines = ForkMacBackupRepositoryMachine.machines(in: manifests)
         suite.expect(machines.map(\.id) == ["tester@test-mac-2", "friend@old-air"] && machines[0].snapshots == 2
                         && machines[0].latest == ForkMacBackupKopia.date("2026-10-22T10:00:00Z"),
                      "the machines of a repository, newest first, with their counts")
-        suite.expect(ForkMacBackupMachine.suggested(machines, localHost: "Test-Mac-2", localUser: "tester")?.hostName == "test-mac-2"
-                        && ForkMacBackupMachine.suggested(machines, localHost: "new-mac", localUser: "tester") == nil,
+        suite.expect(ForkMacBackupRepositoryMachine.suggested(machines, localHost: "Test-Mac-2", localUser: "tester")?.hostName == "test-mac-2"
+                        && ForkMacBackupRepositoryMachine.suggested(machines, localHost: "new-mac", localUser: "tester") == nil,
                      "this Mac's own identity is offered to continue")
         suite.expect(ForkMacBackupLocalIdentity.hostName(from: "MacBook Pro de Whyte (2)") == "macbook-pro-de-whyte-2"
                         && ForkMacBackupLocalIdentity.hostName(from: "studio.local") == "studio"

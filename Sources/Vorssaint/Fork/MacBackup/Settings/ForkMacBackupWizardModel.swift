@@ -95,7 +95,7 @@ final class ForkMacBackupWizardModel: ObservableObject {
     @Published var testing = false
     @Published var results: [NodeResult] = []
     @Published var uniqueID: String?
-    @Published var machines: [ForkMacBackupMachine] = []
+    @Published var machines: [ForkMacBackupRepositoryMachine] = []
     @Published var lockedID: String?
     @Published var testError: String?
     @Published var identityChoice: IdentityChoice = .new
@@ -416,9 +416,9 @@ final class ForkMacBackupWizardModel: ObservableObject {
                 engine.listSnapshots(source: nil) { [weak self] list in
                     guard let self else { return }
                     if case .success(let manifests) = list {
-                        self.machines = ForkMacBackupMachine.machines(in: manifests)
+                        self.machines = ForkMacBackupRepositoryMachine.machines(in: manifests)
                         if case .new = self.identityChoice,
-                           let suggested = ForkMacBackupMachine.suggested(self.machines, localHost: self.newHost,
+                           let suggested = ForkMacBackupRepositoryMachine.suggested(self.machines, localHost: self.newHost,
                                                                           localUser: self.newUser) {
                             self.identityChoice = .continuing(suggested)
                         }
