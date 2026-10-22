@@ -34,6 +34,20 @@ enum ForkMacBackupJSON {
         let decoder = decoder
         return data.split(separator: 0x0A).compactMap { try? decoder.decode(type, from: Data($0)) }
     }
+
+    /// Appends one line to a journal (`runs.jsonl`, `slots.jsonl`,
+    /// `capacity.jsonl`) in ONE `write` with `O_APPEND`, 0600 when created:
+    /// the agent and the app (the window's restores) append to
+    /// `runs.jsonl` side by side without ever tearing a line.
+    @discardableResult
+    static func append<Value: Encodable>(_ value: Value, to url: URL) -> Bool {
+        guard let line = line(value) else { return false }
+        let descriptor = open(url.path, O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0o600)
+        guard descriptor >= 0 else { return false }
+        defer { close(descriptor) }
+        let written = line.withUnsafeBytes { buffer in write(descriptor, buffer.baseAddress, buffer.count) }
+        return written == line.count
+    }
 }
 
 /// `MacBackup/state.json`: what the agent publishes after every change, then

@@ -321,15 +321,7 @@ final class ForkMacBackupRunner {
     }
 
     private func append<Value: Encodable>(_ value: Value, to url: URL) {
-        guard let line = ForkMacBackupJSON.line(value) else { return }
-        if !FileManager.default.fileExists(atPath: url.path) {
-            PrivateFileStore.write(line, to: url)
-            return
-        }
-        guard let handle = try? FileHandle(forWritingTo: url) else { return }
-        defer { try? handle.close() }
-        _ = try? handle.seekToEnd()
-        try? handle.write(contentsOf: line)
+        ForkMacBackupJSON.append(value, to: url)
     }
 
     private func rotate<Value: Codable>(_ url: URL, as type: Value.Type, now: Date, date: (Value) -> Date) {

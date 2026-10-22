@@ -82,31 +82,24 @@ final class ForkMacBackupWindowDiskLedger: ForkMacBackupWindowLedgerReading {
         }
     }
 
+    /// `errors/<manifest>.json`: the agent's `[ForkMacBackupFailure]`.
     func failures(manifestID: String, completion: @escaping ([ForkMacBackupFailure]?) -> Void) {
         let url = paths.errorsFile(manifestID: manifestID)
         queue.async {
-            let data = try? Data(contentsOf: url)
-            let list = data.flatMap { data -> [ForkMacBackupFailure]? in
-                if let list = try? ForkMacBackupJSON.decoder.decode([ForkMacBackupFailure].self, from: data) { return list }
-                return (try? ForkMacBackupJSON.decoder.decode(ForkMacBackupSnapshotProof.self, from: data))?.failures
+            let list = (try? Data(contentsOf: url)).flatMap {
+                try? ForkMacBackupJSON.decoder.decode([ForkMacBackupFailure].self, from: $0)
             }
             DispatchQueue.main.async { completion(list) }
         }
     }
 
+    /// The same record and the same single `O_APPEND` write as the agent's.
     func append(_ run: ForkMacBackupRunRecord) {
-        guard let line = ForkMacBackupJSON.line(run) else { return }
         let url = paths.runs
         let root = paths.root
         queue.async {
             guard PrivateFileStore.createDirectory(at: root, container: PrivateFileStore.containerURL) else { return }
-            // One write with O_APPEND: the agent's own appends never interleave with it.
-            let descriptor = open(url.path, O_WRONLY | O_APPEND | O_CREAT, 0o600)
-            guard descriptor >= 0 else { return }
-            defer { close(descriptor) }
-            line.withUnsafeBytes { buffer in
-                _ = write(descriptor, buffer.baseAddress, buffer.count)
-            }
+            ForkMacBackupJSON.append(run, to: url)
         }
     }
 
@@ -121,17 +114,9 @@ final class ForkMacBackupWindowDiskLedger: ForkMacBackupWindowLedgerReading {
         return ForkMacBackupJSON.lines(type, from: data)
     }
 
-    /// `proofs.json`: a list, or lists by source, or proofs by manifest.
+    /// `proofs.json`, the agent's `ForkMacBackupProofStore`.
     private static func proofs(at url: URL) -> [ForkMacBackupSnapshotProof] {
-        guard let data = try? Data(contentsOf: url) else { return [] }
-        let decoder = ForkMacBackupJSON.decoder
-        if let list = try? decoder.decode([ForkMacBackupSnapshotProof].self, from: data) { return list }
-        if let bySource = try? decoder.decode([String: [ForkMacBackupSnapshotProof]].self, from: data) {
-            return bySource.values.flatMap { $0 }
-        }
-        if let byID = try? decoder.decode([String: ForkMacBackupSnapshotProof].self, from: data) {
-            return Array(byID.values)
-        }
-        return []
+        guard let data = try? Data(contentsOf: url), let store = ForkMacBackupProofStore.decode(data) else { return [] }
+        return Array(store.proofs.values)
     }
 }
