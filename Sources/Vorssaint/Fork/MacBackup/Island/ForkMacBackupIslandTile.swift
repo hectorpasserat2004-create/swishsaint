@@ -10,9 +10,14 @@ import SwiftUI
 /// « il y a 2 h » at rest, red while the chain is broken.
 struct ForkMacBackupIslandTile: View {
     let service: NotchService
-    @ObservedObject private var status = ForkMacBackupStatusModel.shared
+    @ObservedObject private var status: ForkMacBackupStatusModel
     @ObservedObject private var l10n = L10n.shared
     @AppStorage(ForkDefaultsKey.macBackupIslandReading) private var readingStored = ForkMacBackupReading.fallback.rawValue
+
+    init(service: NotchService, status: ForkMacBackupStatusModel = .shared) {
+        self.service = service
+        _status = ObservedObject(wrappedValue: status)
+    }
 
     var body: some View {
         // The age moves slowly: once a minute is enough.

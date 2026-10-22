@@ -458,7 +458,7 @@ extension ForkMacBackupIslandStrings {
         emptyMessage: "Protege este Mac con copias en tu propio almacenamiento.",
         filesRead: "%@ archivos leídos",
         errorsNone: "sin errores",
-        errorsOne: "1 error",
+        errorsOne: "un error",
         errorsFew: "%d errores",
         errorsMany: "%d errores",
         proofSpoken: "Prueba: %@",

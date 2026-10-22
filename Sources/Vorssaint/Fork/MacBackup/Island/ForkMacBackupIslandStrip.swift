@@ -192,11 +192,15 @@ struct ForkMacBackupIslandStrip: View {
     /// timer's clearance from the silhouette's curve and air beside the
     /// camera (seam `notch-macbackup3`).
     static func wing(in geometry: NotchGeometry) -> CGFloat {
+        wing(in: geometry, reading: currentReading)
+    }
+
+    static func wing(in geometry: NotchGeometry, reading value: String) -> CGFloat {
         let provisional = geometry.compactTimerGeometry(showsDownloads: false,
                                                         wing: NotchTimerSupport.stripWingRange.lowerBound)
         let height = provisional.compactActivityContentHeight
         let textSize = NotchTimerSupport.stripTextSize(height: height)
-        let reading = (NotchAgentSupport.readingShape(currentReading) as NSString)
+        let reading = (NotchAgentSupport.readingShape(value) as NSString)
             .size(withAttributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: textSize, weight: .medium)])
             .width.rounded(.up)
         let side = markSide(height: height)
@@ -208,12 +212,16 @@ struct ForkMacBackupIslandStrip: View {
     /// The floating capsule: the ring, the meter while bytes move, the
     /// reading (seam `notch-macbackup3`).
     static func capsuleSize(geometry: NotchGeometry) -> CGSize {
-        let layout = NotchCapsuleLayout.self
         let model = ForkMacBackupIslandModel.shared
-        let meter = ForkMacBackupIslandRules.ringProgress(model.status.presentation, finishing: model.finishing) != nil
-            ? layout.downloadMeterWidth + layout.groupSpacing : 0
+        return capsuleSize(geometry: geometry, hasMeter: ForkMacBackupIslandRules.ringProgress(
+            model.status.presentation, finishing: model.finishing) != nil, reading: currentReading)
+    }
+
+    static func capsuleSize(geometry: NotchGeometry, hasMeter: Bool, reading: String) -> CGSize {
+        let layout = NotchCapsuleLayout.self
+        let meter = hasMeter ? layout.downloadMeterWidth + layout.groupSpacing : 0
         let content = layout.symbolWidth + layout.spacing + meter
-            + layout.width(NotchAgentSupport.readingShape(currentReading), font: layout.readingFont)
+            + layout.width(NotchAgentSupport.readingShape(reading), font: layout.readingFont)
         return layout.surface(content: content, maximum: layout.Maximum.activity, geometry: geometry)
     }
 
