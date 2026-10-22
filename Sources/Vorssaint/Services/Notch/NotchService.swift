@@ -1044,7 +1044,7 @@ final class NotchService: ObservableObject {
             }
             return layout.keepAwakeSurface(reading: reading, geometry: geometry)
         case .meeting: return ForkMeetingIslandStrip.capsuleSize(geometry: geometry) // FORK(notch-meeting3)
-        case .macBackup: return ForkMacBackupIslandStrip.capsuleSize(geometry: geometry) // FORK(notch-macbackup3)
+        case .macBackup: return ForkMacBackupIslandStrip.capsuleSize(geometry: geometry) // FORK(notch-macbackup8)
         }
     }
 
