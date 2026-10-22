@@ -57,9 +57,16 @@ struct ForkMeetingLibraryEntry: Equatable {
         case folderCreated
     }
 
-    /// The folder's name: unique in the meetings folder, so it is what the
-    /// list selects. A rename changes it; `identity` stays.
+    /// The folder's name under the meetings folder ("<meeting>", or
+    /// "acme.com/<meeting>" once filed in its company's folder,
+    /// `ForkMeetingCompanyFolder`): unique, so it is what the list selects. A
+    /// rename changes it; `identity` stays.
     private(set) var folderName: String
+
+    /// The folder's own name, which its media are named after.
+    var leafName: String { ForkMeetingCompanyFolder.leaf(of: folderName) }
+    /// The company folder it is filed in, `nil` at the root.
+    var companyFolder: String? { ForkMeetingCompanyFolder.company(of: folderName) }
     let id: UUID?
     let status: Status
     /// The title written in `meeting.json`; for a sidecar that cannot be
@@ -150,12 +157,13 @@ struct ForkMeetingLibraryEntry: Equatable {
         audio = audioOnly ? nil : contents.audio
         transcript = contents.transcript
         subtitles = contents.subtitles
-        let stamped = ForkMeetingLibrary.stampDate(folderName, calendar: calendar)
+        let leaf = ForkMeetingCompanyFolder.leaf(of: folderName)
+        let stamped = ForkMeetingLibrary.stampDate(leaf, calendar: calendar)
         switch sidecar {
         case .failure:
             id = nil
             status = .unreadable
-            title = ForkMeetingLibrary.folderTitle(folderName)
+            title = ForkMeetingLibrary.folderTitle(leaf)
             startedAt = nil
             endedAt = nil
             seconds = videoSeconds

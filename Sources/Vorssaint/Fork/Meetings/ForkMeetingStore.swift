@@ -411,7 +411,9 @@ final class ForkMeetingStore: @unchecked Sendable {
     private func recover(root: URL, finalizer: ForkMeetingFinalizer, extractAudio: Bool,
                          titles: ForkMeetingFinalizer.TrackTitles) async -> [Recovery] {
         let manager = FileManager.default
-        // No folder yet is the first launch, not a problem.
+        // No folder yet is the first launch, not a problem. The root alone:
+        // a meeting is recorded there, and only a complete one is ever filed
+        // in its company's folder (`ForkMeetingCompanyFolder`).
         guard let names = try? manager.contentsOfDirectory(atPath: root.path) else { return [] }
         var found: [Recovery] = []
         for name in names.sorted() where !name.hasPrefix(".") {

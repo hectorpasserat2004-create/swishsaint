@@ -139,8 +139,15 @@ extension ForkMeetingStore {
         guard id != nil else { return nil }
         let parent = folder.deletingLastPathComponent()
         let names = (try? manager.contentsOfDirectory(atPath: parent.path)) ?? []
-        return names.lazy.filter { !$0.hasPrefix(".") }
-            .map { parent.appendingPathComponent($0, isDirectory: true) }
+        if let beside = names.lazy.filter({ !$0.hasPrefix(".") })
+            .map({ parent.appendingPathComponent($0, isDirectory: true) })
+            .first(where: holds) {
+            return beside
+        }
+        // Filed in its company's folder since, or moved from one to another.
+        let root = root()
+        return ForkMeetingCompanyFolder.meetings(in: root).lazy
+            .map { root.appendingPathComponent($0, isDirectory: true) }
             .first(where: holds)
     }
 
