@@ -54,7 +54,7 @@ struct ForkMacBackupIslandCardView: View {
             ForkMacBackupIslandMessage(
                 symbol: "arrow.down.circle.fill", tint: .teal, title: text.noticeRestore,
                 caption: text.restored(Int(clamping: files), language: language) + " · "
-                    + ForkMacBackupFormat.middleTruncated((path as NSString).abbreviatingWithTildeInPath, limit: 40)) {
+                    + ForkMacBackupFormat.middleTruncated(path, limit: 40)) {
                 ForkMacBackupIslandButton(title: text.showInFinder) { card.perform(.showInFinder(path)) }
                 ForkMacBackupIslandButton(title: text.open, prominent: true) { card.perform(.open(path)) }
             }

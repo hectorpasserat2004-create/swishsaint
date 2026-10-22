@@ -213,7 +213,7 @@ struct ForkMacBackupBrowseView: View {
             .disabled(model.selectedEntries.isEmpty)
             ForkMacBackupSearchField(text: $model.searchText, placeholder: text.searchPlaceholder,
                                      focusToken: model.searchFocusToken)
-                .frame(width: 200)
+                .frame(width: 250)
             Button {
                 model.inspectorShown.toggle()
             } label: {

@@ -72,6 +72,7 @@ extension ForkFeature {
         case .macBackup:
             let backup = ForkMacBackupStrings.strings(language)
             return [text.macBackupSummary, backup.islandTitle, backup.restore, backup.openBackups,
+                    ForkMacBackupIslandStrings.strings(language).barKeywords,
                     "backup", "kopia", "restore", "nas", "s3", "minio", "time machine"]
         }
     }

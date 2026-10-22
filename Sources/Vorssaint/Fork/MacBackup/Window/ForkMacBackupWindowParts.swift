@@ -258,10 +258,11 @@ struct ForkMacBackupEmptyState: View {
                 .font(.title3.weight(.semibold))
                 .multilineTextAlignment(.center)
             if let detail {
+                // No fixed height: a minimum that follows the width makes
+                // the split view's minimum size chase itself until AppKit stops it.
                 Text(detail)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
             }
             if let action {
                 Button(action.title, action: action.run)
