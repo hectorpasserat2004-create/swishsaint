@@ -455,7 +455,8 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
                 switch result {
                 case .success(let data): existing = ForkMacBackupPolicyDocument.object(data)
                 case .failure(let failure) where failure.isNotFound: existing = nil
-                case .failure(.engine(.serverUnavailable)):
+                case .failure(.engine(.serverUnavailable)), .failure(.engine(.timeout)):
+                    // The server cannot be reached: the same single write through the CLI.
                     return self.applyPolicyWithCLI(rules, source: source, task: task)
                 case .failure(let failure): return task.finish(.failure(failure.engineError))
                 }
@@ -478,8 +479,11 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
         let task = task(completion)
         work.async { [self] in
             readPolicyFromServer(query: sourceQuery(source.path)) { result in
-                if case .failure(.serverUnavailable) = result, self.role == .owner, self.files != nil {
-                    return self.readPolicyWithCLI(source: source, task: task)
+                switch result {
+                case .failure(.serverUnavailable), .failure(.timeout):
+                    if self.role == .owner, self.files != nil { return self.readPolicyWithCLI(source: source, task: task) }
+                default:
+                    break
                 }
                 task.finish(result)
             }
