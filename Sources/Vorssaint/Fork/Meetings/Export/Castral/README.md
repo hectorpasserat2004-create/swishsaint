@@ -52,6 +52,18 @@ A profile never holds the token: it is typed once on the page, written at Save.
    new one: the record goes back to `summarizing` and is followed again. A server without the route
    (404 without its sentence) is said so, never taken for a deposit gone.
 
+6. **File by company** (`filesByCompany`, off by default, the CRM's block): once the CRM settled a
+   meeting (ready or failed), its folder goes into `<meetings folder>/<company domain>/`
+   (`ForkMeetingCompanyFolder`: the company's `domain`, else the appointment's `detected_domain`,
+   kept in the record as `companyDomain`; `/status` gives it too). The company folder is made when
+   missing and kept as it is otherwise (other files beside the meetings stay). Asked when the follow
+   settles a meeting, at launch and when the option is turned on; never while the meeting is
+   written, sent, moved, chosen for, transcribed or summarised here: it waits for the next time. The
+   library names a filed meeting "acme.com/<meeting>" and reads, besides the root, only folders named
+   like a domain, one level down; renames stay in the company folder; the follow, the sends and the
+   store's writes find it by its id. New recordings, the free space and the recovery at launch stay
+   at the root.
+
 The island's Meetings page reads `ForkMeetingExports.castralStatus(folder)` (phase, share, failure)
 and `ForkCastralStatus.short(_:)`, 28 characters at most.
 

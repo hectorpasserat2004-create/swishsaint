@@ -135,6 +135,9 @@ struct ForkCastralRecord: Equatable {
     var booking: String?
     var company: String?
     var companyName: String?
+    /// The company's domain: the folder the meeting is filed in
+    /// (`ForkMeetingCompanyFolder`), when the CRM exporter files by company.
+    var companyDomain: String?
     var bookingStart: Date?
     var rule: ForkCastralMatch.Rule?
     var format: ForkCastralAudioPlan.Format?
@@ -154,7 +157,7 @@ struct ForkCastralRecord: Equatable {
     var preserved: [String: ForkMeetingJSON] = [:]
 
     private static let known: Set<String> = [
-        "target", "step", "deposit", "booking", "company", "companyName", "bookingStart", "rule", "format", "bytes",
+        "target", "step", "deposit", "booking", "company", "companyName", "companyDomain", "bookingStart", "rule", "format", "bytes",
         "seconds", "openedAt", "startedAt", "engine", "stage", "progress", "error", "warning", "hasSummary", "checkedAt",
     ]
 
@@ -184,6 +187,7 @@ struct ForkCastralRecord: Equatable {
         booking = string("booking")
         company = string("company")
         companyName = string("companyName")
+        companyDomain = string("companyDomain")
         bookingStart = date("bookingStart")
         rule = string("rule").flatMap(ForkCastralMatch.Rule.init(rawValue:))
         format = string("format").flatMap(ForkCastralAudioPlan.Format.init(rawValue:))
@@ -212,6 +216,7 @@ struct ForkCastralRecord: Equatable {
         text("booking", booking)
         text("company", company)
         text("companyName", companyName)
+        text("companyDomain", companyDomain)
         instant("bookingStart", bookingStart)
         text("rule", rule?.rawValue)
         text("format", format?.rawValue)
@@ -232,6 +237,10 @@ struct ForkCastralRecord: Equatable {
     /// The server said what became of it; nothing more to ask.
     var isSettled: Bool { step == .started && stage?.isTerminal == true }
 
+    /// The company folder this meeting is filed in, when its company's
+    /// domain is known and reads as one.
+    var companyFolder: String? { ForkMeetingCompanyFolder.name(domain: companyDomain) }
+
     /// A status read: the stage and what comes with it.
     mutating func apply(_ status: ForkCastralContract.Status, at date: Date) {
         if let stage = status.stage { self.stage = stage }
@@ -241,6 +250,7 @@ struct ForkCastralRecord: Equatable {
         if let engine = status.engine { self.engine = engine }
         if let id = status.companyID { company = id }
         if let name = status.companyName { companyName = name }
+        if let domain = status.companyDomain { companyDomain = domain }
         hasSummary = status.hasSummary
         checkedAt = date
     }
@@ -252,6 +262,7 @@ struct ForkCastralRecord: Equatable {
         bookingStart = booking?.startAt
         company = answer.companyID
         companyName = booking?.company?.name
+        companyDomain = booking?.domain
         rule = .chosen
         if answer.regenerating {
             stage = .summarizing

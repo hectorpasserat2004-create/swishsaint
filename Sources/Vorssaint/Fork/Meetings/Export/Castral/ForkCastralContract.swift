@@ -111,6 +111,10 @@ enum ForkCastralContract {
         /// The Google Meet code of its link.
         var meetCode: String? { meetingURL.flatMap(ForkMeetingTitleRules.meetCode(inLink:)) }
 
+        /// The domain its company is known by, else the one its attendee's
+        /// address gave.
+        var domain: String? { company?.domain ?? detectedDomain }
+
         /// Who it is with: the company, else the person who booked.
         var who: String? {
             company?.name ?? attendeeName
@@ -243,6 +247,8 @@ enum ForkCastralContract {
         var engine: String?
         var companyID: String?
         var companyName: String?
+        /// The company's domain ("acme.com"): its folder, once filed.
+        var companyDomain: String?
         var hasSummary = false
     }
 
@@ -257,6 +263,7 @@ enum ForkCastralContract {
         if let company = object["company"] as? [String: Any] {
             status.companyID = (company["id"] as? String).flatMap { isID($0) ? $0.lowercased() : nil }
             status.companyName = text(company["nom"], maximum: 120)
+            status.companyDomain = text(company["domain"], maximum: 253)
         }
         if let summary = object["summary"], !(summary is NSNull) { status.hasSummary = true }
         return status

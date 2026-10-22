@@ -198,6 +198,8 @@ extension ForkMeetingExports {
                 config.speakers = old.speakers ?? ForkCastralContract.defaultSpeakers
                 config.author = old.author.flatMap { profile.authors.contains($0) ? $0 : nil }
             }
+            // Where the meetings are kept on this Mac, whatever the server.
+            config.filesByCompany = existing?.filesByCompany
             guard store(configs.filter { $0.id != existing?.id } + [config]) else { return done(.listUnconfirmed) }
             if let old = existing {
                 castralProfiles[old.id] = nil
