@@ -324,7 +324,9 @@ extension ForkCastralStatus {
         case .summarizing: return text.castralPhaseSummarizing
         case .ready: return text.castralPhaseReady
         case .readyWithoutReport: return text.castralPhaseReadyWithoutReport
-        case .failed: return failure == nil ? text.castralPhaseFailed : text.exportFailedShort
+        case .failed:
+            if failure?.castralNeedsChoice == true { return text.castralPhaseChoose }
+            return failure == nil ? text.castralPhaseFailed : text.exportFailedShort
         case .stillWorking: return text.castralPhaseStillWorking
         }
     }
@@ -333,7 +335,7 @@ extension ForkCastralStatus {
         switch phase {
         case .ready: return .green
         case .readyWithoutReport: return .orange
-        case .failed: return .red
+        case .failed: return failure?.castralNeedsChoice == true ? .orange : .red
         default: return .secondary
         }
     }
@@ -342,7 +344,7 @@ extension ForkCastralStatus {
         switch phase {
         case .ready: return "checkmark.circle.fill"
         case .readyWithoutReport: return "exclamationmark.circle.fill"
-        case .failed: return "xmark.circle.fill"
+        case .failed: return failure?.castralNeedsChoice == true ? "questionmark.circle.fill" : "xmark.circle.fill"
         case .sending, .waitingForSound: return "arrow.up.circle"
         default: return "hourglass"
         }

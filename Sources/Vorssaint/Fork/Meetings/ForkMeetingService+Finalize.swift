@@ -116,11 +116,11 @@ extension ForkMeetingService {
         presenter.showExportFailed(folder: folder)
     }
 
-    /// "Sent to <CRM>", or "Not sent to <CRM>": a send to a CRM ended, or
-    /// the CRM failed the meeting it took.
-    func castralNotice(folder: URL, name: String, sent: Bool) {
+    /// "Sent to <CRM>", "Not sent to <CRM>", or "Choose the appointment":
+    /// a send to a CRM ended, or the CRM failed the meeting it took.
+    func castralNotice(folder: URL, name: String, outcome: ForkCastralOutcome) {
         guard isWanted else { return }
-        presenter.showCastral(folder: folder, name: name, sent: sent)
+        presenter.showCastral(folder: folder, name: name, outcome: outcome)
     }
 
     // MARK: - Launch

@@ -479,13 +479,24 @@ enum ForkMeetingCastralTests {
                      "the longest meeting is kept with its failure; a code of a later version reads as the vaguest")
         suite.expect(all.filter(\.needsChoice) == [.noBooking, .uncertain, .orphan, .alreadyReported, .alreadyDeposited],
                      "what the person settles by choosing the appointment")
+        suite.expect(all.filter { ForkMeetingExportFailure.castral($0).castralNeedsChoice } == all.filter(\.needsChoice)
+                        && !ForkMeetingExportFailure.network.castralNeedsChoice,
+                     "only a CRM's own failure waits for an appointment")
+        suite.expect(ForkCastralOutcome(failed: false, failure: nil) == .sent
+                        && ForkCastralOutcome(failed: true, failure: .castral(.uncertain)) == .needsChoice
+                        && ForkCastralOutcome(failed: true, failure: .castral(.noBooking)) == .needsChoice
+                        && ForkCastralOutcome(failed: true, failure: .castral(.storage)) == .failed
+                        && ForkCastralOutcome(failed: true, failure: .network) == .failed
+                        && ForkCastralOutcome(failed: true, failure: nil) == .failed,
+                     "an automatic send without a sure appointment asks for one; any other failure says it failed")
+        let english = ForkMeetingStrings.strings(.enUS)
         for language in AppLanguage.allCases {
             let strings = ForkMeetingStrings.strings(language)
             let messages = all.map { ForkMeetingExportFailure.castral($0).message(strings) }
             suite.expect(Set(messages).count == messages.count && messages.allSatisfy { $0.count > 8 },
                          "\(language.rawValue): every CRM failure says, in a sentence of its own, what happened")
         }
-        let english = ForkMeetingStrings.strings(.enUS), french = ForkMeetingStrings.strings(.fr)
+        let french = ForkMeetingStrings.strings(.fr)
         suite.expect(english.castralFailTooLong(minutes: 85).contains("1 h 25")
                         && french.castralFailTooLong(minutes: 85).contains("1\u{00A0}h\u{00A0}25"),
                      "too long says how long a meeting the server takes: about 1 h 25")
@@ -520,12 +531,16 @@ enum ForkMeetingCastralTests {
                          strings.castralPhaseSending, strings.castralLinkCheckFailed, strings.castralPhaseWaiting,
                          strings.castralPhaseQueued, strings.castralPhaseTranscribing, strings.castralPhaseSummarizing,
                          strings.castralPhaseReady, strings.castralPhaseReadyWithoutReport, strings.castralPhaseFailed,
-                         strings.castralPhaseStillWorking, strings.castralNoCompany, strings.castralBadgeReported]
+                         strings.castralPhaseStillWorking, strings.castralNoCompany, strings.castralBadgeReported,
+                         strings.noticeCastralChoose, strings.castralPhaseChoose]
             tooLong += short.filter { $0.count > 28 }.map { "\(language.rawValue): \($0)" }
             let phases = [strings.castralPhaseSending, strings.castralPhaseWaiting, strings.castralPhaseQueued,
                           strings.castralPhaseTranscribing, strings.castralPhaseSummarizing, strings.castralPhaseReady,
                           strings.castralPhaseReadyWithoutReport, strings.castralPhaseFailed, strings.castralPhaseStillWorking]
             suite.expect(Set(phases).count == phases.count, "\(language.rawValue): each phase has its own words")
+            suite.expect(!phases.contains(strings.castralPhaseChoose) && strings.castralPhaseChoose != strings.exportFailedShort
+                            && !strings.castralFailUncertain.contains(strings.exportRetry),
+                         "\(language.rawValue): waiting for an appointment is said apart from a failure, and no longer sends to Retry")
             suite.expect(strings.noticeCastralSent("Example CRM").contains("Example CRM")
                             && strings.castralLinkConnected(12).contains("12")
                             && strings.castralAudioCaption(lower: "45 min", longest: "1 h 25").contains("1 h 25")
