@@ -512,10 +512,11 @@ final class ForkMacBackupRunner {
                                                    wokeAt: wokeAt, manual: manualRequest)
             if machine.isPaused { input.manual = nil }
             let planned = ForkMacBackupPlanner.decide(input)
-            manualRequest = nil
             decision = planned
             note(planned, now: now)
-            // A Tailscale peer is asked again right before a run.
+            // A Tailscale peer is asked again right before a run. The run
+            // waits for the answer; a « Sauvegarder maintenant » waits with
+            // it instead of being dropped.
             if case .run = planned, let peer = settings.repository?.peer,
                peerCheckedAt.map({ now.timeIntervalSince($0) > 60 }) ?? true {
                 if !peerProbeInFlight { probePeer(peer) }
@@ -525,6 +526,7 @@ final class ForkMacBackupRunner {
                     return
                 }
             }
+            manualRequest = nil
             perform(machine.handle(.decision(planned), now: now))
         }
         scheduleWake(now: now, decision: decision)
@@ -881,8 +883,10 @@ final class ForkMacBackupRunner {
                 ?? .systemDefault
             keepAwake.set(on, reason: ForkMacBackupAgentStrings.strings(language).keepAwakeReason)
         case .runStarted(let id, let trigger, _):
-            // « Sauvegarder maintenant » at normal priority, the planner's runs as chosen.
-            extras?.priority = settings.enginePriority(for: trigger)
+            // « Sauvegarder maintenant » and the first backup after the setup
+            // at normal priority, the planner's other runs as chosen.
+            let firstBackup = proofs.lastBackup(paths: settings.sources.map(\.path)) == nil
+            extras?.priority = settings.enginePriority(for: trigger, firstBackup: firstBackup)
             runStarted(id: id)
         case .runEnded(let summary):
             runEnded(summary)

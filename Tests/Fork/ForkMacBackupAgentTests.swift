@@ -37,6 +37,7 @@ enum ForkMacBackupAgentTests {
         cost(suite)
         proofStore(suite)
         journal(suite)
+        priorities(suite)
         strings(suite)
     }
 
@@ -1184,6 +1185,16 @@ enum ForkMacBackupAgentTests {
                      "a trim and appends from another process side by side keep every line (\(survived.count)/\(appends))")
         let mode = (try? FileManager.default.attributesOfItem(atPath: url.path + ".lock"))?[.posixPermissions] as? Int
         suite.expect(mode == 0o600, "the journal's lock file is private")
+    }
+
+    private static func priorities(_ suite: TestSuite) {
+        let low = settings([ForkDefaultsKey.macBackupPriority: "low"])
+        suite.expect(low.enginePriority(for: .scheduled) == .background && low.enginePriority(for: .catchUp) == .background,
+                     "the planner's runs follow « Priorité basse »")
+        suite.expect(low.enginePriority(for: .island) == .normal, "« Sauvegarder maintenant » runs at normal priority")
+        suite.expect(low.enginePriority(for: .scheduled, firstBackup: true) == .normal
+                        && low.enginePriority(for: .agent, firstBackup: true) == .normal,
+                     "the first backup after the setup runs at normal priority, even started by the planner")
     }
 
     private static func strings(_ suite: TestSuite) {

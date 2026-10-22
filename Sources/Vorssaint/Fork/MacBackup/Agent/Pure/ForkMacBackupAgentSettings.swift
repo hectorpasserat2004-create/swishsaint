@@ -292,8 +292,12 @@ struct ForkMacBackupAgentSettings: Equatable {
     }
 
     /// The engine's priority for a run: « Sauvegarder maintenant » and the
-    /// other buttons run normal, the planner's runs as the person chose.
-    func enginePriority(for trigger: ForkMacBackupTrigger) -> ForkMacBackupKopiaInvocation.Priority {
+    /// other buttons run normal, the planner's runs as the person chose,
+    /// except the very first backup (nothing protected yet, the setup just
+    /// ended): it runs normal too, whoever started it.
+    func enginePriority(for trigger: ForkMacBackupTrigger, firstBackup: Bool = false)
+        -> ForkMacBackupKopiaInvocation.Priority {
+        if firstBackup { return .normal }
         switch trigger {
         case .island, .settings, .commandBar, .window: return .normal
         case .scheduled, .catchUp, .early, .agent: return priority == .low ? .background : .utility
