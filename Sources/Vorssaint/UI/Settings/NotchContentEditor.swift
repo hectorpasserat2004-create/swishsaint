@@ -179,6 +179,7 @@ struct NotchPagePreview: View {
         // The live area belongs to the island; the preview explains it instead.
         case .watch: NotchWatchView(size: size)
         case .meetings: ForkMeetingIslandSection(service: notch, size: size) // FORK(notch-meetings6)
+        case .macBackup: ForkMacBackupIslandSection(service: notch, size: size) // FORK(notch-macbackups6)
         }
     }
 
@@ -408,6 +409,7 @@ extension NotchModule {
         case .agents: return Color(red: 0.85, green: 0.47, blue: 0.34)
         case .watch: return .purple
         case .meetings: return .red // FORK(notch-meetings6)
+        case .macBackup: return .teal // FORK(notch-macbackups6)
         }
     }
 

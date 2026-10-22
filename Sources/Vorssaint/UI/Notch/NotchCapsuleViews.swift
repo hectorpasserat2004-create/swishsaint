@@ -432,6 +432,7 @@ private struct NotchCapsuleCompanionMark: View {
         case .timer, .keepAwake, .watch:
             EmptyView()
         case .meeting: EmptyView() // FORK(notch-meeting7)
+        case .macBackup: EmptyView() // FORK(notch-macbackup7)
         }
     }
 }

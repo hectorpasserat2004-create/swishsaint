@@ -93,6 +93,7 @@ struct NotchEditorStrings {
         case .agents: return agentsSummary
         case .watch: return watchSummary
         case .meetings: return NotchModule.meetingsHooks.summary() // FORK(notch-meetings4)
+        case .macBackup: return NotchModule.macBackupHooks.summary() // FORK(notch-macbackups4)
         }
     }
 }

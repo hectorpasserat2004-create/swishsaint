@@ -503,10 +503,12 @@ final class NotchService: ObservableObject {
     }
 
     var compactActivities: [NotchCompactActivity] {
+        NotchCompactActivity.macBackupHooks.ordered( // FORK(notch-macbackup3)
         NotchCompactActivity.meetingHooks.activities() + // FORK(notch-meeting3)
         NotchSupport.compactActivities(timer: hasTimerActivity, watch: hasWatchActivity, downloads: hasDownloadActivity,
                                       agents: hasAgentActivity, calendar: hasCalendarActivity,
                                       music: hasMusicActivity, keepAwake: hasKeepAwakeActivity)
+        ) // FORK(notch-macbackup3)
     }
 
     var showsCompactActivityPicker: Bool {
@@ -633,6 +635,7 @@ final class NotchService: ObservableObject {
         // Its reading is a countdown like the timer's, so it takes the timer's wings.
         case .keepAwake: return geometry.compactTimerGeometry(showsDownloads: false, wing: keepAwakeStripWing(in: geometry))
         case .meeting: return geometry.compactTimerGeometry(showsDownloads: false, wing: NotchCompactActivity.meetingHooks.wing(geometry)) // FORK(notch-meeting3)
+        case .macBackup: return geometry.compactTimerGeometry(showsDownloads: false, wing: NotchCompactActivity.macBackupHooks.wing(geometry)) // FORK(notch-macbackup3)
         default: return geometry
         }
     }
@@ -1041,6 +1044,7 @@ final class NotchService: ObservableObject {
             }
             return layout.keepAwakeSurface(reading: reading, geometry: geometry)
         case .meeting: return ForkMeetingIslandStrip.capsuleSize(geometry: geometry) // FORK(notch-meeting3)
+        case .macBackup: return ForkMacBackupIslandStrip.capsuleSize(geometry: geometry) // FORK(notch-macbackup3)
         }
     }
 
@@ -1833,6 +1837,7 @@ final class NotchService: ObservableObject {
             switch item {
             case .dictation: ForkNotchDictations.activateQuickAction() // FORK(notch-dictation4)
             case .meeting: ForkMeetingIslandTile.activate() // FORK(notch-meeting-tile4)
+            case .macBackup: select(.macBackup) // FORK(notch-macbackup-tile4)
             case .keepAwake: KeepAwakeManager.shared.toggle()
             case .microphone: MicMuteService.shared.toggle()
             case .screenshot: perform { ScreenshotService.shared.capture() }
@@ -2269,6 +2274,7 @@ final class NotchService: ObservableObject {
         guard notice == selectedNotice else { return }
         if ForkDictationIsland.activate(selectedNotice) { return } // FORK(notch-dictation4)
         if ForkMeetingIsland.activate(selectedNotice) { return } // FORK(notch-meetings9)
+        if ForkMacBackupIsland.activate(selectedNotice) { return } // FORK(notch-macbackups9)
         if let id = selectedNotice.notificationID {
             guard NotchNotificationService.shared.openingID == nil else { return }
             // The pointer stays where the banner was; like a click on the
