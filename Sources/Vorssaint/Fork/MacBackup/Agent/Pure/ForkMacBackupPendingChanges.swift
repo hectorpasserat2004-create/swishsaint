@@ -130,6 +130,9 @@ enum ForkMacBackupPendingChanges {
             overflow = [:]
         }
 
+        /// Changes counted without their path (past `pendingPathCap`).
+        var overflowCount: Int { overflow.values.reduce(0, +) }
+
         var summary: ForkMacBackupPendingSummary {
             var counts: [Weight: Int] = overflow
             for entry in entries.values { counts[entry.weight, default: 0] += 1 }

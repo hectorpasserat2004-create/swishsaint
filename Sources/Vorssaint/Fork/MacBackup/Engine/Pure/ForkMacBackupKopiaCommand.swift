@@ -20,14 +20,19 @@ struct ForkMacBackupKopiaInvocation: Equatable {
     /// Killed after this long with nothing printed; nil: never.
     var silenceTimeout: TimeInterval?
     var priority: Priority
+    /// May the child download cloud-only iCloud files it reads
+    /// (`ForkMacBackupDatalessPolicy`)? Only the server of the
+    /// « Tout télécharger avant » mode does; never a CLI call.
+    var materializeDataless: Bool
 
     init(arguments: [String], environment: [String: String], timeout: TimeInterval,
-         silenceTimeout: TimeInterval? = nil, priority: Priority = .utility) {
+         silenceTimeout: TimeInterval? = nil, priority: Priority = .utility, materializeDataless: Bool = false) {
         self.arguments = arguments
         self.environment = environment
         self.timeout = timeout
         self.silenceTimeout = silenceTimeout
         self.priority = priority
+        self.materializeDataless = materializeDataless
     }
 
     /// The command line as a log may show it: it never holds a secret

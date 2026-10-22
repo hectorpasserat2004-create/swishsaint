@@ -25,6 +25,8 @@ final class ForkMacBackupKopiaServer {
     let files: ForkMacBackupPaths.RepositoryFiles
     let queue: DispatchQueue
     var priority: ForkMacBackupKopiaInvocation.Priority = .utility
+    /// The « Tout télécharger avant » mode (`ForkMacBackupDatalessPolicy`).
+    var materializeDataless = false
     /// Called on `queue` after every start and every exit.
     var onChange: (() -> Void)?
 
@@ -104,7 +106,7 @@ final class ForkMacBackupKopiaServer {
         let invocation = ForkMacBackupKopiaInvocation(
             arguments: ForkMacBackupKopiaCommand.global(files) + ForkMacBackupKopiaCommand.serverStart(socketPath: socket.path),
             environment: ForkMacBackupKopiaCommand.environment(credentials: credentials, files: files, extra: extra),
-            timeout: .infinity, silenceTimeout: nil, priority: priority)
+            timeout: .infinity, silenceTimeout: nil, priority: priority, materializeDataless: materializeDataless)
 
         generation += 1
         let current = generation

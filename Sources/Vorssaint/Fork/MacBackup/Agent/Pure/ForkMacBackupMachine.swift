@@ -118,6 +118,9 @@ struct ForkMacBackupMachine {
         case matched
         case mismatched
         case failed(ForkMacBackupEngineError)
+        /// The agent would not start the snapshot (« Tout télécharger
+        /// avant » with too little room): the cause, and why in words.
+        case refused(ForkMacBackupRunFailure, String)
     }
 
     /// How a run ended, for the runner (runs.jsonl, slots, proofs, pending).
@@ -435,6 +438,10 @@ struct ForkMacBackupMachine {
             run.abortMessage = message(of: error)
             self.run = run
             return finish(abort: error.runFailure, now: now)
+        case .refused(let failure, let reason):
+            run.abortMessage = reason
+            self.run = run
+            return finish(abort: failure, now: now)
         case .matched:
             run.lastProgressAt = now
             guard let index = run.sources.firstIndex(where: { $0.source == source }) else { return [] }

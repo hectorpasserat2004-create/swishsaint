@@ -175,9 +175,15 @@ enum ForkMacBackupRunRules {
 
     static func extra(for source: ForkMacBackupSource, usage: ForkMacBackupDiskUsage, iCloud: ForkMacBackupICloudMode,
                       home: String) -> [String] {
+        extra(for: source, sparseImages: usage.sparseImages, dataless: usage.dataless, iCloud: iCloud, home: home)
+    }
+
+    /// The same from a cached walk (`ForkMacBackupPrescanCache`).
+    static func extra(for source: ForkMacBackupSource, sparseImages: [ForkMacBackupDiskUsage.SparseImage],
+                      dataless: [String], iCloud: ForkMacBackupICloudMode, home: String) -> [String] {
         var rules = ForkMacBackupContentScan.runRules(
-            sparseImages: source.presets.contains(.sparseDiskImages) ? usage.sparseImages : [],
-            dataless: iCloud == .local ? usage.dataless : [])
+            sparseImages: source.presets.contains(.sparseDiskImages) ? sparseImages : [],
+            dataless: iCloud == .local ? dataless : [])
         if iCloud == .exclude, let rule = iCloudDriveRule(source: source.path, home: home), !rules.contains(rule) {
             rules.append(rule)
         }

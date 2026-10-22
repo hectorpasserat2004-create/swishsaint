@@ -120,7 +120,10 @@ final class ForkMacBackupKopiaProcess: ForkMacBackupCancellable {
                 return finish(launchFailed: false)
             }
             do {
-                try process.run()
+                // The cloud-only files: downloaded only when the invocation says so.
+                try ForkMacBackupDatalessPolicy.spawning(materialize: invocation.materializeDataless) {
+                    try process.run()
+                }
             } catch {
                 stdoutPipe.fileHandleForReading.readabilityHandler = nil
                 stderrPipe.fileHandleForReading.readabilityHandler = nil

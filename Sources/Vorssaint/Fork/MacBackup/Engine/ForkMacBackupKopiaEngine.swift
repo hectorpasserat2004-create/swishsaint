@@ -40,6 +40,7 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
     private let binaryProvider: () -> URL?
     private let lock = NSLock()
     private var priorityValue: ForkMacBackupKopiaInvocation.Priority = .utility
+    private var materializeValue = false
     private var ownerServerPID: Int32?
 
     // Owned by `work`.
@@ -72,6 +73,15 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
                 _ = setpriority(PRIO_DARWIN_PROCESS, id_t(pid), newValue == .background ? PRIO_DARWIN_BG : 0)
             }
             work.async { [weak self] in self?.server?.priority = newValue }
+        }
+    }
+
+    /// Read by the next server start (the policy is inherited at spawn).
+    var materializeDataless: Bool {
+        get { lock.withLock { materializeValue } }
+        set {
+            lock.withLock { materializeValue = newValue }
+            work.async { [weak self] in self?.server?.materializeDataless = newValue }
         }
     }
 
@@ -242,6 +252,7 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
             server = fresh
         }
         server?.priority = priority
+        server?.materializeDataless = materializeDataless
         server?.start(credentials: credentials, completion: completion)
     }
 

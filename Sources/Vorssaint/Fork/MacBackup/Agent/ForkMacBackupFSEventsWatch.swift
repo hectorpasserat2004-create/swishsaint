@@ -21,6 +21,12 @@ final class ForkMacBackupFSEventsWatch {
     /// Events were dropped, or there is no starting point yet: unknown
     /// until the next complete snapshot.
     private var unknown = false
+    /// The replay of the history since the saved event has ended (true
+    /// when there is none to replay).
+    private var historyDone = false
+    /// The changed paths cover everything since the last complete snapshot's
+    /// start: false after a count that restarted clean from unknown.
+    private var pathsComplete = true
     private var savedAt: Date = .distantPast
 
     init(queue: DispatchQueue, fileURL: URL) {
@@ -37,6 +43,15 @@ final class ForkMacBackupFSEventsWatch {
     /// nil when not counted.
     var summary: ForkMacBackupPendingSummary? { unknown ? nil : tally.summary }
 
+    /// Every file seen changed since the start of the last complete
+    /// snapshot (absolute paths, the sources' rules applied), for the
+    /// pre-scan's refresh; nil when the list is not whole: events dropped,
+    /// the history still replaying, or past the path cap.
+    func changedPaths() -> [String]? {
+        guard !unknown, historyDone, pathsComplete, tally.overflowCount == 0 else { return nil }
+        return Array(tally.entries.keys)
+    }
+
     /// (Re)starts the stream on `sources`. On `queue`.
     func start(sources: [ForkMacBackupSource], extraRules: [String: [String]] = [:], ignoredPrefixes: [String]) {
         stopStream()
@@ -49,6 +64,7 @@ final class ForkMacBackupFSEventsWatch {
         let current = FSEventsGetCurrentEventId()
         let since = ForkMacBackupPendingChanges.replayStart(saved: file.sinceEventID, current: current)
         unknown = since == nil
+        historyDone = since == nil
         guard !sources.isEmpty else { return }
         var context = FSEventStreamContext(version: 0, info: Unmanaged.passUnretained(self).toOpaque(),
                                            retain: nil, release: nil, copyDescription: nil)
@@ -102,6 +118,9 @@ final class ForkMacBackupFSEventsWatch {
             // (dropped events), so the count starts clean from the run's start.
             tally.clear()
             unknown = false
+            pathsComplete = false
+        } else {
+            pathsComplete = true
         }
         file.sinceEventID = eventID
         file.since = date
@@ -120,7 +139,10 @@ final class ForkMacBackupFSEventsWatch {
                 unknown = true
                 continue
             }
-            if flag & kFSEventStreamEventFlagHistoryDone != 0 { continue }
+            if flag & kFSEventStreamEventFlagHistoryDone != 0 {
+                historyDone = true
+                continue
+            }
             guard flag & (kFSEventStreamEventFlagItemIsFile | kFSEventStreamEventFlagItemIsSymlink) != 0 else { continue }
             let path = paths[index]
             guard let weight = filters.lazy.compactMap({ $0.weight(of: path) }).first else { continue }
