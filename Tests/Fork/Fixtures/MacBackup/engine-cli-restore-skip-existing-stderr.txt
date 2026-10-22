@@ -1,0 +1,4 @@
+Restoring to local filesystem (/Users/bench/bench/restore/cli/small) with parallelism=8...
+Processed 3121 (20 B) of 3120 (67.7 KB), skipped 2999 (67.7 KB).
+Restored 1 files, 121 directories and 0 symbolic links (20 B), skipped 2999 (67.7 KB).
+

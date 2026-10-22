@@ -1,0 +1,3 @@
+Restoring to local filesystem (/Users/bench/bench/restore/cli/small) with parallelism=8...
+Restored 3000 files, 121 directories and 0 symbolic links (67.7 KB).
+

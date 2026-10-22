@@ -1,0 +1,808 @@
+[
+ {
+  "id": "897b757777ea35114a2dac7a3701604f",
+  "startTime": "2024-11-03T22:00:00Z",
+  "endTime": "2024-11-03T22:00:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "891bfd4622dd0202db80303d12f3f629",
+  "startTime": "2024-11-03T23:00:00Z",
+  "endTime": "2024-11-03T23:00:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "41b7ee08b19abc1242fc465f06b43bcb",
+  "startTime": "2024-11-05T01:00:00Z",
+  "endTime": "2024-11-05T01:00:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "43e1ea41e073bcb25078ffdaf363af64",
+  "startTime": "2024-12-12T13:00:00Z",
+  "endTime": "2024-12-12T13:00:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "f2585d1361b608effc41b0298d0d8a18",
+  "startTime": "2024-12-12T13:12:00Z",
+  "endTime": "2024-12-12T13:12:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "7e3ff0f7bc894227fb958cc95deb0f31",
+  "startTime": "2024-12-12T13:48:00Z",
+  "endTime": "2024-12-12T13:48:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "e1944a10d01f7a1d7e7869de3534608b",
+  "startTime": "2024-12-19T15:48:00Z",
+  "endTime": "2024-12-19T15:48:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "12008a242411e8829f85dca2dadcd172",
+  "startTime": "2024-12-19T16:24:00Z",
+  "endTime": "2024-12-19T16:24:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "77fd4964baa157ada7801982f93d134c",
+  "startTime": "2024-12-20T05:24:00Z",
+  "endTime": "2024-12-20T05:24:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "04130b0eb0424f5a96bac1e73ab37e49",
+  "startTime": "2025-01-05T21:24:00Z",
+  "endTime": "2025-01-05T21:24:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "67c41a42aaa9248aa07953459c5a5594",
+  "startTime": "2025-01-05T21:36:00Z",
+  "endTime": "2025-01-05T21:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "e3e1253c78b791839c9ec75f1aa42a7e",
+  "startTime": "2025-01-12T23:36:00Z",
+  "endTime": "2025-01-12T23:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "1a892d0a39da036423bdb2ec8b585c11",
+  "startTime": "2025-01-13T01:36:00Z",
+  "endTime": "2025-01-13T01:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "b23844c8082c5e8b79a8ef0d65be0816",
+  "startTime": "2025-01-13T01:48:00Z",
+  "endTime": "2025-01-13T01:48:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "2b07dd15f9ed57c976630b6eebb31bee",
+  "startTime": "2025-01-13T02:24:00Z",
+  "endTime": "2025-01-13T02:24:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "31e0a5d15ce9df12cb17cb49a4e689be",
+  "startTime": "2025-01-14T04:24:00Z",
+  "endTime": "2025-01-14T04:24:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "0a39420dbf33da013e5f4c39b0e4ec2b",
+  "startTime": "2025-01-15T06:24:00Z",
+  "endTime": "2025-01-15T06:24:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "2ab6e3b3ec7870519ea9f4078bc8d0e8",
+  "startTime": "2025-01-15T07:00:00Z",
+  "endTime": "2025-01-15T07:00:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "a940b5e86b5f9caf0bdfd630e212c5b1",
+  "startTime": "2025-01-15T09:00:00Z",
+  "endTime": "2025-01-15T09:00:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "fa29cacbeadb4f067e63f72e59d99e56",
+  "startTime": "2025-01-15T09:36:00Z",
+  "endTime": "2025-01-15T09:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "eb00ea554f26e2c0580e135505c9bba3",
+  "startTime": "2025-01-22T11:36:00Z",
+  "endTime": "2025-01-22T11:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "8de03b82c919ffb6a572bddea136dbff",
+  "startTime": "2025-01-23T13:36:00Z",
+  "endTime": "2025-01-23T13:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "1e239ae860de3b5a4d192d6bf4b68596",
+  "startTime": "2025-01-23T13:48:00Z",
+  "endTime": "2025-01-23T13:48:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "acb2d5334077f263bf6d4d83a58eb577",
+  "startTime": "2025-02-09T05:48:00Z",
+  "endTime": "2025-02-09T05:48:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "20d42f4524c775621b43e7fc64efa571",
+  "startTime": "2025-02-09T06:24:00Z",
+  "endTime": "2025-02-09T06:24:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "f1d6bd3f93797b9b202941df3e0a4d6d",
+  "startTime": "2025-02-09T08:24:00Z",
+  "endTime": "2025-02-09T08:24:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "9608fdb6ae389326f583fd037c060602",
+  "startTime": "2025-03-18T20:24:00Z",
+  "endTime": "2025-03-18T20:24:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "9c1df03c3e1bf98d9d108cac563b5547",
+  "startTime": "2025-03-30T00:30:00Z",
+  "endTime": "2025-03-30T00:30:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "ce037e9754ecf553248966489eef172c",
+  "startTime": "2025-03-30T01:30:00Z",
+  "endTime": "2025-03-30T01:30:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "c84292f48e44d98de6629c0debebe2e1",
+  "startTime": "2025-04-25T08:24:00Z",
+  "endTime": "2025-04-25T08:24:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "27739a91e934a153e83f041cc831a5b4",
+  "startTime": "2025-05-12T00:24:00Z",
+  "endTime": "2025-05-12T00:24:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "30f0e92ac87e36f50e4414ece9e5e5f9",
+  "startTime": "2025-05-12T00:36:00Z",
+  "endTime": "2025-05-12T00:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "3ced11e3a6591b5ffbda1df1de70de6b",
+  "startTime": "2025-05-28T16:36:00Z",
+  "endTime": "2025-05-28T16:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "5a8358360a6d6a56bbb9d8d8a28cd62d",
+  "startTime": "2025-06-14T08:36:00Z",
+  "endTime": "2025-06-14T08:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "33370a082b9f68738b18dd2126222583",
+  "startTime": "2025-06-15T10:36:00Z",
+  "endTime": "2025-06-15T10:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "c5b0b96cce508273a698caa9ee44e220",
+  "startTime": "2025-06-15T10:48:00Z",
+  "endTime": "2025-06-15T10:48:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "2716cd224cd5619913e416a64092e658",
+  "startTime": "2025-06-15T12:48:00Z",
+  "endTime": "2025-06-15T12:48:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "b3cb3d5f8081f85280677cfc544b9632",
+  "startTime": "2025-06-15T13:00:00Z",
+  "endTime": "2025-06-15T13:00:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "4fa46d8790d4b3d3a7ca38b5c44e382c",
+  "startTime": "2025-06-22T15:00:00Z",
+  "endTime": "2025-06-22T15:00:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "82e31814736da691a2e488481cfe7b30",
+  "startTime": "2025-06-22T16:00:00Z",
+  "endTime": "2025-06-22T16:00:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "beb426a22c2f6ef403504ecbf035dcce",
+  "startTime": "2025-06-22T21:00:00Z",
+  "endTime": "2025-06-22T21:00:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "1738b6768aca9b6587dcab6a1dd7c5de",
+  "startTime": "2025-06-23T23:00:00Z",
+  "endTime": "2025-06-23T23:00:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "51430b921d915d7405543a6c50313e71",
+  "startTime": "2025-06-24T00:00:00Z",
+  "endTime": "2025-06-24T00:00:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "e0817792f264170260f37ed0e7047f8e",
+  "startTime": "2025-07-01T02:00:00Z",
+  "endTime": "2025-07-01T02:00:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "931f22d910b26168b2ff6d9aeefad62e",
+  "startTime": "2025-07-01T02:36:00Z",
+  "endTime": "2025-07-01T02:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "1a46d9c9b04fbc6cf3d4b128bd023ad8",
+  "startTime": "2025-07-17T18:36:00Z",
+  "endTime": "2025-07-17T18:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "d74781bbdcd7a899196920d99b4310fd",
+  "startTime": "2025-07-17T23:36:00Z",
+  "endTime": "2025-07-17T23:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "7dce31c0617c723f1366b292eae460ef",
+  "startTime": "2025-07-25T01:36:00Z",
+  "endTime": "2025-07-25T01:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "f90b03509c3a3a09d98ee25146ed86e5",
+  "startTime": "2025-08-31T13:36:00Z",
+  "endTime": "2025-08-31T13:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "b6b22fc996d33a3b93928adfdececaad",
+  "startTime": "2025-08-31T14:36:00Z",
+  "endTime": "2025-08-31T14:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "73e679c59dc6ce4f410fe4d70d6e149b",
+  "startTime": "2025-08-31T15:12:00Z",
+  "endTime": "2025-08-31T15:12:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "aa1f0645c81fb795acbafb56584ef3fc",
+  "startTime": "2025-09-17T07:12:00Z",
+  "endTime": "2025-09-17T07:12:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "6250a3b9bf9a353dcd55c69a127522d7",
+  "startTime": "2025-10-03T23:12:00Z",
+  "endTime": "2025-10-03T23:12:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "9702b32fca5de2d845d234ec7e9c928f",
+  "startTime": "2025-10-26T00:30:00Z",
+  "endTime": "2025-10-26T00:30:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "a4a3710ccbc4fe2c4a14289daf4e91e0",
+  "startTime": "2025-10-26T01:30:00Z",
+  "endTime": "2025-10-26T01:30:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "40a4ac65f9ad1672b8d33a558a908271",
+  "startTime": "2025-11-10T11:12:00Z",
+  "endTime": "2025-11-10T11:12:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "9dfa46d4fbc7791ef7248983689c0f36",
+  "startTime": "2025-11-10T13:12:00Z",
+  "endTime": "2025-11-10T13:12:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "2eb9e52110d98e21111d3e895eb17848",
+  "startTime": "2025-11-11T02:12:00Z",
+  "endTime": "2025-11-11T02:12:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "9b431452d9b197de80bb760c3c1e5539",
+  "startTime": "2025-11-11T02:48:00Z",
+  "endTime": "2025-11-11T02:48:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "4fb6b0027b513f294cd8bbab05508ae8",
+  "startTime": "2025-11-18T04:48:00Z",
+  "endTime": "2025-11-18T04:48:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "866d8a9f85d35a4f6887b800728c2dbc",
+  "startTime": "2025-11-18T05:24:00Z",
+  "endTime": "2025-11-18T05:24:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "1928e9da145d6868a24954f67b9eed35",
+  "startTime": "2025-12-04T21:24:00Z",
+  "endTime": "2025-12-04T21:24:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "25b276f85c023b8fa9de625aa0de8462",
+  "startTime": "2025-12-04T21:36:00Z",
+  "endTime": "2025-12-04T21:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "6e1811a55196cf3831c5e9a120b844de",
+  "startTime": "2025-12-21T13:36:00Z",
+  "endTime": "2025-12-21T13:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "9ada3c1611240c183fd5800436abf188",
+  "startTime": "2025-12-21T15:36:00Z",
+  "endTime": "2025-12-21T15:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "50f856d297387384dfd3a0e2e7aefa04",
+  "startTime": "2025-12-23T16:36:00Z",
+  "endTime": "2025-12-23T16:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "21e5a68c2a301cda2e555dfc69d934be",
+  "startTime": "2025-12-31T22:30:00Z",
+  "endTime": "2025-12-31T22:30:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "7a485975d6652823bbb37e9ec4cc1e35",
+  "startTime": "2025-12-31T23:30:00Z",
+  "endTime": "2025-12-31T23:30:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "73ad592425a7e88adef2f99cf3fc90c6",
+  "startTime": "2026-01-01T00:10:00Z",
+  "endTime": "2026-01-01T00:10:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "05f1b4bcd7399ae67a4211c8aad87ca4",
+  "startTime": "2026-01-30T04:36:00Z",
+  "endTime": "2026-01-30T04:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "7c5a149ac268ffdf2956138c11c6c630",
+  "startTime": "2026-02-06T06:36:00Z",
+  "endTime": "2026-02-06T06:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "b0945b38a8976e9493cccd6f405d6e42",
+  "startTime": "2026-02-07T08:36:00Z",
+  "endTime": "2026-02-07T08:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "0fe04ee1c3a07526533681c7bf1cac90",
+  "startTime": "2026-02-07T21:36:00Z",
+  "endTime": "2026-02-07T21:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "44a555a03787d1a15c9f927a92cd33a9",
+  "startTime": "2026-02-09T22:36:00Z",
+  "endTime": "2026-02-09T22:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "92b85d62b1d2b9092882c4dcf6fb5fd4",
+  "startTime": "2026-02-26T14:36:00Z",
+  "endTime": "2026-02-26T14:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "25286976c094755c45fcf5dff93c1626",
+  "startTime": "2026-02-28T15:36:00Z",
+  "endTime": "2026-02-28T15:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "9483de17ff43dc07ecd3298e1b3f4f89",
+  "startTime": "2026-03-01T04:36:00Z",
+  "endTime": "2026-03-01T04:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "f4dd74a40d8511f5835478dcff32f16a",
+  "startTime": "2026-03-01T09:36:00Z",
+  "endTime": "2026-03-01T09:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "6de99e81e1c6cc4bb982f3d108e49e26",
+  "startTime": "2026-03-01T11:36:00Z",
+  "endTime": "2026-03-01T11:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "fc819e9e2d8992102b9428155d1e4f44",
+  "startTime": "2026-03-01T12:36:00Z",
+  "endTime": "2026-03-01T12:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "cdd75ecbdffa61c9f92c0f1fd4a4530d",
+  "startTime": "2026-03-01T14:36:00Z",
+  "endTime": "2026-03-01T14:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "e3de9abdc591e88a7af9f88df6d552f5",
+  "startTime": "2026-03-01T15:12:00Z",
+  "endTime": "2026-03-01T15:12:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "085b93aa81926cb5c7066e2141bd309b",
+  "startTime": "2026-03-18T07:12:00Z",
+  "endTime": "2026-03-18T07:12:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "31436e9620f5dca3ec2230cda0c44f25",
+  "startTime": "2026-03-18T12:12:00Z",
+  "endTime": "2026-03-18T12:12:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "1f2d270be58f48bb208b5286a1ca75aa",
+  "startTime": "2026-03-25T14:12:00Z",
+  "endTime": "2026-03-25T14:12:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "4bcae67e47c63454f6ea68793f280234",
+  "startTime": "2026-03-27T15:12:00Z",
+  "endTime": "2026-03-27T15:12:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "b251ba4a6390b6afcbfcba9f3c60cae2",
+  "startTime": "2026-03-28T04:12:00Z",
+  "endTime": "2026-03-28T04:12:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "240e08ed7417f3dad2afa641a5f5ca0e",
+  "startTime": "2026-03-30T05:12:00Z",
+  "endTime": "2026-03-30T05:12:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "f068ee6617de9c3a105e3c9a40a93113",
+  "startTime": "2026-03-30T10:12:00Z",
+  "endTime": "2026-03-30T10:12:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "fa5f18a67f72748228ef1111ce1555ae",
+  "startTime": "2026-04-16T02:12:00Z",
+  "endTime": "2026-04-16T02:12:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "b49646ba9d425d05b72dc82ded613f78",
+  "startTime": "2026-04-16T02:48:00Z",
+  "endTime": "2026-04-16T02:48:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "9a77ceef11ae3911fd6a494b22d0195a",
+  "startTime": "2026-04-16T03:24:00Z",
+  "endTime": "2026-04-16T03:24:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "2aaa9197836813cb0c3f9c3b3d77d3b4",
+  "startTime": "2026-04-23T05:24:00Z",
+  "endTime": "2026-04-23T05:24:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "23bbac8c57bb207f8aff519795b5451e",
+  "startTime": "2026-04-24T07:24:00Z",
+  "endTime": "2026-04-24T07:24:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "fe3afdf04809cef5036f6cdb0734aaec",
+  "startTime": "2026-04-24T08:24:00Z",
+  "endTime": "2026-04-24T08:24:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "0d18fc2ecab133265eda75b5dc473410",
+  "startTime": "2026-04-24T21:24:00Z",
+  "endTime": "2026-04-24T21:24:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "0b6657d9cb42e800bdf5db74bd689545",
+  "startTime": "2026-04-24T22:24:00Z",
+  "endTime": "2026-04-24T22:24:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "ac012c4c7b3bb78a32ff7263d739904f",
+  "startTime": "2026-04-26T23:24:00Z",
+  "endTime": "2026-04-26T23:24:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "6f82bdccd10eec13a9537e6cb6f0f1e9",
+  "startTime": "2026-04-28T01:24:00Z",
+  "endTime": "2026-04-28T01:24:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "289b63f3a217c0a37c3b02f2340dad41",
+  "startTime": "2026-04-28T01:36:00Z",
+  "endTime": "2026-04-28T01:36:30Z",
+  "retentionReason": [
+   "monthly-6"
+  ]
+ },
+ {
+  "id": "72fd891a7c1681c66be065fe72fa9718",
+  "startTime": "2026-06-04T13:36:00Z",
+  "endTime": "2026-06-04T13:36:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "9e6da0acc6102281ede59473d7314416",
+  "startTime": "2026-06-04T14:12:00Z",
+  "endTime": "2026-06-04T14:12:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "0ae6f9730ed60150e94fa609aa47dbc6",
+  "startTime": "2026-06-11T16:12:00Z",
+  "endTime": "2026-06-11T16:12:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "c9a61fa0f2e75cc756a356e5a7dce069",
+  "startTime": "2026-06-28T08:12:00Z",
+  "endTime": "2026-06-28T08:12:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "7444443b7d6f4f94d4a13c1c78c67f1d",
+  "startTime": "2026-06-28T21:12:00Z",
+  "endTime": "2026-06-28T21:12:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "cc1fefa6ebad3484d54244e47f1ea22a",
+  "startTime": "2026-06-29T10:12:00Z",
+  "endTime": "2026-06-29T10:12:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "7a9ad533f9e44f37e91ab33fbd1b120e",
+  "startTime": "2026-06-29T23:12:00Z",
+  "endTime": "2026-06-29T23:12:30Z",
+  "retentionReason": [
+   "monthly-5"
+  ]
+ },
+ {
+  "id": "0219af936d7487b69ca3bcff2b45f1e5",
+  "startTime": "2026-07-16T15:12:00Z",
+  "endTime": "2026-07-16T15:12:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "4b89441901f7e3f56d672fe7a0cfe6fc",
+  "startTime": "2026-07-18T16:12:00Z",
+  "endTime": "2026-07-18T16:12:30Z",
+  "retentionReason": [
+   "monthly-4"
+  ]
+ },
+ {
+  "id": "c2542e98ebc79db8934c88e8eea49a7d",
+  "startTime": "2026-08-04T08:12:00Z",
+  "endTime": "2026-08-04T08:12:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "53ffe6eaaaaf067533e850cdc119adda",
+  "startTime": "2026-08-06T09:12:00Z",
+  "endTime": "2026-08-06T09:12:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "c1558786bd6e9f1c006c110148761440",
+  "startTime": "2026-08-06T09:48:00Z",
+  "endTime": "2026-08-06T09:48:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "d039d1d55352b3c5c042ff89b35ca641",
+  "startTime": "2026-08-06T10:24:00Z",
+  "endTime": "2026-08-06T10:24:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "6b94808adf671c5493dedc786d071bb4",
+  "startTime": "2026-08-06T15:24:00Z",
+  "endTime": "2026-08-06T15:24:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "b804de593cee605388ac51efeaa251ed",
+  "startTime": "2026-08-08T16:24:00Z",
+  "endTime": "2026-08-08T16:24:30Z",
+  "retentionReason": [
+   "monthly-3"
+  ]
+ },
+ {
+  "id": "6da94b4cb2c26655f8b7187b4c4a2eee",
+  "startTime": "2026-09-15T04:24:00Z",
+  "endTime": "2026-09-15T04:24:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "7861da889dfbf23e360e678c169e0797",
+  "startTime": "2026-09-15T05:00:00Z",
+  "endTime": "2026-09-15T05:00:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "18a1616dddfad781d7e103ab713feb95",
+  "startTime": "2026-09-15T05:12:00Z",
+  "endTime": "2026-09-15T05:12:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "303a421e68f200d9c6712c974b5a0703",
+  "startTime": "2026-09-15T10:12:00Z",
+  "endTime": "2026-09-15T10:12:30Z",
+  "retentionReason": [
+   "monthly-2"
+  ]
+ },
+ {
+  "id": "3bfde5f1a51fd5c024d1d8201c80cf53",
+  "startTime": "2026-10-22T22:12:00Z",
+  "endTime": "2026-10-22T22:12:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "b9abd5d39554e2e6d10f5cf06599beb9",
+  "startTime": "2026-10-22T22:18:00Z",
+  "endTime": "2026-10-22T22:18:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "157dcc87c495d70a903df9b04912bef9",
+  "startTime": "2026-10-22T22:30:00Z",
+  "endTime": "2026-10-22T22:30:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "f0ca54630b7a580086e05275499eb00b",
+  "startTime": "2026-10-22T22:54:00Z",
+  "endTime": "2026-10-22T22:54:30Z",
+  "retentionReason": []
+ },
+ {
+  "id": "10cad05e3b336509f7d20e73de9ef0ef",
+  "startTime": "2026-10-22T23:24:00Z",
+  "endTime": "2026-10-22T23:24:30Z",
+  "retentionReason": [
+   "daily-3"
+  ]
+ },
+ {
+  "id": "6d77b991b4816ca919cc90b806505257",
+  "startTime": "2026-10-23T01:12:00Z",
+  "endTime": "2026-10-23T01:12:30Z",
+  "retentionReason": [
+   "latest-5",
+   "hourly-5"
+  ]
+ },
+ {
+  "id": "ef287922a4684c69f5866b9d23dcb6c0",
+  "startTime": "2026-10-23T03:12:00Z",
+  "endTime": "2026-10-23T03:12:30Z",
+  "retentionReason": [
+   "latest-4",
+   "hourly-4"
+  ]
+ },
+ {
+  "id": "af5e74ad726b61b4a00a10417dd36c87",
+  "startTime": "2026-10-23T21:12:00Z",
+  "endTime": "2026-10-23T21:12:30Z",
+  "retentionReason": [
+   "latest-3",
+   "hourly-3"
+  ]
+ },
+ {
+  "id": "9a4fe112091bbf8ba9cd6fbd729c2008",
+  "startTime": "2026-10-23T23:12:00Z",
+  "endTime": "2026-10-23T23:12:30Z",
+  "retentionReason": [
+   "latest-2",
+   "hourly-2",
+   "daily-2"
+  ]
+ },
+ {
+  "id": "c2964e1c69137ad9cb71b3dff03cb62c",
+  "startTime": "2026-10-24T00:12:00Z",
+  "endTime": "2026-10-24T00:12:30Z",
+  "retentionReason": [
+   "latest-1",
+   "hourly-1",
+   "daily-1",
+   "weekly-1",
+   "monthly-1",
+   "annual-1"
+  ]
+ }
+]

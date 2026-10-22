@@ -1,0 +1,4 @@
+Restoring to local filesystem (/Users/bench/bench/restore/cli/random200m.bin) with parallelism=8...
+Processed 0 (38.5 MB) of 0 (0 B).Processed 0 (75.1 MB) of 0 (0 B).Processed 0 (111.2 MB) of 0 (0 B).Processed 0 (152 MB) of 0 (0 B).  Processed 0 (190.6 MB) of 0 (0 B).Processed 1 (209.7 MB) of 0 (0 B).
+Restored 1 files, 0 directories and 0 symbolic links (209.7 MB).
+
