@@ -320,6 +320,7 @@ struct NotchSettings: View {
                     NotchSectionHeader(module: module, shown: isShown(module),
                                        reason: available ? nil : moduleFeature(module).map { $0.enableReason(l10n) } ?? text.disabled) {
                         if module == .meetings { return ForkMeetingIslandSettings.openFeature() } // FORK(notch-meetings7)
+                        if module == .macBackup { return ForkMacBackupIslandSettings.openFeature() } // FORK(notch-macbackups7)
                         SettingsRouter.shared.request(FeatureSettingsDestination(.features), targetFeature: moduleFeature(module))
                     }
                     if !wide { preview(width: detailWidth, limit: 280) }
@@ -523,6 +524,7 @@ struct NotchSettings: View {
             NotchWatchSettingsControls()
                 .toggleStyle(TrailingSwitchToggleStyle())
         case .meetings: ForkMeetingIslandSettings() // FORK(notch-meetings7)
+        case .macBackup: ForkMacBackupIslandSettings() // FORK(notch-macbackups7)
         case .mixer, .system, .tools:
             EmptyView()
         }
@@ -627,6 +629,7 @@ struct NotchSettings: View {
                 switchRow("speaker.wave.2", locked.sounds, caption: locked.soundsHint, isOn: $lockSounds)
             }
             ForkMeetingIslandActivityCard() // FORK(notch-meetings8)
+            ForkMacBackupIslandActivityCard() // FORK(notch-macbackups8)
         }
     }
 
@@ -821,6 +824,7 @@ struct NotchSettings: View {
     private func controlReason(_ item: NotchControlItem) -> String {
         if item == .dictation, let reason = ForkNotchDictations.controlReason(l10n.language) { return reason } // FORK(notch-dictation5)
         if item == .meeting, let reason = ForkMeetingIslandTile.controlReason(l10n.language) { return reason } // FORK(notch-meeting-tile5)
+        if item == .macBackup, let reason = ForkMacBackupIslandTile.controlReason(l10n.language) { return reason } // FORK(notch-macbackup-tile5)
         // The keyboard light also needs a keyboard that has one.
         if item == .keyboardLight, AppFeature.brightness.isAvailable { return editor.keyboardLightUnavailable }
         switch item.setupRequirement {
@@ -833,6 +837,7 @@ struct NotchSettings: View {
     private func controlUnavailableAction(_ item: NotchControlItem) -> (() -> Void)? {
         if item == .dictation, let action = ForkNotchDictations.controlSetupAction() { return action } // FORK(notch-dictation5)
         if item == .meeting, let action = ForkMeetingIslandTile.controlSetupAction() { return action } // FORK(notch-meeting-tile5)
+        if item == .macBackup, let action = ForkMacBackupIslandTile.controlSetupAction() { return action } // FORK(notch-macbackup-tile5)
         if item == .keyboardLight, AppFeature.brightness.isAvailable { return nil }
         switch item.setupRequirement {
         case .feature(let feature):
@@ -860,6 +865,7 @@ struct NotchSettings: View {
         case .agents: return .notchAgents
         case .watch: return .notchWatch
         case .meetings: return nil // FORK(notch-meetings7)
+        case .macBackup: return nil // FORK(notch-macbackups7)
         }
     }
 

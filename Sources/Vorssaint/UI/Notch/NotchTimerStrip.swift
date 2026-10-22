@@ -139,6 +139,7 @@ struct NotchCompanionMark: View {
         case .timer, .keepAwake, .watch:
             EmptyView()
         case .meeting: EmptyView() // FORK(notch-meeting6)
+        case .macBackup: EmptyView() // FORK(notch-macbackup6)
         }
     }
 
@@ -179,6 +180,7 @@ struct NotchCompanionMark: View {
             let side = min(13, NotchTimerSupport.stripIconSize(height: geometry.compactActivityContentHeight))
             return geometry.compactActivityEdgeInset(boxHeight: side, radius: side / 2)
         case .meeting: return 0 // FORK(notch-meeting6)
+        case .macBackup: return 0 // FORK(notch-macbackup6)
         }
     }
 
@@ -200,6 +202,7 @@ struct NotchCompanionMark: View {
         case .timer, .keepAwake, .watch:
             return companion.title(language)
         case .meeting: return companion.title(language) // FORK(notch-meeting6)
+        case .macBackup: return companion.title(language) // FORK(notch-macbackup6)
         }
     }
 }
