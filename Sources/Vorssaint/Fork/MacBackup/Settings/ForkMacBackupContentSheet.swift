@@ -51,7 +51,7 @@ struct ForkMacBackupContentSheet: View {
                         .frame(width: 20, height: 20)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(source.path == context.home ? text.homeFolder : source.displayName)
+                        Text(source.displayName(.strings(l10n.language), home: context.home))
                         Text(ForkMacBackupFormat.middleTruncated(source.path, limit: 60, home: context.home))
                             .font(.caption)
                             .foregroundStyle(.secondary)

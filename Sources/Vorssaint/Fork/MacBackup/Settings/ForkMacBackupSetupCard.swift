@@ -16,6 +16,8 @@ struct ForkMacBackupSetupCard: View {
 
     @ObservedObject private var l10n = L10n.shared
 
+    private var agentText: ForkMacBackupAgentStrings { .strings(l10n.language) }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 12) {
@@ -83,6 +85,8 @@ struct ForkMacBackupSetupCard: View {
                 if !done {
                     ForkMacBackupCaption(caption(step))
                     detail(step)
+                } else if step == .background, context.registration == .developmentFallback {
+                    ForkMacBackupCaption(agentText.development)
                 }
             }
             .accessibilityElement(children: .combine)
@@ -103,10 +107,15 @@ struct ForkMacBackupSetupCard: View {
         case .engine: return text.stepEngineCaption
         case .diskAccess: return String(format: text.stepDiskAccessCaption, ForkMacBackupAppName.current)
         case .background:
+            // Who backs up now (`ForkMacBackupAgentLink.mode`): without the
+            // agent, the app does, only while it is open.
+            let app = ForkMacBackupAppName.current
+            let appOnly = context.agentLink.mode == .appWhileOpen ? " " + String(format: agentText.appOnly, app) : ""
             switch context.registration {
-            case .failed: return text.stepBackgroundFailed
-            case .notRegistered: return enabled ? text.stepBackgroundCaption : text.stepBackgroundAfterSwitch
-            default: return text.stepBackgroundCaption
+            case .requiresApproval: return String(format: agentText.needsApproval, app) + appOnly
+            case .failed: return text.stepBackgroundFailed + appOnly
+            case .notRegistered: return enabled ? text.stepBackgroundCaption + appOnly : text.stepBackgroundAfterSwitch
+            case .enabled, .developmentFallback: return text.stepBackgroundCaption
             }
         case .repository: return text.stepRepositoryCaption
         case .kit: return text.stepKitCaption

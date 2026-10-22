@@ -90,9 +90,16 @@ enum ForkMacBackupCoreTests {
                      "identities and short IDs read and print")
 
         let source = ForkMacBackupSource(path: "/Users/test", presets: [.logs, .trash, .logs], customRules: ["*.tmp", "*.log"])
-        suite.expect(roundTrips(source) && source.presets == [.trash, .logs] && source.displayName == "test"
+        suite.expect(roundTrips(source) && source.presets == [.trash, .logs]
                         && source.ignoreRules == ["/.Trash/", "*.log", "*.tmp"],
                      "a source keeps its presets once, in a stable order, and its rules without duplicates")
+        let fr = ForkMacBackupStrings.strings(.fr)
+        suite.expect(source.displayName(fr, home: "/Users/test") == "Dossier personnel"
+                        && source.displayName(fr, home: "/Users/other") == "test"
+                        && ForkMacBackupFormat.sourceName("/Users/louis/", text: fr, userName: "louis", home: "/Users/m") == "Dossier personnel"
+                        && ForkMacBackupFormat.sourceName("/Users/m/Documents", text: fr, home: "/Users/m") == "Documents"
+                        && ForkMacBackupFormat.sourceName("/", text: fr, home: "/Users/m") == "/",
+                     "a home folder reads « Dossier personnel », never the account's name; other sources their folder's")
         let rules = ForkMacBackupPolicyRules(source: source, extraRules: ["/big.raw"], retention: .balanced)
         suite.expect(rules.ignoreRules == rules.ignoreRules.sorted() && rules.manual && !rules.ignoreCacheDirs
                         && rules == ForkMacBackupPolicyRules(ignoreRules: rules.ignoreRules.reversed(),

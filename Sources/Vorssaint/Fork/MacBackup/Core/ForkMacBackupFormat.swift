@@ -8,6 +8,24 @@ import Foundation
 /// tests pin it. Never assume a 24-hour clock: the locale's hour cycle
 /// decides (the CI runs in 12-hour).
 enum ForkMacBackupFormat {
+    /// How a source is named everywhere (island, window, settings): a home
+    /// folder is « Dossier personnel » (this Mac's, or `userName`'s on
+    /// another Mac), any other source its folder's name. Never the account's
+    /// name.
+    static func sourceName(_ path: String, text: ForkMacBackupStrings, userName: String? = nil,
+                           home: String = NSHomeDirectory()) -> String {
+        func trimmed(_ value: String) -> String {
+            var value = value
+            while value.count > 1, value.hasSuffix("/") { value.removeLast() }
+            return value
+        }
+        let normalized = trimmed(path)
+        if normalized == trimmed(home) { return text.homeFolder }
+        if let userName, !userName.isEmpty, normalized == "/Users/" + userName { return text.homeFolder }
+        let name = (normalized as NSString).lastPathComponent
+        return name.isEmpty || name == "/" ? normalized : name
+    }
+
     /// A size as the Finder writes it (« 1,3 Go »). Every size the feature
     /// shows is a real one (decision 1 of 22/10): sparse images are out of
     /// the sources by default, and the scanner reads allocated sizes.

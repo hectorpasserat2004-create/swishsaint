@@ -91,7 +91,7 @@ struct ForkMacBackupWindowView: View {
         return Label {
             HStack(spacing: 6) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(key.displayName)
+                    Text(key.displayName(shared))
                         .lineLimit(1)
                     if let subtitle {
                         Text(subtitle)
@@ -147,7 +147,7 @@ struct ForkMacBackupBrowseView: View {
             content
             ForkMacBackupTimelineBar(model: model)
         }
-        .navigationTitle(model.selectedKey?.displayName ?? text.windowTitle)
+        .navigationTitle(model.selectedKey?.displayName(shared) ?? text.windowTitle)
         .navigationSubtitle(subtitle)
         .toolbar { toolbar }
         .inspector(isPresented: Binding(get: { model.inspectorShown && model.selectedSnapshot != nil },
@@ -298,7 +298,7 @@ struct ForkMacBackupPathBar: View {
             .disabled(model.folder.isEmpty)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 2) {
-                    crumb(model.selectedKey?.displayName ?? "", symbol: ForkMacBackupWindowStyle.symbol(
+                    crumb(model.selectedKey?.displayName(model.shared) ?? "", symbol: ForkMacBackupWindowStyle.symbol(
                         forSource: model.selectedKey?.path ?? ""), depth: 0, last: model.folder.isEmpty)
                     ForEach(Array(model.folder.enumerated()), id: \.offset) { index, name in
                         Image(systemName: "chevron.compact.right")

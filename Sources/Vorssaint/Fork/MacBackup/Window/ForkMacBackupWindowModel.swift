@@ -13,7 +13,10 @@ struct ForkMacBackupSourceKey: Hashable, Identifiable {
 
     var id: String { "\(userName)@\(host):\(path)" }
     var machine: String { "\(userName)@\(host)" }
-    var displayName: String { ForkMacBackupSource(path: path).displayName }
+    /// « Dossier personnel » for that account's home, else the folder's name.
+    func displayName(_ text: ForkMacBackupStrings) -> String {
+        ForkMacBackupFormat.sourceName(path, text: text, userName: userName)
+    }
 
     init(userName: String, host: String, path: String) {
         self.userName = userName

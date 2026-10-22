@@ -19,6 +19,8 @@ struct ForkMacBackupStrings {
     let featureTitle: String
     /// The island's section and the Command Bar (island).
     let islandTitle: String
+    /// A home folder as a source: « Dossier personnel », never the account's name.
+    let homeFolder: String
 
     // MARK: States (island)
     let off: String
@@ -216,6 +218,7 @@ extension ForkMacBackupStrings {
     static let enUS = ForkMacBackupStrings(
         featureTitle: "Mac Backup",
         islandTitle: "Backup",
+        homeFolder: "Home folder",
         off: "Off",
         notConfigured: "Not set up",
         protected: "Protected",
@@ -327,6 +330,7 @@ extension ForkMacBackupStrings {
     static let fr = ForkMacBackupStrings(
         featureTitle: "Sauvegarde du Mac",
         islandTitle: "Sauvegarde",
+        homeFolder: "Dossier personnel",
         off: "Désactivée",
         notConfigured: "Non configurée",
         protected: "Protégé",
@@ -438,6 +442,7 @@ extension ForkMacBackupStrings {
     static let ptBR = ForkMacBackupStrings(
         featureTitle: "Backup do Mac",
         islandTitle: "Backup do Mac",
+        homeFolder: "Pasta de início",
         off: "Desativado",
         notConfigured: "Não configurado",
         protected: "Protegido",
@@ -549,6 +554,7 @@ extension ForkMacBackupStrings {
     static let tr = ForkMacBackupStrings(
         featureTitle: "Mac Yedekleme",
         islandTitle: "Yedekleme",
+        homeFolder: "Ev klasörü",
         off: "Kapalı",
         notConfigured: "Ayarlanmadı",
         protected: "Korunuyor",
@@ -660,6 +666,7 @@ extension ForkMacBackupStrings {
     static let ru = ForkMacBackupStrings(
         featureTitle: "Резервное копирование Mac",
         islandTitle: "Резервная копия",
+        homeFolder: "Домашняя папка",
         off: "Выключено",
         notConfigured: "Не настроено",
         protected: "Защищён",
@@ -771,6 +778,7 @@ extension ForkMacBackupStrings {
     static let es = ForkMacBackupStrings(
         featureTitle: "Copia de seguridad del Mac",
         islandTitle: "Copia de seguridad",
+        homeFolder: "Carpeta de inicio",
         off: "Desactivada",
         notConfigured: "Sin configurar",
         protected: "Protegido",
@@ -882,6 +890,7 @@ extension ForkMacBackupStrings {
     static let sk = ForkMacBackupStrings(
         featureTitle: "Záloha Macu",
         islandTitle: "Záloha",
+        homeFolder: "Domovský priečinok",
         off: "Vypnutá",
         notConfigured: "Nenastavená",
         protected: "Chránený",
@@ -993,6 +1002,7 @@ extension ForkMacBackupStrings {
     static let de = ForkMacBackupStrings(
         featureTitle: "Mac-Backup",
         islandTitle: "Sicherung",
+        homeFolder: "Benutzerordner",
         off: "Aus",
         notConfigured: "Nicht eingerichtet",
         protected: "Geschützt",
@@ -1104,6 +1114,7 @@ extension ForkMacBackupStrings {
     static let it = ForkMacBackupStrings(
         featureTitle: "Backup del Mac",
         islandTitle: "Backup del Mac",
+        homeFolder: "Cartella Inizio",
         off: "Disattivato",
         notConfigured: "Non configurato",
         protected: "Protetto",
@@ -1215,6 +1226,7 @@ extension ForkMacBackupStrings {
     static let ja = ForkMacBackupStrings(
         featureTitle: "Macのバックアップ",
         islandTitle: "バックアップ",
+        homeFolder: "ホームフォルダ",
         off: "オフ",
         notConfigured: "未設定",
         protected: "保護済み",
@@ -1326,6 +1338,7 @@ extension ForkMacBackupStrings {
     static let ko = ForkMacBackupStrings(
         featureTitle: "Mac 백업",
         islandTitle: "백업",
+        homeFolder: "홈 폴더",
         off: "끔",
         notConfigured: "설정 안 됨",
         protected: "보호됨",
@@ -1437,6 +1450,7 @@ extension ForkMacBackupStrings {
     static let uk = ForkMacBackupStrings(
         featureTitle: "Резервне копіювання Mac",
         islandTitle: "Резервна копія",
+        homeFolder: "Домашня папка",
         off: "Вимкнено",
         notConfigured: "Не налаштовано",
         protected: "Захищено",
@@ -1548,6 +1562,7 @@ extension ForkMacBackupStrings {
     static let zhHans = ForkMacBackupStrings(
         featureTitle: "Mac 备份",
         islandTitle: "备份",
+        homeFolder: "个人文件夹",
         off: "已关闭",
         notConfigured: "未设置",
         protected: "已保护",
@@ -1659,6 +1674,7 @@ extension ForkMacBackupStrings {
     static let zhTW = ForkMacBackupStrings(
         featureTitle: "Mac 備份",
         islandTitle: "備份",
+        homeFolder: "個人專屬檔案夾",
         off: "已關閉",
         notConfigured: "未設定",
         protected: "已保護",
@@ -1770,6 +1786,7 @@ extension ForkMacBackupStrings {
     static let zhHK = ForkMacBackupStrings(
         featureTitle: "Mac 備份",
         islandTitle: "備份",
+        homeFolder: "個人專屬資料夾",
         off: "已關閉",
         notConfigured: "未設定",
         protected: "已保護",

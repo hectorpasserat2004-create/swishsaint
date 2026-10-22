@@ -424,7 +424,7 @@ struct ForkMacBackupIslandSection: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(Self.color(for: source.state))
                 .frame(width: 14)
-            Text(source.displayName)
+            Text(source.displayName(text))
                 .font(.system(size: 11, weight: .semibold))
                 .lineLimit(1)
             Text(sourceState(source, now: now))

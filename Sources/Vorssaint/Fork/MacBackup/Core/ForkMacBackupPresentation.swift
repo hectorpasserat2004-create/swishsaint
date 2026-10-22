@@ -91,7 +91,7 @@ struct ForkMacBackupPresentation: Codable, Equatable {
 
         var id: String { path }
         var proof: ForkMacBackupProofLevel? { last?.level }
-        var displayName: String { ForkMacBackupSource(path: path).displayName }
+        func displayName(_ text: ForkMacBackupStrings) -> String { ForkMacBackupFormat.sourceName(path, text: text) }
 
         init(path: String, state: SourceState = .idle, last: SnapshotSummary? = nil, lastComplete: SnapshotSummary? = nil) {
             self.path = path

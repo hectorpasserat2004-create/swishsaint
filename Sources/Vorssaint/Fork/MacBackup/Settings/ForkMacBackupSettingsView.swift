@@ -106,9 +106,8 @@ struct ForkMacBackupSettingsView: View {
         _ = presetsStorage
         _ = rulesStorage
         let sources = context.effectiveSources
-        let what = sources.count == 1 && sources[0].path == context.home
-            ? text.homeFolder
-            : (sources.count == 1 ? sources[0].displayName : text.folderCount(sources.count, language: language))
+        let what = sources.count == 1 ? sources[0].displayName(.strings(language), home: context.home)
+            : text.folderCount(sources.count, language: language)
         var parts = [what]
         let size = context.preview?.includedBytes ?? status.presentation.capacity.protectedBytes
         if let size { parts.append(ForkMacBackupFormat.bytes(size, locale: language.formattingLocale())) }

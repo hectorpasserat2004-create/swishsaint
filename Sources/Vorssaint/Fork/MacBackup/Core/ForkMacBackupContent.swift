@@ -117,10 +117,9 @@ struct ForkMacBackupSource: Codable, Equatable, Identifiable {
         self.customRules = customRules
     }
 
-    /// The source's folder name, « Documents », for a short line.
-    var displayName: String {
-        let name = (path as NSString).lastPathComponent
-        return name.isEmpty ? path : name
+    /// The source as people name it (« Dossier personnel », « Documents »).
+    func displayName(_ text: ForkMacBackupStrings, home: String = NSHomeDirectory()) -> String {
+        ForkMacBackupFormat.sourceName(path, text: text, home: home)
     }
 
     /// Every ignore rule of the source: its presets' patterns, then its own,
