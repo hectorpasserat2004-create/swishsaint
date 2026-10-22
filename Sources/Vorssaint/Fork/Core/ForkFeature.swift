@@ -13,6 +13,7 @@ enum ForkFeature: String, CaseIterable, Identifiable {
     case trackpadGestures
     case dictation
     case meetings
+    case macBackup
 
     var id: String { rawValue }
 
@@ -22,6 +23,7 @@ enum ForkFeature: String, CaseIterable, Identifiable {
         case .trackpadGestures: return ForkDefaultsKey.gesturesEnabled
         case .dictation: return ForkDefaultsKey.dictationEnabled
         case .meetings: return ForkDefaultsKey.meetingsEnabled
+        case .macBackup: return ForkDefaultsKey.macBackupEnabled
         }
     }
 
@@ -30,6 +32,7 @@ enum ForkFeature: String, CaseIterable, Identifiable {
         case .trackpadGestures: return "hand.draw"
         case .dictation: return "waveform"
         case .meetings: return "record.circle"
+        case .macBackup: return "clock.arrow.circlepath"
         }
     }
 
@@ -39,6 +42,7 @@ enum ForkFeature: String, CaseIterable, Identifiable {
         case .trackpadGestures: return .blue
         case .dictation: return .purple
         case .meetings: return .red
+        case .macBackup: return .teal
         }
     }
 
@@ -47,7 +51,7 @@ enum ForkFeature: String, CaseIterable, Identifiable {
     var needsAccessibility: Bool {
         switch self {
         case .trackpadGestures, .dictation: return true
-        case .meetings: return false
+        case .meetings, .macBackup: return false
         }
     }
 
@@ -56,7 +60,7 @@ enum ForkFeature: String, CaseIterable, Identifiable {
     var needsScreenRecording: Bool {
         switch self {
         case .meetings: return true
-        case .trackpadGestures, .dictation: return false
+        case .trackpadGestures, .dictation, .macBackup: return false
         }
     }
 
@@ -65,7 +69,7 @@ enum ForkFeature: String, CaseIterable, Identifiable {
     var needsMicrophone: Bool {
         switch self {
         case .meetings: return true
-        case .trackpadGestures, .dictation: return false
+        case .trackpadGestures, .dictation, .macBackup: return false
         }
     }
 
@@ -74,6 +78,7 @@ enum ForkFeature: String, CaseIterable, Identifiable {
         case .trackpadGestures: return text.gesturesTitle
         case .dictation: return text.dictationTitle
         case .meetings: return text.meetingsTitle
+        case .macBackup: return text.macBackupTitle
         }
     }
 
@@ -82,6 +87,7 @@ enum ForkFeature: String, CaseIterable, Identifiable {
         case .trackpadGestures: return text.gesturesSummary
         case .dictation: return text.dictationSummary
         case .meetings: return text.meetingsSummary
+        case .macBackup: return text.macBackupSummary
         }
     }
 
@@ -93,6 +99,7 @@ enum ForkFeature: String, CaseIterable, Identifiable {
         case .trackpadGestures: ForkGestures.sync()
         case .dictation: ForkDictationService.sync()
         case .meetings: ForkMeetingService.sync()
+        case .macBackup: ForkMacBackupApp.sync()
         }
     }
 }

@@ -436,6 +436,7 @@ enum SettingsDirectory {
                                                  FeatureStrings.radialMenu(language).kindSubmenu,
                                                  FeatureStrings.radialMenu(language).mouseTriggerRequirement]),
                 ForkSettingsPages.item(.dictation, language: language), // FORK(settings4)
+                ForkSettingsPages.item(.macBackup, language: language), // FORK(settings4)
             ]),
             (categories.app, [
                 SettingsDirectoryItem(page: .shortcuts, title: s.shortcutsPageTitle, icon: "command",
