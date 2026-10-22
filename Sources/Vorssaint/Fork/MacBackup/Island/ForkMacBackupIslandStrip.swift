@@ -138,8 +138,22 @@ struct ForkMacBackupIslandStrip: View {
         let side = NotchCapsuleLayout.side(geometry)
         let layout = NotchCapsuleLayout.self
         return HStack(spacing: layout.spacing) {
-            mark(snapshot, side: layout.symbolWidth)
-                .frame(width: layout.symbolWidth)
+            // With the meter beside it the mark need not fill too, as the
+            // downloads' arrow does not: the ring only turns while no share is known.
+            Group {
+                if snapshot.progress != nil {
+                    Image(systemName: snapshot.glyph.capsuleSymbol)
+                        .font(.system(size: layout.symbolSize, weight: .medium))
+                        .foregroundStyle(Color.teal)
+                        .id(snapshot.glyph)
+                        .transition(.blurReplace)
+                } else {
+                    mark(snapshot, side: layout.symbolWidth)
+                }
+            }
+            .frame(width: layout.symbolWidth)
+            .animation(reduceMotion ? nil : .smooth(duration: 0.3), value: snapshot.glyph)
+            .accessibilityHidden(true)
             if let fraction = snapshot.progress {
                 NotchMeter(value: fraction, height: layout.meterHeight, tint: .teal)
                     .frame(width: layout.downloadMeterWidth)

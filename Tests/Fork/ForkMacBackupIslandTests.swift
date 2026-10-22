@@ -198,6 +198,15 @@ enum ForkMacBackupIslandTests {
                         && ForkMacBackupIslandRules.sectionHeight("compact") == 180
                         && ForkMacBackupIslandRules.sectionHeight(nil) == 180,
                      "the section is 180 pt, or 264 pt spacious")
+        let bare = AppLanguage.allCases.map { ForkMacBackupIslandRules.bare(ForkMacBackupStrings.strings($0).running) }
+        suite.expect(bare.allSatisfy { !$0.isEmpty && !$0.contains("%") && !$0.hasSuffix("·") && !$0.hasSuffix(" ") }
+                        && ForkMacBackupIslandRules.bare(ForkMacBackupStrings.fr.running) == "Sauvegarde",
+                     "the card's title without its figure, in every language: \(bare)")
+        let frText = ForkMacBackupStrings.fr
+        suite.expect(ForkMacBackupIslandRules.heroTitle(ForkMacBackupPresentation.preview(.protected, now: now), text: frText) == "Protégé"
+                        && ForkMacBackupIslandRules.heroTitle(ForkMacBackupPresentation.preview(.running42, now: now), text: frText) == "Sauvegarde"
+                        && ForkMacBackupIslandRules.heroTitle(ForkMacBackupPresentation.preview(.scanning, now: now), text: frText) == nil,
+                     "the ring says the figure, the title never repeats it")
 
         let fr = locale("fr_FR")
         let today = ForkMacBackupIslandRules.when(now.addingTimeInterval(-2 * hour), now: now, locale: fr, calendar: calendar)
@@ -210,9 +219,10 @@ enum ForkMacBackupIslandTests {
         let text = ForkMacBackupStrings.strings(.fr)
         let fr = locale("fr_FR")
         let rest = ForkMacBackupPresentation.preview(.protected, now: now)
-        let reading = ForkMacBackupIslandRules.tileReading(rest, text: text, locale: fr, reading: .percent, now: now)
-        suite.expect(reading?.contains("2") == true && reading?.lowercased().contains("il y a") == true,
-                     "the tile reads « il y a 2 h » at rest: \(String(describing: reading))")
+        suite.expect(ForkMacBackupIslandRules.tileReading(rest, text: text, locale: fr, reading: .percent, now: now) == nil
+                        && ForkMacBackupIslandRules.tileReading(ForkMacBackupPresentation.preview(.failedChainBroken, now: now),
+                                                                text: text, locale: fr, reading: .percent, now: now) == nil,
+                     "at rest the tile only names the section: the state lives inside it (decision 2)")
         let running = ForkMacBackupIslandRules.tileReading(ForkMacBackupPresentation.preview(.running42, now: now),
                                                            text: text, locale: fr, reading: .percent, now: now)
         suite.expect(running?.hasPrefix("42") == true, "« 42 % » while it runs")
@@ -222,8 +232,8 @@ enum ForkMacBackupIslandTests {
         let broken = ForkMacBackupIslandRules.tileAccent(ForkMacBackupPresentation.preview(.failedChainBroken, now: now))
         let busy = ForkMacBackupIslandRules.tileAccent(ForkMacBackupPresentation.preview(.running42, now: now))
         let calm = ForkMacBackupIslandRules.tileAccent(rest)
-        suite.expect(broken.active && broken.alert && busy.active && !busy.alert && !calm.active,
-                     "the tile lights while running, in red while the chain is broken")
+        suite.expect(!broken.active && !broken.alert && busy.active && !busy.alert && !calm.active,
+                     "the tile lights while running, never in red: no alert outside the section (decision 3)")
     }
 
     // MARK: Notices

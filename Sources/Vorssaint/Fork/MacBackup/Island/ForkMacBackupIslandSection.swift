@@ -87,20 +87,20 @@ struct ForkMacBackupIslandSection: View {
 
     @ViewBuilder private func band(_ state: ForkMacBackupPresentation, top: ForkMacBackupIslandRules.Top) -> some View {
         // The card's own button says it when it has one: never twice.
+        // The pause has its menu among the actions while a backup runs.
         switch Self.heroHasAction(top) ? ForkMacBackupIslandRules.Primary.none : ForkMacBackupIslandRules.primary(state.phase) {
         case .backUpNow, .backUpAnyway:
             NotchIconButton(symbol: "arrow.clockwise", title: text.backUpNow) { send(.backUpNow) }
-        case .pause:
-            NotchIconButton(symbol: "pause.fill", title: text.pause) {
-                send(.pause(until: ForkMacBackupIslandRules.pauseEnd(.oneHour, now: Date())))
-            }
         case .resume:
             NotchIconButton(symbol: "play.fill", title: text.resume) { send(.resume) }
-        case .none:
+        case .pause, .none:
             EmptyView()
         }
-        NotchIconButton(symbol: "arrow.up.forward.app", title: text.openBackups) {
-            service.perform { ForkMacBackupWindow.open(.browse) }
+        // Nothing to open before a backup is set up: the page's own button leads there.
+        if top != .off, top != .notConfigured {
+            NotchIconButton(symbol: "arrow.up.forward.app", title: text.openBackups) {
+                service.perform { ForkMacBackupWindow.open(.browse) }
+            }
         }
     }
 
@@ -116,6 +116,8 @@ struct ForkMacBackupIslandSection: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .contentTransition(.opacity)
+                    // The ring's figure is drawn, not read: the full sentence is.
+                    .accessibilityLabel(spokenHeadline(state, top: top, now: now))
                     .accessibilityAddTraits(.isHeader)
                 lines(state, top: top, now: now)
             }
@@ -132,8 +134,19 @@ struct ForkMacBackupIslandSection: View {
         case .failed(let failure): return failure.title(text)
         case .partial(let files): return text.partial(files, language: l10n.language)
         default:
+            if let title = ForkMacBackupIslandRules.heroTitle(state, text: text) { return title }
             let reading = ForkMacBackupIslandModel.shared.readingSetting
             return state.headline(text, language: l10n.language, locale: locale, now: now, reading: reading)
+        }
+    }
+
+    private func spokenHeadline(_ state: ForkMacBackupPresentation, top: ForkMacBackupIslandRules.Top,
+                                now: Date) -> String {
+        switch top {
+        case .failed, .partial: return headline(state, top: top, now: now)
+        default:
+            return state.headline(text, language: l10n.language, locale: locale, now: now,
+                                  reading: ForkMacBackupIslandModel.shared.readingSetting)
         }
     }
 
@@ -189,12 +202,6 @@ struct ForkMacBackupIslandSection: View {
                                     now: Date) -> some View {
         switch top {
         case .running, .restoring, .verifying, .maintaining:
-            if let fraction = state.fraction {
-                NotchMeter(value: fraction, height: 4,
-                           tint: ForkMacBackupIslandRules.readingIsSlowed(state) ? .orange : .teal)
-                    .animation(reduceMotion ? nil : .smooth(duration: 0.3), value: fraction)
-                    .padding(.vertical, 2)
-            }
             if let progress = state.progress, progress.bytesDone > 0 || progress.bytesTotal != nil,
                let line = state.progressLine(text, locale: locale) {
                 caption(line, digits: true)
@@ -384,18 +391,8 @@ struct ForkMacBackupIslandSection: View {
                 send(.pause(until: ForkMacBackupIslandRules.pauseEnd(choice, now: now)))
             }
         }
-        return NotchMenuButton(title: text.pause, items: items, cornerRadius: 8) {
-            HStack(spacing: 5) {
-                Image(systemName: "pause.fill").font(.system(size: 10, weight: .bold))
-                Text(text.pause).lineLimit(1).fixedSize()
-                Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).opacity(0.7)
-            }
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 10)
-            .frame(minHeight: 28)
-            .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        return NotchMenuButton(title: text.pause, items: items, cornerRadius: 14) {
+            ForkMacBackupIslandPill(symbol: "pause.fill", title: text.pause, chevron: true)
         }
     }
 

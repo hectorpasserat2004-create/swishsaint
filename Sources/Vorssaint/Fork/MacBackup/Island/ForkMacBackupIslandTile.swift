@@ -5,9 +5,9 @@ import SwiftUI
 
 /// The island's Backup button among its controls (seams
 /// `notch-macbackup-tile*`): it opens the Backup section, where « Back Up
-/// Now », the pause and the rest live (decision 2 of 22/10). Being inside
-/// the island, it may say the state: « 42 % » lit while something runs,
-/// « il y a 2 h » at rest, red while the chain is broken.
+/// Now », the pause and the rest live (decision 2 of 22/10). Like the
+/// timer's, it lights with « 42 % » while something runs; at rest it only
+/// names the section, and never turns red (decision 3).
 struct ForkMacBackupIslandTile: View {
     let service: NotchService
     @ObservedObject private var status: ForkMacBackupStatusModel
@@ -20,21 +20,15 @@ struct ForkMacBackupIslandTile: View {
     }
 
     var body: some View {
-        // The age moves slowly: once a minute is enough.
-        TimelineView(.periodic(from: Date(), by: 60)) { context in
-            tile(now: context.date)
-        }
-    }
-
-    private func tile(now: Date) -> some View {
+        let now = Date()
         let state = status.presentation
         let text = ForkMacBackupStrings.strings(l10n.language)
         let accent = ForkMacBackupIslandRules.tileAccent(state)
         let reading = ForkMacBackupIslandRules.tileReading(
             state, text: text, locale: l10n.language.formattingLocale(),
             reading: ForkMacBackupReading(rawValue: readingStored) ?? .fallback, now: now)
-        return NotchActionTile(symbol: NotchControlItem.macBackup.symbol, title: Self.title(l10n.language),
-                               reading: reading, active: accent.active, accent: accent.alert ? .alert : .selection) {
+        NotchActionTile(symbol: NotchControlItem.macBackup.symbol, title: Self.title(l10n.language),
+                        reading: reading, active: accent.active, accent: accent.alert ? .alert : .selection) {
             ForkMacBackupIsland.openSection(from: service)
         }
         .accessibilityHint(ForkMacBackupIslandStrings.strings(l10n.language).activityHint)

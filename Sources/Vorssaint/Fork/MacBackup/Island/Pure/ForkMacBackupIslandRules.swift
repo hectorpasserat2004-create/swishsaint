@@ -55,6 +55,16 @@ enum ForkMacBackupIslandRules {
             case .done: return "checkmark"
             }
         }
+
+        /// The filled mark the capsule shows beside its meter.
+        var capsuleSymbol: String {
+            switch self {
+            case .upload: return "arrow.up.circle.fill"
+            case .download: return "arrow.down.circle.fill"
+            case .verify: return "checkmark.shield.fill"
+            case .done: return "checkmark.circle.fill"
+            }
+        }
     }
 
     static func glyph(phase: ForkMacBackupPhase, finishing: Bool) -> Glyph {
@@ -121,6 +131,26 @@ enum ForkMacBackupIslandRules {
         case .verifying: return .verifying
         case .maintaining: return .maintaining
         }
+    }
+
+    /// The section card's title where its ring already says the number:
+    /// « Protégé » beside « 2 h », « Sauvegarde » around « 42 % », never the
+    /// same figure twice. Nil: the state's own headline.
+    static func heroTitle(_ state: ForkMacBackupPresentation, text: ForkMacBackupStrings) -> String? {
+        switch state.phase {
+        case .ready, .finished(.nothingToDo):
+            return state.protectedSince == nil ? nil : text.protected
+        case .uploading where state.fraction != nil: return bare(text.running)
+        case .slowed where state.fraction != nil: return bare(text.slowed)
+        default: return nil
+        }
+    }
+
+    /// « Sauvegarde · %@ » without its figure: « Sauvegarde ».
+    static func bare(_ format: String) -> String {
+        var words = format.replacingOccurrences(of: "%@", with: "")
+        while let last = words.last, last == " " || last == "·" || last == "\u{00A0}" { words.removeLast() }
+        return words
     }
 
     /// The one button beside the camera.
@@ -229,23 +259,19 @@ enum ForkMacBackupIslandRules {
 
     // MARK: - The tile
 
-    /// The tile's reading: « 42 % » while something runs, « il y a 2 h » at
-    /// rest, nothing before the first backup.
+    /// The tile's reading: « 42 % » while something runs, as the closed
+    /// island shows it; nothing otherwise: the state lives in the section the
+    /// tile opens (decision 2 of 22/10), never a delay outside it.
     static func tileReading(_ state: ForkMacBackupPresentation, text: ForkMacBackupStrings, locale: Locale,
                             reading: ForkMacBackupReading, now: Date) -> String? {
-        if state.phase.showsInClosedIsland { return state.compactValue(text, locale: locale, reading: reading) }
-        switch state.phase {
-        case .off, .notConfigured: return nil
-        default: return state.lastBackup.map { ForkMacBackupFormat.relative($0.date, now: now, locale: locale) }
-        }
+        guard state.phase.showsInClosedIsland else { return nil }
+        return state.compactValue(text, locale: locale, reading: reading)
     }
 
-    /// The tile lights while something runs (white), or in red while the
-    /// chain is broken: the tile is inside the island, where the state may
-    /// show.
+    /// The tile lights while something runs, like the timer's; never in red:
+    /// a broken chain is told in the section only (decision 3 of 22/10).
     static func tileAccent(_ state: ForkMacBackupPresentation) -> (active: Bool, alert: Bool) {
-        let broken = state.hasBrokenNode || state.phase == .finished(.failed(.chainBroken))
-        return (state.phase.showsInClosedIsland || broken, broken && !state.phase.showsInClosedIsland)
+        (state.phase.showsInClosedIsland, false)
     }
 
     // MARK: - Notices
