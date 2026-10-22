@@ -43,6 +43,8 @@ struct ForkCastralChoice: Identifiable, Equatable {
     var proposed: String?
     var loading = true
     var failure: ForkMeetingExportFailure?
+    /// "Change Appointment…": the one the meeting is on now, never offered.
+    var current: String?
 }
 
 /// A meeting in the CRM, as the island's Meetings page and the library's
@@ -256,20 +258,28 @@ extension ForkMeetingExports {
 
     /// "Export To" a CRM: a deposit under way goes on (sent again, started,
     /// retried, followed) without a question; otherwise the sheet asks
-    /// which appointment, the likeliest chosen.
-    func askCastralChoice(_ folder: URL, _ config: ForkMeetingExporterConfig) {
+    /// which appointment, the likeliest chosen. `moving`: "Change
+    /// Appointment…", the same sheet for a deposit already made.
+    func askCastralChoice(_ folder: URL, _ config: ForkMeetingExporterConfig, moving: Bool = false) {
         let name = title(config, ForkMeetingStrings.current)
         DispatchQueue.global(qos: .userInitiated).async { [self] in
             let read = store.sidecar(in: folder)
             guard case let .success(sidecar) = read else {
                 return DispatchQueue.main.async { [self] in refuse(folder, config.id, .unreadable) }
             }
+            var current: String?
             if let record = ForkCastralRecord(json: sidecar.castral), record.target == config.id {
-                return DispatchQueue.main.async { [self] in enqueue(folder, config, automatic: false) }
+                guard moving, let booking = record.booking else {
+                    return DispatchQueue.main.async { [self] in enqueue(folder, config, automatic: false) }
+                }
+                current = booking
+            } else if moving {
+                return
             }
             let startedAt = sidecar.startedAt ?? Date()
             var choice = ForkCastralChoice(folder: folder, target: config.id, name: name, startedAt: startedAt,
                                            recordedSeconds: sidecar.recordedSeconds)
+            choice.current = current
             DispatchQueue.main.async { [self] in castralChoice = choice }
             let exporter = castralExporter(config, request: nil)
             do {
@@ -280,6 +290,7 @@ extension ForkMeetingExports {
                     choice.bookings = ForkCastralMatch.candidates(bookings, startedAt: startedAt)
                     choice.proposed = ForkCastralMatch.choose(bookings, meetCode: sidecar.meetCode, startedAt: startedAt,
                                                               endedAt: sidecar.endedAt)?.booking.id
+                    if choice.proposed == current { choice.proposed = nil }
                 case let .failure(failure):
                     choice.failure = failure.exportFailure
                 }
@@ -300,6 +311,66 @@ extension ForkMeetingExports {
         guard let config = config(choice.target), config.kind == .castral else { return }
         enqueue(choice.folder, config, automatic: false,
                 request: ForkCastralRequest(bookingID: booking, complement: ForkCastralContract.complement(complement)))
+    }
+
+    // MARK: - Another appointment
+
+    /// "Change Appointment…" under the CRM's line: the choice, for a
+    /// meeting already deposited.
+    func askCastralMove(_ folder: URL) {
+        guard let config = castralConfig, !listChanged else { return }
+        askCastralChoice(folder, config, moving: true)
+    }
+
+    /// "Move": the deposit goes to the appointment chosen, nothing sent or
+    /// transcribed again; the server puts back the previous one's notes and
+    /// writes the report again. What became of them is said under the line.
+    func confirmCastralMove(_ choice: ForkCastralChoice, booking: String) {
+        castralChoice = nil
+        guard let config = config(choice.target), config.kind == .castral, booking != choice.current else { return }
+        let folder = choice.folder
+        let key = Self.key(folder, config.id)
+        let path = folder.standardizedFileURL.path
+        guard !pending.contains(key), castralMoving.insert(path).inserted else { return }
+        castralSaid[key] = nil
+        let chosen = choice.bookings.first { $0.id == booking }
+        let exporter = castralExporter(config, request: nil)
+        let text = ForkMeetingStrings.current
+        DispatchQueue.global(qos: .userInitiated).async { [self] in
+            var said: String
+            var written: (folder: URL, record: ForkCastralRecord)?
+            do {
+                guard case let .success(sidecar) = store.sidecar(in: folder),
+                      var record = ForkCastralRecord(json: sidecar.castral), record.target == config.id else {
+                    throw ForkMeetingExportFailure.unreadable
+                }
+                let client = try exporter.credentials()
+                switch try Self.blocking({ await client.move(record.deposit, to: booking) }) {
+                case let .success(.moved(answer)):
+                    record.moved(answer, booking: chosen, at: Date())
+                    said = text.castralMoved(answer.oldNotes)
+                    if let at = store.writeCastral(record, in: folder, id: sidecar.id) {
+                        written = (at, record)
+                    } else {
+                        Self.castralLog.error("moved on the server, but its meeting.json was not written")
+                    }
+                case .success(.unsupported):
+                    said = text.castralMoveUnsupported
+                case let .failure(failure):
+                    said = failure.said ?? failure.exportFailure.message(text)
+                }
+            } catch {
+                said = (error as? ForkMeetingExportFailure ?? .network).message(text)
+            }
+            DispatchQueue.main.async { [self] in
+                castralMoving.remove(path)
+                castralSaid[key] = said
+                if let written {
+                    castralRecords[written.folder.standardizedFileURL.path] = written.record
+                    castralTracker.follow(written.folder, target: config.id)
+                }
+            }
+        }
     }
 
     // MARK: - Read by the island and the library

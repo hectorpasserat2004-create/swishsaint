@@ -118,6 +118,23 @@ struct ForkCastralClient {
         await command("POST", ForkCastralContract.retryPath(id)).map { _ in () }
     }
 
+    enum MoveOutcome: Equatable {
+        case moved(ForkCastralContract.Moved)
+        /// 404 without the server's sentence: this CRM has no such route yet.
+        case unsupported
+    }
+
+    /// Attaches the deposit to another appointment: nothing is sent or
+    /// transcribed again.
+    func move(_ id: String, to booking: String) async -> Result<MoveOutcome, CallFailure> {
+        switch await command("POST", ForkCastralContract.movePath(id), body: ForkCastralContract.moveBody(booking)) {
+        case let .success((status, data)):
+            return ForkCastralContract.moved(data).map { .success(.moved($0)) } ?? .failure(.shape(status))
+        case .failure(.refused(404, nil)): return .success(.unsupported)
+        case let .failure(failure): return .failure(failure)
+        }
+    }
+
     /// A deposit left uploading: the server takes it back only in that
     /// state, or failed. Best effort: an orphan costs less than a block.
     func abandon(_ id: String) async {

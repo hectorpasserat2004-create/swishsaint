@@ -17,6 +17,7 @@ import Foundation
 ///                                           → summarizing 85 → ready | failed
 /// POST api/transcriptions/<id>/retry        only once the sound is there (S1)
 /// DELETE api/transcriptions/<id>            only a deposit still uploading or failed
+/// POST api/transcriptions/<id>/move         {booking_id}: another appointment, nothing sent again
 /// ```
 /// Every error is `{"error": "<a sentence>"}`.
 enum ForkCastralContract {
@@ -26,6 +27,7 @@ enum ForkCastralContract {
     static func statusPath(_ id: String) -> String { "api/transcriptions/\(id)/status" }
     static func retryPath(_ id: String) -> String { "api/transcriptions/\(id)/retry" }
     static func depositPath(_ id: String) -> String { "api/transcriptions/\(id)" }
+    static func movePath(_ id: String) -> String { "api/transcriptions/\(id)/move" }
 
     static let maximumSpeakers = 6
     static let minimumSpeakers = 2
@@ -258,6 +260,44 @@ enum ForkCastralContract {
         }
         if let summary = object["summary"], !(summary is NSNull) { status.hasSummary = true }
         return status
+    }
+
+    // MARK: - Move
+
+    /// What became of the previous appointment's notes after a move.
+    enum OldNotes: String, CaseIterable {
+        /// Its notes from before the report are back.
+        case restored
+        /// Someone wrote in them since the report: left as they are.
+        case keptEdited = "kept_edited"
+        /// The report had written nothing there.
+        case untouched
+        /// The move stands, but the notes could not be put back.
+        case failed
+    }
+
+    /// The answer of `POST api/transcriptions/<id>/move`.
+    struct Moved: Equatable {
+        var bookingID: String
+        var companyID: String?
+        var oldNotes: OldNotes?
+        /// Transcribed already: its report is written again for the new
+        /// appointment, and followed again.
+        var regenerating: Bool
+    }
+
+    static func moveBody(_ booking: String) -> Data {
+        (try? JSONSerialization.data(withJSONObject: ["booking_id": booking])) ?? Data()
+    }
+
+    static func moved(_ data: Data) -> Moved? {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              object["ok"] as? Bool == true,
+              let booking = object["booking_id"] as? String, isID(booking) else { return nil }
+        return Moved(bookingID: booking.lowercased(),
+                     companyID: (object["company_id"] as? String).flatMap { isID($0) ? $0.lowercased() : nil },
+                     oldNotes: (object["old_notes"] as? String).flatMap(OldNotes.init(rawValue:)),
+                     regenerating: object["summary"] as? String == "regenerating")
     }
 
     /// `{"error": "…"}`: the server's sentence, written for a person.

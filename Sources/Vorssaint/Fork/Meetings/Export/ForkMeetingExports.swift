@@ -73,6 +73,8 @@ final class ForkMeetingExports: ObservableObject {
     @Published var castralChoice: ForkCastralChoice?
     /// The meetings whose status the follow stopped asking for now.
     @Published var castralResting: Set<String> = []
+    /// The meetings whose appointment changes now, by their folder's path.
+    @Published var castralMoving: Set<String> = []
     /// The appointment chosen for a send waiting on the queue.
     var castralRequests: [String: ForkCastralRequest] = [:]
 

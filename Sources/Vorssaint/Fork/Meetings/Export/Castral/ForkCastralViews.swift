@@ -242,7 +242,8 @@ struct ForkCastralDetail: View {
 
     var body: some View {
         let key = ForkMeetingExports.key(folder, config.id)
-        let record = exports.castralRecords[folder.standardizedFileURL.path].flatMap { $0.target == config.id ? $0 : nil }
+        let path = folder.standardizedFileURL.path
+        let record = exports.castralRecords[path].flatMap { $0.target == config.id ? $0 : nil }
         VStack(alignment: .leading, spacing: 3) {
             // The phase itself is the exporter's line, above: here its bar.
             if let status = exports.castralStatus(folder), status.failure == nil || exports.pending.contains(key),
@@ -255,6 +256,19 @@ struct ForkCastralDetail: View {
             }
             if let record {
                 if let line = booking(record) { Text(line).foregroundStyle(.secondary) }
+                if record.booking != nil {
+                    // Another appointment for the same deposit: nothing sent again.
+                    HStack(spacing: 6) {
+                        Button(text.castralChangeBooking) { exports.askCastralMove(folder) }
+                            .controlSize(.small)
+                            .disabled(exports.pending.contains(key) || exports.castralMoving.contains(path)
+                                        || exports.listChanged)
+                        if exports.castralMoving.contains(path) {
+                            ProgressView().controlSize(.small)
+                            Text(text.castralMoving).foregroundStyle(.secondary)
+                        }
+                    }
+                }
                 if let format = record.format, let bytes = record.bytes {
                     Text(text.castralSound(kilohertz: format.kilohertz,
                                            size: ForkMeetingLiveText.size(bytes, language: language)))
@@ -370,10 +384,11 @@ struct ForkCastralChoiceSheet: View {
 
     var body: some View {
         let shown = current
+        let moving = shown.current != nil
         VStack(alignment: .leading, spacing: 12) {
-            Text(text.castralChooseTitle(shown.name))
+            Text(moving ? text.castralMoveTitle : text.castralChooseTitle(shown.name))
                 .font(.headline)
-            Text(text.castralChooseCaption)
+            Text(moving ? text.castralMoveCaption : text.castralChooseCaption)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -390,10 +405,11 @@ struct ForkCastralChoiceSheet: View {
                 Text(text.castralChooseEmpty).foregroundStyle(.secondary)
             } else {
                 List(shown.bookings, selection: $selected) { booking in
-                    row(booking).tag(booking.id)
+                    row(booking, isCurrent: booking.id == shown.current).tag(booking.id)
                 }
                 .frame(minHeight: 140, maxHeight: 260)
-                if let booking = shown.bookings.first(where: { $0.id == selected }),
+                // A move keeps the deposit as it is: nothing to add to it.
+                if !moving, let booking = shown.bookings.first(where: { $0.id == selected }),
                    ForkCastralMatch.suggestsComplement(recordedSeconds: shown.recordedSeconds, booking: booking) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(text.castralComplement)
@@ -413,11 +429,16 @@ struct ForkCastralChoiceSheet: View {
                 Spacer()
                 Button(text.cancel, role: .cancel) { exports.castralChoice = nil }
                     .keyboardShortcut(.cancelAction)
-                Button(text.castralSend) {
-                    if let selected { exports.confirmCastralChoice(shown, booking: selected, complement: complement) }
+                Button(moving ? text.castralMoveSend : text.castralSend) {
+                    guard let selected else { return }
+                    if moving {
+                        exports.confirmCastralMove(shown, booking: selected)
+                    } else {
+                        exports.confirmCastralChoice(shown, booking: selected, complement: complement)
+                    }
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(selected == nil || shown.loading)
+                .disabled(selected == nil || selected == shown.current || shown.loading)
             }
         }
         .padding(20)
@@ -426,12 +447,15 @@ struct ForkCastralChoiceSheet: View {
         .onAppear { if selected == nil { selected = shown.proposed } }
     }
 
-    private func row(_ booking: ForkCastralContract.Booking) -> some View {
+    private func row(_ booking: ForkCastralContract.Booking, isCurrent: Bool) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(verbatim: booking.company?.name ?? booking.attendeeName ?? text.castralNoCompany)
             HStack(spacing: 6) {
                 if let start = booking.startAt {
                     Text(when(start, timeZone: booking.timeZone)).foregroundStyle(.secondary)
+                }
+                if isCurrent {
+                    Text(text.castralBadgeCurrent).foregroundStyle(.secondary)
                 }
                 if booking.hasReport {
                     Text(text.castralBadgeReported).foregroundStyle(.orange)
