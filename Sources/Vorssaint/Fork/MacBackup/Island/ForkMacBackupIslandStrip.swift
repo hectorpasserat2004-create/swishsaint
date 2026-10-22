@@ -253,7 +253,10 @@ struct ForkMacBackupIslandMark: View {
                     .foregroundStyle(Color.teal)
             } else {
                 ZStack {
+                    // A fresh gauge each time it turns again (the next
+                    // source), so its turning starts anew.
                     ForkMeetingIslandGauge(progress: progress, side: side, tint: .teal)
+                        .id(progress == nil)
                     Image(systemName: glyph.symbol)
                         .font(.system(size: max(6, side * 0.42), weight: .bold))
                         .foregroundStyle(.white)
