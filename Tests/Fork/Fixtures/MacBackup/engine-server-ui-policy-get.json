@@ -1,0 +1,20 @@
+{
+  "retention": {},
+  "files": {},
+  "errorHandling": {},
+  "scheduling": {
+    "manual": true
+  },
+  "compression": {},
+  "metadataCompression": {},
+  "splitter": {},
+  "actions": {},
+  "osSnapshots": {
+    "volumeShadowCopy": {}
+  },
+  "logging": {
+    "directories": {},
+    "entries": {}
+  },
+  "upload": {}
+}

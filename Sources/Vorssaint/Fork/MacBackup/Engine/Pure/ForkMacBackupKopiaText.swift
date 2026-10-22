@@ -11,10 +11,11 @@ import Foundation
 enum ForkMacBackupKopiaText {
     // MARK: Lines
 
-    /// Splits on `\n` and on the `\r` Kopia uses to redraw a progress line;
+    /// Splits on `\n`, on the `\r` Kopia uses to redraw a progress line, and
+    /// on `\r\n` (one Character in Swift);
     /// trims each line, drops the empty ones.
     static func lines(_ text: String) -> [String] {
-        text.split(whereSeparator: { $0 == "\n" || $0 == "\r" })
+        text.split(whereSeparator: \.isNewline)
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
     }

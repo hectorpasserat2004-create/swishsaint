@@ -234,3 +234,37 @@ enum ForkMacBackupHTTP {
         return error
     }
 }
+
+/// How a call to the private server failed.
+enum ForkMacBackupAPIFailure: Error, Equatable {
+    case engine(ForkMacBackupEngineError)
+    /// The server answered with this status (not 2xx, not handled).
+    case status(Int, String)
+
+    /// « policy not found » (400), « no source matching the provided
+    /// filters » (404): the thing asked for does not exist (yet).
+    var isNotFound: Bool {
+        guard case .status(let code, let message) = self else { return false }
+        let text = message.lowercased()
+        return code == 404 || text.contains("not found") || text.contains("no source matching")
+    }
+
+    var engineError: ForkMacBackupEngineError {
+        switch self {
+        case .engine(let error): return error
+        case .status(let code, let message): return .kopia(exitCode: Int32(code), message: message)
+        }
+    }
+
+    /// A non-2xx answer: « not connected » (400 NOT_CONNECTED), a refused
+    /// password (401/403: the server restarted with new ones), or Kopia's
+    /// message.
+    static func from(status: Int, body: Data) -> ForkMacBackupAPIFailure {
+        let apiError = ForkMacBackupHTTP.apiError(body)
+        if apiError?.code == "NOT_CONNECTED" { return .engine(.notConnected) }
+        if status == 401 || status == 403 { return .engine(.serverUnavailable) }
+        let message = apiError?.error ?? String(decoding: body.prefix(300), as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return .status(status, message)
+    }
+}

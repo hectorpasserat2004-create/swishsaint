@@ -1,0 +1,36 @@
+{
+  "snapshots": [
+    {
+      "id": "a1b041ee71bbc784293d0e0fcb709dad",
+      "description": "",
+      "startTime": "2026-10-22T14:41:44.848115Z",
+      "endTime": "2026-10-22T14:42:41.592362Z",
+      "summary": {
+        "size": 107583965315,
+        "files": 3002,
+        "symlinks": 1,
+        "dirs": 124,
+        "maxTime": "2026-10-22T14:22:09.697968313Z",
+        "numFailed": 1,
+        "errors": [
+          {
+            "path": "unreadable/mode000.txt",
+            "error": "unable to open file: unable to open local file: open /Users/bench/bench/data/unreadable/mode000.txt: permission denied"
+          }
+        ]
+      },
+      "rootID": "k12329afa9d1527bf4b01f55afcfda45f",
+      "retention": [
+        "latest-1",
+        "hourly-1",
+        "daily-1",
+        "weekly-1",
+        "monthly-1",
+        "annual-1"
+      ],
+      "pins": []
+    }
+  ],
+  "unfilteredCount": 1,
+  "uniqueCount": 1
+}

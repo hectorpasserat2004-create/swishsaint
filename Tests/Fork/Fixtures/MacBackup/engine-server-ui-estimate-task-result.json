@@ -1,0 +1,45 @@
+{
+  "id": "8",
+  "startTime": "2026-10-22T16:34:02.728836+02:00",
+  "endTime": "2026-10-22T16:34:02.746088+02:00",
+  "kind": "Estimate",
+  "description": "/Users/bench/bench/data",
+  "status": "SUCCESS",
+  "progressInfo": "",
+  "counters": {
+    "Bytes": {
+      "value": 67722,
+      "units": "bytes",
+      "level": ""
+    },
+    "Directories": {
+      "value": 123,
+      "level": ""
+    },
+    "Errors": {
+      "value": 0,
+      "level": "error"
+    },
+    "Excluded Bytes": {
+      "value": 209715200,
+      "units": "bytes",
+      "level": ""
+    },
+    "Excluded Directories": {
+      "value": 1,
+      "level": ""
+    },
+    "Excluded Files": {
+      "value": 1,
+      "level": ""
+    },
+    "Files": {
+      "value": 3001,
+      "level": ""
+    },
+    "Ignored Errors": {
+      "value": 0,
+      "level": "error"
+    }
+  }
+}

@@ -1,0 +1,1 @@
+4 snapshot(s) of bench@bench-mac:/Users/bench/bench/data/small would be deleted. Pass --delete to do it.
