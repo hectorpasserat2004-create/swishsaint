@@ -178,7 +178,7 @@ extension ForkMacBackupIslandStrings {
     static let fr = ForkMacBackupIslandStrings(
         sectionSummary: "La sauvegarde en cours, la dernière et sa preuve.",
         emptyMessage: "Protégez ce Mac avec des sauvegardes sur votre propre stockage.",
-        filesRead: "%@ fichiers lus",
+        filesRead: "Fichiers lus\u{00A0}: %@",
         errorsNone: "aucune erreur",
         errorsOne: "1 erreur",
         errorsFew: "%d erreurs",

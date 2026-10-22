@@ -831,7 +831,7 @@ extension ForkMacBackupWindowStrings {
         restoreTestedOn: "Restauration testée le %@",
         interrupted: "Interrompue\u{00A0}: %@",
         failuresTitle: "Fichiers non sauvegardés",
-        failuresUnnamed: "+ %d autres non nommés par Kopia",
+        failuresUnnamed: "+ %d de plus, que Kopia ne nomme pas",
         cloudOne: "1 fichier dans iCloud seulement, listé à part",
         cloudFew: "%d fichiers dans iCloud seulement, listés à part",
         cloudMany: "%d fichiers dans iCloud seulement, listés à part",
