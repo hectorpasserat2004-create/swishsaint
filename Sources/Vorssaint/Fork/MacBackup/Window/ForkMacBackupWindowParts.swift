@@ -130,13 +130,15 @@ struct ForkMacBackupProofLadder: View {
                     Text(item.title(shared))
                         .font(.caption2)
                         .foregroundStyle(reached ? Color.primary : Color.secondary)
-                        .fixedSize()
-                        .frame(width: step, alignment: alignment(item))
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.7)
+                        .multilineTextAlignment(textAlignment(item))
+                        .frame(width: labelWidth(item, step: step), alignment: alignment(item))
                         .offset(x: labelOffset(item, x: x, step: step), y: 17)
                 }
             }
         }
-        .frame(height: 32)
+        .frame(height: 42)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(String(format: text.proofVoice, level.title(shared), level.rawValue + 1)
                             + (isPartial ? ", " + text.partial : ""))
@@ -152,11 +154,28 @@ struct ForkMacBackupProofLadder: View {
         }
     }
 
+    /// Each name keeps to its share of the line, so none runs into the next
+    /// (they shrink a little, then wrap).
+    private func labelWidth(_ item: ForkMacBackupProofLevel, step: CGFloat) -> CGFloat {
+        switch item {
+        case .present, .restoreTested: return max(10, step * 0.62)
+        default: return max(10, step * 0.76)
+        }
+    }
+
     private func labelOffset(_ item: ForkMacBackupProofLevel, x: CGFloat, step: CGFloat) -> CGFloat {
         switch item {
         case .present: return 0
-        case .restoreTested: return x + 12 - step
-        default: return x + 6 - step / 2
+        case .restoreTested: return x + 12 - labelWidth(item, step: step)
+        default: return x + 6 - labelWidth(item, step: step) / 2
+        }
+    }
+
+    private func textAlignment(_ item: ForkMacBackupProofLevel) -> TextAlignment {
+        switch item {
+        case .present: return .leading
+        case .restoreTested: return .trailing
+        default: return .center
         }
     }
 }

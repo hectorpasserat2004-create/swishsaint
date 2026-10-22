@@ -186,7 +186,7 @@ struct ForkMacBackupSlotsGridView: View {
                            grid: ForkMacBackupSlotsGrid) -> some View {
         let isToday = index == count - 1
         return VStack(spacing: Self.spacing) {
-            Text(row.day.formatted(.dateTime.day().locale(model.locale)))
+            Text(model.calendar.component(.day, from: row.day).formatted(.number.locale(model.locale)))
                 .font(.caption2.monospacedDigit().weight(isToday ? .bold : .regular))
                 .foregroundStyle(isToday ? Color.primary : Color.secondary)
                 .frame(width: Self.cell, height: 14)

@@ -82,43 +82,32 @@ struct ForkMacBackupInspector: View {
         }
     }
 
+    /// One button per line, full width: every language fits.
     private func actions(for entry: ForkMacBackupBrowseEntry) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                if !entry.isDirectory {
-                    Button {
-                        model.previewFile(entry)
-                    } label: {
-                        Label(text.quickLook, systemImage: "eye")
-                    }
+        VStack(alignment: .leading, spacing: 6) {
+            if !entry.isDirectory {
+                action(text.quickLook, "eye") { model.previewFile(entry) }
                     .help(text.quickLook + " (␣)")
-                }
-                Button {
-                    model.beginRestore([entry])
-                } label: {
-                    Label(shared.restore, systemImage: "clock.arrow.circlepath")
-                }
             }
-            HStack(spacing: 8) {
-                if !model.isOtherMac {
-                    Button {
-                        model.beginRestore([entry], original: true)
-                    } label: {
-                        Label(text.restoreHere, systemImage: "arrow.uturn.backward")
-                    }
-                }
-                if !entry.isDirectory {
-                    Button {
-                        model.showVersions(entry)
-                    } label: {
-                        Label(model.versionCounts[entry.relativePath].map { String(format: text.versionsCount, $0) }
-                              ?? text.versions, systemImage: "square.stack.3d.up")
-                    }
-                }
+            action(shared.restore, "clock.arrow.circlepath") { model.beginRestore([entry]) }
+            if !model.isOtherMac {
+                action(text.restoreHere, "arrow.uturn.backward") { model.beginRestore([entry], original: true) }
+            }
+            if !entry.isDirectory {
+                action(model.versionCounts[entry.relativePath].map { String(format: text.versionsCount, $0) } ?? text.versions,
+                       "square.stack.3d.up") { model.showVersions(entry) }
             }
         }
-        .labelStyle(.titleAndIcon)
         .controlSize(.regular)
+    }
+
+    private func action(_ title: String, _ symbol: String, _ run: @escaping () -> Void) -> some View {
+        Button(action: run) {
+            Label(title, systemImage: symbol)
+                .labelStyle(.titleAndIcon)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     // MARK: Snapshot

@@ -142,7 +142,7 @@ struct ForkMacBackupHealthView: View {
     /// The node's last incident: the last error that named it.
     private func incident(_ node: Node) -> String {
         guard let error = presentation.lastError, error.nodeID == node.id else { return text.noIncident }
-        return String(format: text.lastIncident, ForkMacBackupFormat.dayAndTime(error.at, locale: locale))
+        return String(format: text.lastIncident, ForkMacBackupWindowDates.short(error.at, now: model.now(), locale: locale))
     }
 
     // MARK: Capacity

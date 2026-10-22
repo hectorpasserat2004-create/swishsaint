@@ -45,16 +45,12 @@ struct ForkMacBackupWindowView: View {
 
     private var sidebar: some View {
         List(selection: $model.sidebarSelection) {
-            Section(shared.nodeMac) {
-                if model.localSources.isEmpty {
-                    Text(placeholderLine)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .selectionDisabled()
-                }
-                ForEach(model.localSources) { key in
-                    sourceRow(key, subtitle: nil)
-                        .tag(ForkMacBackupSidebarItem.source(key.id))
+            if !model.localSources.isEmpty {
+                Section(shared.nodeMac) {
+                    ForEach(model.localSources) { key in
+                        sourceRow(key, subtitle: nil)
+                            .tag(ForkMacBackupSidebarItem.source(key.id))
+                    }
                 }
             }
             if !model.otherMachines.isEmpty {
@@ -88,14 +84,6 @@ struct ForkMacBackupWindowView: View {
             }
         }
         .listStyle(.sidebar)
-    }
-
-    private var placeholderLine: String {
-        switch model.engineState {
-        case .loading: return text.loading
-        case .unavailable: return text.unavailableTitle
-        case .ready: return text.noSnapshotTitle
-        }
     }
 
     private func sourceRow(_ key: ForkMacBackupSourceKey, subtitle: String?) -> some View {
@@ -162,7 +150,8 @@ struct ForkMacBackupBrowseView: View {
         .navigationTitle(model.selectedKey?.displayName ?? text.windowTitle)
         .navigationSubtitle(subtitle)
         .toolbar { toolbar }
-        .inspector(isPresented: $model.inspectorShown) {
+        .inspector(isPresented: Binding(get: { model.inspectorShown && model.selectedSnapshot != nil },
+                                        set: { model.inspectorShown = $0 })) {
             ForkMacBackupInspector(model: model)
                 .inspectorColumnWidth(min: 250, ideal: 290, max: 380)
         }
@@ -224,7 +213,7 @@ struct ForkMacBackupBrowseView: View {
             .disabled(model.selectedEntries.isEmpty)
             ForkMacBackupSearchField(text: $model.searchText, placeholder: text.searchPlaceholder,
                                      focusToken: model.searchFocusToken)
-                .frame(width: 230)
+                .frame(width: 200)
             Button {
                 model.inspectorShown.toggle()
             } label: {
