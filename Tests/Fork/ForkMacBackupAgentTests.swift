@@ -1156,6 +1156,34 @@ enum ForkMacBackupAgentTests {
                                              from: ForkMacBackupJournal.trimmed(data, as: ForkMacBackupSlotRecord.self, now: t0,
                                                                                 maxLines: 10) { $0.due })
         suite.expect(capped.count == 10 && capped.last?.due == t0, "and at most their line count, the newest")
+
+        // The window appends a restore while the agent trims: no line is lost.
+        let folder = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("fork-macbackup-journal-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let url = folder.appendingPathComponent("runs.jsonl", isDirectory: false)
+        let appends = 300
+        let group = DispatchGroup()
+        DispatchQueue.global().async(group: group) {
+            for index in 0..<appends {
+                ForkMacBackupJSON.append(ForkMacBackupSlotRecord(due: t0.addingTimeInterval(Double(index)), outcome: .done),
+                                         to: url)
+            }
+        }
+        DispatchQueue.global().async(group: group) {
+            for _ in 0..<150 {
+                ForkMacBackupJSON.rewrite(url) {
+                    ForkMacBackupJournal.trimmed($0, as: ForkMacBackupSlotRecord.self, now: t0.addingTimeInterval(1_000)) { $0.due }
+                }
+            }
+        }
+        group.wait()
+        let survived = (try? Data(contentsOf: url)).map { ForkMacBackupJSON.lines(ForkMacBackupSlotRecord.self, from: $0) } ?? []
+        suite.expect(survived.count == appends && Set(survived.map(\.due)).count == appends,
+                     "a trim and appends from another process side by side keep every line (\(survived.count)/\(appends))")
+        let mode = (try? FileManager.default.attributesOfItem(atPath: url.path + ".lock"))?[.posixPermissions] as? Int
+        suite.expect(mode == 0o600, "the journal's lock file is private")
     }
 
     private static func strings(_ suite: TestSuite) {

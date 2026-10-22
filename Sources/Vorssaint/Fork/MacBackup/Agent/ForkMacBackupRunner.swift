@@ -326,8 +326,9 @@ final class ForkMacBackupRunner {
 
     private func rotate<Value: Codable>(_ url: URL, as type: Value.Type, now: Date, date: (Value) -> Date) {
         guard let size = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int,
-              size > ForkMacBackupAgentTuning.journalRotateBytes, let data = try? Data(contentsOf: url) else { return }
-        PrivateFileStore.write(ForkMacBackupJournal.trimmed(data, as: type, now: now, date: date), to: url)
+              size > ForkMacBackupAgentTuning.journalRotateBytes else { return }
+        // Under the journal's lock: a restore the window appends meanwhile is kept.
+        ForkMacBackupJSON.rewrite(url) { ForkMacBackupJournal.trimmed($0, as: type, now: now, date: date) }
     }
 
     private func saveProofs() {

@@ -75,7 +75,7 @@ Rétention : `ForkMacBackupRetentionReplay` (portage vérifié de Kopia), par so
 | notify `.settings` | modèle d'état (tout changement `fork.macbackup.*`) | runner (`reloadSettings`) | — |
 | `run/viewer.lease` | modèle d'état (vue en direct) | runner : 1 Hz sinon 10 s | date du fichier |
 | `run/server.json`, `run/kopia.sock` | moteur propriétaire | client, coût | `ForkMacBackupServerInfo` |
-| `runs.jsonl` | runner (sauvegardes, vérifs, maintenances) **et** fenêtre (restaurations) | fenêtre, réglages | `ForkMacBackupRunRecord`, une ligne par `write` `O_APPEND` (`ForkMacBackupJSON.append`) |
+| `runs.jsonl` | runner (sauvegardes, vérifs, maintenances) **et** fenêtre (restaurations) | fenêtre, réglages | `ForkMacBackupRunRecord`, une ligne par `write` `O_APPEND` (`ForkMacBackupJSON.append`), sous `flock` de `runs.jsonl.lock`, comme la purge du runner (`rewrite`) |
 | `slots.jsonl`, `capacity.jsonl` | runner | fenêtre | idem |
 | `proofs.json` | runner | fenêtre | `ForkMacBackupProofStore` |
 | `errors/<manifest>.json` | runner | fenêtre | `[ForkMacBackupFailure]` |
