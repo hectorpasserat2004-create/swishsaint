@@ -267,39 +267,39 @@ enum ForkMacBackupSettingsTests {
                         && ForkMacBackupRetention.preset(.custom, custom: "nonsense") == .balanced,
                      "the four retention presets carry the plan's values")
 
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: "Europe/Paris") ?? .current
+        // The Settings preview runs the Engine's replay (verified against
+        // Kopia itself), one source at a time.
+        let paris = TimeZone(identifier: "Europe/Paris") ?? .current
         // One snapshot an hour for four days, newest first.
         let hourly = (0..<96).map { index in
-            ForkMacBackupRetentionReplay.Snapshot(id: "h\(index)", start: now.addingTimeInterval(-Double(index) * 3_600 - 60))
+            ForkMacBackupRetentionReplay.Snapshot(id: "h\(index)", startTime: now.addingTimeInterval(-Double(index) * 3_600 - 60))
         }
-        let economical = ForkMacBackupRetentionReplay.evaluate(hourly, retention: .economical, now: now, calendar: calendar)
-        let kept = economical.filter(\.kept)
-        suite.expect(economical.count == 96 && economical.prefix(24).allSatisfy(\.kept),
+        let economical = ForkMacBackupRetentionReplay.evaluate(hourly, retention: .economical, timeZone: paris)
+        let kept = economical.filter(\.isKept)
+        suite.expect(economical.count == 96 && economical.prefix(24).allSatisfy(\.isKept),
                      "the last 24 hours are all kept by the hourly rule")
-        suite.expect(kept.count >= 24 && kept.count <= 30 && !economical[60].kept,
+        suite.expect(kept.count >= 24 && kept.count <= 30 && !economical[60].isKept,
                      "beyond 24 hours only one a day stays (\(kept.count) kept)")
-        suite.expect(economical[0].reasons.contains(.latest) && economical[0].reasons.contains(.hourly),
+        suite.expect(economical[0].reasons.contains("latest-1") && economical[0].reasons.contains("hourly-1"),
                      "the newest is kept by several rules at once: not a copy more")
-        let deletions = ForkMacBackupRetentionReplay.deletions(hourly, retention: .economical, now: now, calendar: calendar)
+        let deletions = ForkMacBackupRetentionReplay.deletions(hourly, retention: .economical, timeZone: paris)
         suite.expect(deletions.count == 96 - kept.count, "the deletions are what no rule keeps")
         let nothing = ForkMacBackupRetention(latest: 0, hourly: 0, daily: 0, weekly: 0, monthly: 0, annual: 0)
-        suite.expect(ForkMacBackupRetentionReplay.deletions(hourly, retention: nothing, now: now, calendar: calendar).count == 96,
-                     "a retention of zeros keeps nothing")
+        suite.expect(ForkMacBackupRetentionReplay.deletions(hourly, retention: nothing, timeZone: paris).isEmpty,
+                     "a retention of zeros keeps everything, as Kopia does")
 
-        let withIncomplete = [ForkMacBackupRetentionReplay.Snapshot(id: "new", start: now, incomplete: true)] + hourly
-            + [ForkMacBackupRetentionReplay.Snapshot(id: "old", start: now.addingTimeInterval(-50 * 3_600), incomplete: true)]
-        let decisions = ForkMacBackupRetentionReplay.evaluate(withIncomplete, retention: .balanced, now: now, calendar: calendar)
-        suite.expect(decisions.first { $0.snapshot.id == "new" }?.reasons == [.incomplete]
-                        && decisions.first { $0.snapshot.id == "old" }?.kept == false,
+        let withIncomplete = [ForkMacBackupRetentionReplay.Snapshot(id: "new", startTime: now, incomplete: "canceled")] + hourly
+            + [ForkMacBackupRetentionReplay.Snapshot(id: "old", startTime: now.addingTimeInterval(-50 * 3_600),
+                                                    incomplete: "canceled")]
+        let decisions = ForkMacBackupRetentionReplay.evaluate(withIncomplete, retention: .balanced, timeZone: paris)
+        suite.expect(decisions.first { $0.snapshot.id == "new" }?.reasons == ["incomplete"]
+                        && decisions.first { $0.snapshot.id == "old" }?.isKept == false,
                      "an incomplete snapshot stays only while no complete one came after it")
-        suite.expect(ForkMacBackupRetentionReplay.periodID(.weekly, of: now, index: 0, calendar: calendar) == "2026-W43",
-                     "weeks are ISO weeks")
         // Two snapshots in the same hour: one slot.
-        let twins = [ForkMacBackupRetentionReplay.Snapshot(id: "a", start: now.addingTimeInterval(-600)),
-                     ForkMacBackupRetentionReplay.Snapshot(id: "b", start: now.addingTimeInterval(-1_200))]
+        let twins = [ForkMacBackupRetentionReplay.Snapshot(id: "a", startTime: now.addingTimeInterval(-600)),
+                     ForkMacBackupRetentionReplay.Snapshot(id: "b", startTime: now.addingTimeInterval(-1_200))]
         let onlyHourly = ForkMacBackupRetention(latest: 0, hourly: 5, daily: 0, weekly: 0, monthly: 0, annual: 0)
-        suite.expect(ForkMacBackupRetentionReplay.deletions(twins, retention: onlyHourly, now: now, calendar: calendar).map(\.id) == ["b"],
+        suite.expect(ForkMacBackupRetentionReplay.deletions(twins, retention: onlyHourly, timeZone: paris).map(\.id) == ["b"],
                      "two snapshots of the same hour fill one hourly slot")
 
         let text = ForkMacBackupSettingsStrings.strings(.fr)

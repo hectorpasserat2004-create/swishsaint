@@ -74,7 +74,9 @@ struct ForkMacBackupRetentionPane: View {
     @AppStorage(ForkDefaultsKey.macBackupRetentionCustom) private var customRaw = ForkMacBackupRetention.balanced.storageValue
     @State private var draftPreset: ForkMacBackupRetention.Preset?
     @State private var draftCustom: ForkMacBackupRetention?
-    @State private var snapshots: [ForkMacBackupRetentionReplay.Snapshot]?
+    /// This Mac's snapshots, one list per source (Kopia's retention is per source).
+    @State private var snapshots: [[ForkMacBackupRetentionReplay.Snapshot]]?
+    @State private var sizes: [String: Int64] = [:]
     @State private var loading = false
     @State private var loadFailed = false
     @State private var confirming = false
@@ -191,27 +193,30 @@ struct ForkMacBackupRetentionPane: View {
 
     private var deletions: [ForkMacBackupRetentionReplay.Snapshot] {
         guard let snapshots else { return [] }
-        return ForkMacBackupRetentionReplay.deletions(snapshots, retention: retention, now: context.services.now())
+        return snapshots.flatMap { ForkMacBackupRetentionReplay.deletions($0, retention: retention) }
+            .sorted { $0.startTime > $1.startTime }
     }
+
+    private var snapshotCount: Int { snapshots?.reduce(0) { $0 + $1.count } ?? 0 }
 
     @ViewBuilder
     private var deletionPreview: some View {
-        if let snapshots {
+        if snapshots != nil {
             let gone = deletions
             if gone.isEmpty {
-                Label(String(format: text.retentionKeepsAll, snapshots.count), systemImage: "checkmark.circle.fill")
+                Label(String(format: text.retentionKeepsAll, snapshotCount), systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
                     .font(.callout)
             } else {
-                Label(String(format: text.retentionWouldDelete, gone.count, snapshots.count), systemImage: "trash")
+                Label(String(format: text.retentionWouldDelete, gone.count, snapshotCount), systemImage: "trash")
                     .foregroundStyle(.orange)
                     .font(.callout)
                 ForEach(gone.prefix(6), id: \.id) { snapshot in
                     HStack {
-                        Text(ForkMacBackupFormat.dayAndTime(snapshot.start, locale: locale))
+                        Text(ForkMacBackupFormat.dayAndTime(snapshot.startTime, locale: locale))
                             .font(.caption)
                         Spacer()
-                        if let bytes = snapshot.bytes {
+                        if let bytes = sizes[snapshot.id] {
                             Text(ForkMacBackupFormat.bytes(bytes, locale: locale))
                                 .font(.caption.monospacedDigit())
                                 .foregroundStyle(.secondary)
@@ -252,7 +257,11 @@ struct ForkMacBackupRetentionPane: View {
                     guard let identity else { return true }
                     return manifest.source?.userName == identity.userName && manifest.source?.host == identity.hostName
                 }
-                snapshots = ForkMacBackupRetentionReplay.snapshots(from: own)
+                let bySource = Dictionary(grouping: own) { $0.source?.path ?? "" }
+                snapshots = bySource.values.map { $0.compactMap(ForkMacBackupRetentionReplay.Snapshot.init(manifest:)) }
+                sizes = Dictionary(own.compactMap { manifest in
+                    (manifest.stats?.totalSize ?? manifest.rootEntry?.summ?.size).map { (manifest.id, $0) }
+                }, uniquingKeysWith: { first, _ in first })
             case .failure:
                 loadFailed = true
             }
