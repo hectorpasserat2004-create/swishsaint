@@ -110,8 +110,26 @@ enum ForkMacBackupIslandTests {
         suite.expect(fallback == percent, "no stable time left yet: the percentage, never a guess: \(fallback)")
 
         let scanning = ForkMacBackupPresentation.preview(.scanning, now: now)
-        suite.expect(ForkMacBackupIslandRules.reading(scanning, text: text, locale: fr, reading: .percent, finishing: false)
-                        == text.calculating, "no percentage while scanning")
+        let scanned = ForkMacBackupIslandRules.reading(scanning, text: text, locale: fr, reading: .percent, finishing: false)
+        suite.expect(scanned.contains("220") && !scanned.contains("%"),
+                     "no percentage while scanning: the real bytes read so far: \(scanned)")
+        var checking = scanning
+        checking.phase = .checkingChain
+        checking.progress = nil
+        suite.expect(ForkMacBackupIslandRules.reading(checking, text: text, locale: fr, reading: .remaining,
+                                                      finishing: false) == "…",
+                     "nothing to read yet: an ellipsis, never a word too long for the wing")
+        let fits = AppLanguage.allCases.allSatisfy { language in
+            let words = ForkMacBackupStrings.strings(language)
+            return [ForkMacBackupPresentation.Scenario.running42, .scanning, .restoring, .verifying].allSatisfy { scenario in
+                ForkMacBackupReading.allCases.allSatisfy { reading in
+                    ForkMacBackupIslandRules.reading(.preview(scenario, now: now), text: words,
+                                                     locale: Locale(identifier: language.rawValue),
+                                                     reading: reading, finishing: false).count <= 8
+                }
+            }
+        }
+        suite.expect(fits, "every wing reading stays short in every language")
         suite.expect(ForkMacBackupIslandRules.reading(scanning, text: text, locale: fr, reading: .percent, finishing: true)
                         .hasPrefix("100"), "the finished ring reads 100 %")
 
@@ -152,7 +170,10 @@ enum ForkMacBackupIslandTests {
                                                               interval: 2 * hour, now: now) == 0.5
                         && ForkMacBackupIslandRules.freshness(protectedSince: now.addingTimeInterval(-9 * hour),
                                                               interval: 2 * hour, now: now) == 0
-                        && ForkMacBackupIslandRules.freshness(protectedSince: nil, interval: 2 * hour, now: now) == nil,
+                        && ForkMacBackupIslandRules.freshness(protectedSince: nil, interval: 2 * hour, now: now) == nil
+                        && ForkMacBackupIslandRules.freshness(protectedSince: now.addingTimeInterval(-2 * hour),
+                                                              nextRun: now.addingTimeInterval(2 * hour),
+                                                              interval: 2 * hour, now: now) == 0.5,
                      "the ring at rest is full after a backup and empties toward the next")
         suite.expect(ForkMacBackupIslandRules.freshnessTone(protectedSince: now.addingTimeInterval(-hour), interval: 2 * hour,
                                                             lateHours: 24, now: now) == .teal

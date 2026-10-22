@@ -86,7 +86,8 @@ struct ForkMacBackupIslandSection: View {
     // MARK: Band
 
     @ViewBuilder private func band(_ state: ForkMacBackupPresentation, top: ForkMacBackupIslandRules.Top) -> some View {
-        switch ForkMacBackupIslandRules.primary(state.phase) {
+        // The card's own button says it when it has one: never twice.
+        switch Self.heroHasAction(top) ? ForkMacBackupIslandRules.Primary.none : ForkMacBackupIslandRules.primary(state.phase) {
         case .backUpNow, .backUpAnyway:
             NotchIconButton(symbol: "arrow.clockwise", title: text.backUpNow) { send(.backUpNow) }
         case .pause:
@@ -161,8 +162,8 @@ struct ForkMacBackupIslandSection: View {
             let tone = ForkMacBackupIslandRules.freshnessTone(protectedSince: state.protectedSince, interval: interval,
                                                               lateHours: lateHours, now: now)
             ForkMacBackupIslandHeroRing(
-                progress: ForkMacBackupIslandRules.freshness(protectedSince: state.protectedSince, interval: interval,
-                                                             now: now),
+                progress: ForkMacBackupIslandRules.freshness(protectedSince: state.protectedSince,
+                                                             nextRun: state.nextRun, interval: interval, now: now),
                 tint: tone == .calm ? .teal : tone.color,
                 value: state.protectedSince.map { ForkMacBackupFormat.age(now.timeIntervalSince($0), locale: locale) },
                 symbol: "checkmark.shield", turnsWhenUnknown: false)
@@ -194,7 +195,8 @@ struct ForkMacBackupIslandSection: View {
                     .animation(reduceMotion ? nil : .smooth(duration: 0.3), value: fraction)
                     .padding(.vertical, 2)
             }
-            if let line = state.progressLine(text, locale: locale) {
+            if let progress = state.progress, progress.bytesDone > 0 || progress.bytesTotal != nil,
+               let line = state.progressLine(text, locale: locale) {
                 caption(line, digits: true)
             }
             if let path = state.progress?.currentPath, !path.isEmpty {
@@ -220,11 +222,11 @@ struct ForkMacBackupIslandSection: View {
             }
             lastLine(state, now: now)
         case .partial:
+            lastLine(state, now: now)
             if let complete = state.lastComplete {
                 caption(String(format: text.lastComplete, ForkMacBackupIslandRules.when(complete.date, now: now,
                                                                                           locale: locale)))
             }
-            lastLine(state, now: now, ladderOnly: true)
         case .failed(let failure):
             Text(failure == .chainBroken ? chainRemedy(state) : failure.remedy(text))
                 .font(.system(size: 11))
@@ -237,12 +239,10 @@ struct ForkMacBackupIslandSection: View {
     }
 
     /// « Dernière : aujourd’hui 10:04 ●●○○ ».
-    @ViewBuilder private func lastLine(_ state: ForkMacBackupPresentation, now: Date, ladderOnly: Bool = false) -> some View {
+    @ViewBuilder private func lastLine(_ state: ForkMacBackupPresentation, now: Date) -> some View {
         if let last = state.lastBackup {
             HStack(spacing: 6) {
-                if !ladderOnly {
-                    caption(String(format: text.lastBackup, ForkMacBackupIslandRules.when(last.date, now: now, locale: locale)))
-                }
+                caption(String(format: text.lastBackup, ForkMacBackupIslandRules.when(last.date, now: now, locale: locale)))
                 ForkMacBackupIslandProofLadder(level: last.level)
             }
         } else {
@@ -268,8 +268,19 @@ struct ForkMacBackupIslandSection: View {
 
     private func filesLine(_ progress: ForkMacBackupPresentation.Progress?) -> String {
         guard let progress else { return "" }
-        let files = progress.files.formatted(.number.locale(locale))
+        var files = progress.files.formatted(.number.locale(locale))
+        if let total = progress.filesTotal, total >= progress.files {
+            files += " / " + total.formatted(.number.locale(locale))
+        }
         return String(format: island.filesRead, files) + " · " + island.errors(progress.errors, language: l10n.language)
+    }
+
+    static func heroHasAction(_ top: ForkMacBackupIslandRules.Top) -> Bool {
+        switch top {
+        case .waiting, .paused, .partial: return true
+        case .failed(let failure): return failure != .chainBroken
+        default: return false
+        }
     }
 
     /// The card's own button, on its right: the one thing the state asks.
@@ -325,7 +336,12 @@ struct ForkMacBackupIslandSection: View {
                                           prominent: state.slowDown) { send(.slowDown(!state.slowDown)) }
                 pauseMenu
                 restoreButton
-            case .restoring, .verifying, .maintaining:
+            case .restoring:
+                // A restore is cancelled from the window that runs it.
+                ForkMacBackupIslandButton(symbol: "arrow.up.forward.app", title: text.openBackups) {
+                    service.perform { ForkMacBackupWindow.open(.browse) }
+                }
+            case .verifying, .maintaining:
                 ForkMacBackupIslandButton(symbol: "xmark", title: FeatureStrings.clipboard(l10n.language).cancel) {
                     send(.cancel)
                 }

@@ -72,12 +72,16 @@ enum ForkMacBackupIslandRules {
         finishing ? 1 : state.fraction
     }
 
-    /// The right wing: the percentage or the time left, as chosen, never a
-    /// guess (`ForkMacBackupPresentation.compactValue`).
+    /// The right wing: the percentage or the time left, as chosen
+    /// (`ForkMacBackupPresentation.compactValue`); while no share is honest
+    /// (scanning), the real bytes read so far; else an ellipsis, never a
+    /// guess nor a word too long for the wing.
     static func reading(_ state: ForkMacBackupPresentation, text: ForkMacBackupStrings, locale: Locale,
                         reading: ForkMacBackupReading, finishing: Bool) -> String {
         if finishing { return ForkMacBackupFormat.percent(1, locale: locale) }
-        return state.compactValue(text, locale: locale, reading: reading)
+        if state.fraction != nil { return state.compactValue(text, locale: locale, reading: reading) }
+        if let bytes = state.progress?.bytesDone, bytes > 0 { return ForkMacBackupFormat.bytes(bytes, locale: locale) }
+        return "…"
     }
 
     /// Orange when something else than the person's « Ralentir » holds the
@@ -152,12 +156,17 @@ enum ForkMacBackupIslandRules {
         }
     }
 
-    /// The ring at rest: full right after a backup, empty at the next one
-    /// due; nil with nothing protected yet.
-    static func freshness(protectedSince: Date?, interval: TimeInterval, now: Date) -> Double? {
-        guard let protectedSince, interval > 0 else { return nil }
+    /// The ring at rest: full right after a backup, empty when the next one
+    /// is due (the planned one, else the rhythm's interval); nil with
+    /// nothing protected yet.
+    static func freshness(protectedSince: Date?, nextRun: Date? = nil, interval: TimeInterval,
+                          now: Date) -> Double? {
+        guard let protectedSince else { return nil }
+        let planned = nextRun.map { $0.timeIntervalSince(protectedSince) }.flatMap { $0 > 0 ? $0 : nil }
+        let span = planned ?? interval
+        guard span > 0 else { return nil }
         let age = max(0, now.timeIntervalSince(protectedSince))
-        return min(1, max(0, 1 - age / interval))
+        return min(1, max(0, 1 - age / span))
     }
 
     /// The ring's colour at rest: sarcelle while on time, orange past twice
