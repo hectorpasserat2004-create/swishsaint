@@ -241,12 +241,6 @@ final class ForkMacBackupSettingsContext: ObservableObject {
         }
     }
 
-    func forgetProfile(named name: String) {
-        knownProfiles.removeAll { $0.name == name }
-        store(knownProfiles, ForkDefaultsKey.macBackupKnownProfiles)
-        if profile?.name == name { setProfile(nil) }
-    }
-
     func saveSources(_ newSources: [ForkMacBackupSource]) {
         sources = newSources
         store(newSources, ForkDefaultsKey.macBackupSources)

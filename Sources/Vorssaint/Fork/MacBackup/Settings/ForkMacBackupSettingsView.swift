@@ -91,6 +91,11 @@ struct ForkMacBackupSettingsView: View {
             kitRow(text, language)
             ForkMacBackupNavigationRow(symbol: "slider.horizontal.3", color: .gray, title: text.optionsTitle,
                                        summary: optionsSummary(text)) { sheet = .options(.retention) }
+            // What the island shows of the backup lives with the island's settings.
+            HStack {
+                Spacer()
+                ForkMacBackupIslandSettingsLink()
+            }
         }
         .disabled(!enabled && context.repository != nil)
         .sheet(item: $sheet) { sheet in

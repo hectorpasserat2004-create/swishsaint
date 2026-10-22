@@ -49,12 +49,10 @@ notch-calendar-crm   Sources/Vorssaint/Services/Notch/NotchCalendarService.swift
 notch-calendar-crm2  Sources/Vorssaint/UI/Notch/NotchCalendarView.swift          # calendrier de l'île : la carte d'un RDV avec visio ou du CRM (Rejoindre, Copier le lien, menu) — hors de NotchCalendarEventRow, extrait par generate_sources.py
 notch-calendar-crm3  Sources/Vorssaint/UI/Settings/NotchSettings.swift          # calendrier de l'île : réglage « Afficher les RDV du CRM » dans Contenu › Calendrier (seulement avec un CRM importé)
 #
-# Sauvegarde du Mac : chaque lot ajoute ses coutures sous SON titre (des fusions parallèles sans conflit).
-# macbackup · Agent (main.swift : macbackup-agent)
+# Sauvegarde du Mac (Fork/MacBackup/README.md). La page de réglages passe par settings4, le démarrage par bootstrap.
+# L'agent sans interface (main.swift, hors TEST_SOURCES) :
 macbackup-agent    Sources/Vorssaint/main.swift                                # sauvegarde du Mac : le mode sans interface --fork-backup-agent (l'agent lancé par launchd), après --uninstall
-
-#
-# macbackup · Island (notch-macbackups*, notch-macbackup*, notch-macbackup-tile*, notch-macbackup-event, command-bar-macbackup)
+# L'île (crochets injectés, Fork/Notch/README.md) et la Command Bar :
 notch-macbackups     Sources/Vorssaint/Services/Notch/NotchSupport.swift        # sauvegarde : section « Sauvegarde » de l'île (cas et crochets injectés : titre, résumé, disponibilité, hauteur) — ne nomme aucun type du fork (TEST_SOURCES)
 notch-macbackups2    Sources/Vorssaint/Services/Notch/NotchSupport.swift        # sauvegarde : symbole, raccourci ⌥⌘K et disponibilité de la section — ne nomme aucun type du fork (TEST_SOURCES)
 notch-macbackups3    Sources/Vorssaint/Services/Notch/NotchSupport.swift        # sauvegarde : hauteur de la page, compacte 180 pt ou spacieuse 264 pt, par le crochet (switch exhaustif)
@@ -80,5 +78,3 @@ notch-macbackup-event  Sources/Vorssaint/Services/Notch/NotchSupport.swift      
 notch-macbackup-event2 Sources/Vorssaint/Services/Notch/NotchSupport.swift      # sauvegarde : clé, priorité 1, durée 6 s et routage de NotchEvent.backup (switch exhaustifs)
 command-bar-macbackup  Sources/Vorssaint/Services/CommandBar/CommandBarCatalog.swift  # sauvegarde : lignes de la Command Bar (sauvegarder, pause, reprendre, état, restaurer, vérifier, fenêtre, kit)
 
-#
-# macbackup · fin
