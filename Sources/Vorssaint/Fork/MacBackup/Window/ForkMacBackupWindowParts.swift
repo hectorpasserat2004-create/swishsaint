@@ -127,13 +127,15 @@ struct ForkMacBackupWindowProofLadder: View {
                         .overlay(Circle().strokeBorder(reached ? fill : Color.secondary.opacity(0.5), lineWidth: 1.5))
                         .frame(width: 12, height: 12)
                         .offset(x: x)
-                    Text(item.title(shared))
+                    let title = item.title(shared)
+                    let width = labelWidth(item, step: step)
+                    Text(title)
                         .font(.caption2)
                         .foregroundStyle(reached ? Color.primary : Color.secondary)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.7)
+                        .lineLimit(Self.shrinksToOneLine(title, width: width) ? 1 : 2)
+                        .minimumScaleFactor(Self.smallestScale)
                         .multilineTextAlignment(textAlignment(item))
-                        .frame(width: labelWidth(item, step: step), alignment: alignment(item))
+                        .frame(width: width, alignment: alignment(item))
                         .offset(x: labelOffset(item, x: x, step: step), y: 17)
                 }
             }
@@ -145,6 +147,16 @@ struct ForkMacBackupWindowProofLadder: View {
     }
 
     private var fill: Color { isPartial ? .orange : ForkMacBackupWindowStyle.teal }
+
+    static let smallestScale: CGFloat = 0.7
+
+    /// A name that fits its share once shrunk a little stays on ONE line (the
+    /// narrow inspector used to break « Vorhanden » as « Vorhan-den »); only a
+    /// name too long even then wraps, at a space when it has one.
+    static func shrinksToOneLine(_ title: String, width: CGFloat) -> Bool {
+        let natural = (title as NSString).size(withAttributes: [.font: NSFont.preferredFont(forTextStyle: .caption2)]).width
+        return natural * smallestScale <= width
+    }
 
     private func alignment(_ item: ForkMacBackupProofLevel) -> Alignment {
         switch item {

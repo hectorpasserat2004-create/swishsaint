@@ -102,8 +102,75 @@ struct ForkMacBackupMachine {
         var abortMessage: String?
         var failedNode: String?
         var pollFailures = 0
+        /// Once a source has shown its estimate, the run never goes back to
+        /// « scanning »: several sources read as ONE continuous progress.
+        var uploadStarted = false
+        /// The highest fraction shown: the aggregate never moves backwards
+        /// when a later source's estimate arrives.
+        var fractionFloor = 0.0
+        var filesFloor = 0.0
 
         var current: SourceRun? { sources.indices.contains(index) ? sources[index] : nil }
+
+        struct Aggregate: Equatable {
+            var done: Int64
+            var total: Int64
+            var files: Int64
+            var filesTotal: Int64
+            var uploaded: Int64
+            var errors: Int
+        }
+
+        /// The running total across sources: what finished, plus the current
+        /// source over the sum of the known estimates. While the current
+        /// source's estimate is unknown, the fraction holds at its floor.
+        func aggregate(holding hold: Bool = true) -> Aggregate {
+            let completed = sources.prefix(index)
+            let current = self.current?.counters ?? Counters()
+            // A concluded source is complete: its done is its total.
+            let completedBytes = completed.map { max($0.counters.done, $0.counters.total ?? 0) }
+            let completedFiles = completed.map { max($0.counters.files, $0.counters.filesTotal ?? 0) }
+            let done = completedBytes.reduce(0, +) + current.done
+            let files = completedFiles.reduce(0, +) + current.files
+            var total = Self.estimated(completedBytes, current: current.total, done: current.done, later: sources.count - index - 1)
+            var filesTotal = Self.estimated(completedFiles, current: current.filesTotal, done: current.files, later: sources.count - index - 1)
+            if hold {
+                total = Self.holding(total, done: done, floor: fractionFloor, known: current.total != nil)
+                filesTotal = Self.holding(filesTotal, done: files, floor: filesFloor, known: current.filesTotal != nil)
+            }
+            return Aggregate(
+                done: done, total: total, files: files, filesTotal: filesTotal,
+                uploaded: completed.reduce(0) { $0 + $1.counters.uploaded } + current.uploaded,
+                errors: completed.reduce(0) { $0 + $1.counters.errors } + current.errors)
+        }
+
+        /// The known estimates, plus the mean of them for every source whose
+        /// estimate has not arrived yet (the current one and the later ones).
+        static func estimated(_ completed: [Int64], current: Int64?, done: Int64, later: Int) -> Int64 {
+            var known = completed
+            if let current { known.append(current) }
+            let sum = known.reduce(0, +)
+            let unknown = later + (current == nil ? 1 : 0)
+            guard unknown > 0, !known.isEmpty else { return max(sum, current == nil ? sum + done : sum) }
+            let mean = sum / Int64(known.count)
+            return sum + mean * Int64(unknown) + (current == nil ? max(0, done - mean) : 0)
+        }
+
+        /// Keeps `done / total` at or above `floor` (and under 100 % while a
+        /// later source is unknown). A known estimate that arrives late and
+        /// lowers the ratio is held at the floor until the work catches up.
+        static func holding(_ total: Int64, done: Int64, floor: Double, known: Bool) -> Int64 {
+            guard floor > 0, done > 0 else { return max(total, done) }
+            let capped = Int64((Double(done) / min(floor, 0.99)).rounded(.up))
+            return known ? max(done, min(total, capped)) : max(total, capped)
+        }
+
+        mutating func raiseFloors() {
+            let a = aggregate(holding: false)
+            guard current?.counters.total != nil else { return }
+            if a.total > 0 { fractionFloor = max(fractionFloor, min(0.99, Double(a.done) / Double(a.total))) }
+            if a.filesTotal > 0 { filesFloor = max(filesFloor, min(0.99, Double(a.files) / Double(a.filesTotal))) }
+        }
     }
 
     struct VerifyRun: Equatable {
@@ -252,9 +319,11 @@ struct ForkMacBackupMachine {
         if let run {
             switch run.step {
             case .checkingChain: return .checkingChain
-            case .preparing, .starting: return .preparing
-            case .scanning: return .scanning
-            case .uploading: return limit == nil ? .uploading : .slowed
+            case .preparing, .starting: return run.uploadStarted ? (limit == nil ? .uploading : .slowed) : .preparing
+            case .scanning where !run.uploadStarted: return .scanning
+            case .scanning, .uploading: return limit == nil ? .uploading : .slowed
+            case .concluding where run.uploadStarted && run.index + 1 < run.sources.count:
+                return limit == nil ? .uploading : .slowed
             case .concluding: return .concluding
             }
         }
@@ -272,20 +341,15 @@ struct ForkMacBackupMachine {
     /// The live figures of the operation running; nil at rest.
     func progress(now: Date) -> ForkMacBackupPresentation.Progress? {
         if let run {
-            let completed = run.sources.prefix(run.index)
             let current = run.current?.counters ?? Counters()
-            let done = completed.reduce(0) { $0 + $1.counters.done } + current.done
-            let total: Int64? = current.total.map { completed.reduce(0) { $0 + ($1.counters.total ?? $1.counters.done) } + $0 }
-            let files = completed.reduce(0) { $0 + $1.counters.files } + current.files
-            let filesTotal: Int64? = current.filesTotal.map { completed.reduce(0) { $0 + ($1.counters.filesTotal ?? $1.counters.files) } + $0 }
-            let uploaded = completed.reduce(0) { $0 + $1.counters.uploaded } + current.uploaded
-            let errors = completed.reduce(0) { $0 + $1.counters.errors } + current.errors
-            let scanning = run.step != .uploading
+            let agg = run.aggregate()
+            let raw = run.aggregate(holding: false)
+            let known = run.uploadStarted
             return ForkMacBackupPresentation.Progress(
-                bytesDone: done, bytesTotal: scanning ? nil : total, bytesUploaded: uploaded, files: files,
-                filesTotal: scanning ? nil : filesTotal, bytesPerSecond: run.tracker.rate(),
-                eta: scanning ? nil : run.tracker.eta(now: now, done: done, total: total),
-                currentPath: current.path, errors: errors)
+                bytesDone: agg.done, bytesTotal: known ? agg.total : nil, bytesUploaded: agg.uploaded, files: agg.files,
+                filesTotal: known ? agg.filesTotal : nil, bytesPerSecond: run.tracker.rate(),
+                eta: known ? run.tracker.eta(now: now, done: raw.done, total: raw.total) : nil,
+                currentPath: current.path, errors: agg.errors)
         }
         if let verify {
             return ForkMacBackupPresentation.Progress(files: verify.progress.checked, filesTotal: verify.progress.total)
@@ -510,15 +574,19 @@ struct ForkMacBackupMachine {
             run.sources[run.index].sawUpload = true
             run.bytesSent = max(run.bytesSent, run.sources.reduce(0) { $0 + $1.counters.uploaded })
             run.step = counters.total == nil ? .scanning : .uploading
+            if counters.total != nil { run.uploadStarted = true }
             let signature = counters.signature
             if signature != run.signature {
                 run.signature = signature
                 run.lastProgressAt = now
             }
-            let completed = run.sources.prefix(run.index)
-            let done = completed.reduce(0) { $0 + $1.counters.done } + counters.done
-            let total = counters.total.map { completed.reduce(0) { $0 + ($1.counters.total ?? $1.counters.done) } + $0 }
-            run.tracker.add(done: done, estimate: total, at: now)
+            if run.uploadStarted {
+                run.raiseFloors()
+                let agg = run.aggregate(holding: false)
+                run.tracker.add(done: agg.done, estimate: agg.total, at: now)
+            } else {
+                run.tracker.add(done: counters.done, estimate: nil, at: now)
+            }
             self.run = run
             if before != run.step { actions.append(.publish) }
             return actions

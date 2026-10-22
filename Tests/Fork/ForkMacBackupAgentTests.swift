@@ -20,6 +20,7 @@ enum ForkMacBackupAgentTests {
         slotBook(suite)
         machineHappyPath(suite)
         machineConclusions(suite)
+        machineMultiSourceContinuity(suite)
         machineFailures(suite)
         machineStops(suite)
         machineLimitsAndVerify(suite)
@@ -531,6 +532,58 @@ enum ForkMacBackupAgentTests {
                      "« finished » shows a while, then the state rests")
         suite.expect(machine.nextWake(now: at.addingTimeInterval(10)) == at.addingTimeInterval(2 + 5 * 60),
                      "the machine asks to be woken when the « finished » display ends")
+    }
+
+    /// Three sources, the second's estimate arrives late, the third is tiny:
+    /// ONE continuous progress (never nil, never backwards, never « scanning »).
+    private static func machineMultiSourceContinuity(_ suite: TestSuite) {
+        let paths = ["/Users/test/A", "/Users/test/B", "/Users/test/C"]
+        let list = paths.map { ForkMacBackupSource(path: $0) }
+        var (machine, _) = startedMachine(settings(sources: paths))
+        _ = machine.handle(.chainChecked(nil, nodeID: nil), now: t0)
+        for source in list { _ = machine.handle(.policyApplied(source, .matched), now: t0) }
+        var clock = 0.0
+        var fractions: [Double?] = []
+        var started = false
+        var scanningAfterStart = false
+        func observe() {
+            let at = t0.addingTimeInterval(clock)
+            let presentation = ForkMacBackupPresentation(phase: machine.phase(now: at), progress: machine.progress(now: at))
+            if started {
+                fractions.append(presentation.fraction)
+                if presentation.phase == .scanning || presentation.phase == .preparing { scanningAfterStart = true }
+            }
+            if presentation.fraction != nil { started = true }
+        }
+        func feed(_ source: ForkMacBackupSource, hashed: Int64, estimate: Int64) {
+            clock += 1
+            _ = machine.handle(.progress(sources(path: source.path, uploading: true, hashed: hashed, estimate: estimate,
+                                                 files: hashed / 10)), now: t0.addingTimeInterval(clock))
+            observe()
+        }
+        func finish(_ source: ForkMacBackupSource) {
+            clock += 1
+            _ = machine.handle(.progress(sources(path: source.path, uploading: false)), now: t0.addingTimeInterval(clock))
+            if source != list[2] { observe() }
+            clock += 1
+            _ = machine.handle(.listed(source, .success([manifest(id: source.path, path: source.path, start: t0,
+                                                                  end: t0.addingTimeInterval(clock))])),
+                               now: t0.addingTimeInterval(clock))
+            if source != list[2] { observe() }
+        }
+        for step in 1...4 { feed(list[0], hashed: Int64(step) * 250, estimate: 1_000) }
+        finish(list[0])
+        // Source 2: no estimate for a while, then a large one.
+        for step in 1...3 { feed(list[1], hashed: Int64(step) * 100, estimate: 0) }
+        for step in 4...8 { feed(list[1], hashed: Int64(step) * 100, estimate: 4_000) }
+        finish(list[1])
+        feed(list[2], hashed: 5, estimate: 10)
+        feed(list[2], hashed: 10, estimate: 10)
+        finish(list[2])
+        let known = fractions.compactMap { $0 }
+        suite.expect(started && known.count == fractions.count, "multi-source: the fraction is never nil once uploading started")
+        suite.expect(zip(known, known.dropFirst()).allSatisfy { $0 <= $1 }, "multi-source: the fraction never moves backwards")
+        suite.expect(!scanningAfterStart, "multi-source: the phase never returns to scanning between sources")
     }
 
     private static func machineConclusions(_ suite: TestSuite) {
