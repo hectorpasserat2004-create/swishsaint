@@ -575,6 +575,7 @@ final class ForkUpdateService: ObservableObject {
         let destination = Bundle.main.bundleURL
         let parent = destination.deletingLastPathComponent()
         guard FileManager.default.isWritableFile(atPath: parent.path) else {
+            ForkMacBackupActivity.updateAbandoned()
             state = .failed(InstallError.location.message)
             return
         }
@@ -598,6 +599,7 @@ final class ForkUpdateService: ObservableObject {
         do {
             try process.run()
         } catch {
+            ForkMacBackupActivity.updateAbandoned()
             state = .failed(InstallError.location.message)
             return
         }

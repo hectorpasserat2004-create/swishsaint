@@ -32,11 +32,15 @@ enum ForkMacBackupAgentPlist {
     /// The keys both forms share. `KeepAlive.SuccessfulExit = false`:
     /// relaunched after a crash or an update (the agent exits non-zero to
     /// move to the new binary), never after a clean exit (switched off, a
-    /// second instance).
+    /// second instance). `ExitTimeOut`: the clean stop (the snapshot
+    /// canceled with its checkpoint, up to 25 s, then the server and a
+    /// verification stopped) needs more than launchd's default 20 s before
+    /// its SIGKILL, which would orphan a `kopia snapshot verify`.
     private static func common(bundleID: String) -> [String: Any] {
         [
             "Label": label(bundleID: bundleID),
             "KeepAlive": ["SuccessfulExit": false],
+            "ExitTimeOut": 60,
             "RunAtLoad": true,
             "ProcessType": "Background",
             "LowPriorityBackgroundIO": true,

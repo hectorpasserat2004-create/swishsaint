@@ -932,8 +932,9 @@ enum ForkMacBackupAgentTests {
                         && keepAlive?["SuccessfulExit"] as? Bool == false && release["RunAtLoad"] as? Bool == true
                         && release["ProcessType"] as? String == "Background"
                         && release["LowPriorityBackgroundIO"] as? Bool == true && release["Program"] == nil
-                        && release["AssociatedBundleIdentifiers"] as? [String] == [bundle],
-                     "the release plist: BundleProgram, the flag, KeepAlive on failure only, Background, low-priority I/O")
+                        && release["AssociatedBundleIdentifiers"] as? [String] == [bundle]
+                        && release["ExitTimeOut"] as? Int == 60,
+                     "the release plist: BundleProgram, the flag, KeepAlive on failure only, Background, low-priority I/O, 60 s to stop")
         let legacy = ForkMacBackupAgentPlist.legacy(bundleID: bundle, executablePath: "/tmp/App.app/Contents/MacOS/App")
         suite.expect(legacy["Program"] as? String == "/tmp/App.app/Contents/MacOS/App" && legacy["BundleProgram"] == nil
                         && legacy["ProgramArguments"] as? [String] == ["/tmp/App.app/Contents/MacOS/App", "--fork-backup-agent"]

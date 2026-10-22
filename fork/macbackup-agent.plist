@@ -31,6 +31,8 @@
 	<true/>
 	<key>ThrottleInterval</key>
 	<integer>30</integer>
+	<key>ExitTimeOut</key>
+	<integer>60</integer>
 	<key>AssociatedBundleIdentifiers</key>
 	<array>
 		<string>__BUNDLE_ID__</string>
