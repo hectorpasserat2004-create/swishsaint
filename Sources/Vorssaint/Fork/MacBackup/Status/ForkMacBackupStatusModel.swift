@@ -36,6 +36,10 @@ final class ForkMacBackupStatusModel: ObservableObject {
     private var settingsPost: DispatchWorkItem?
     private var liveViewers = 0
     private var leaseTimer: Timer?
+    /// While the agent's state shows something running: read again after
+    /// a while, so an agent that died mid-run is noticed without its
+    /// notification.
+    private var aliveCheck: DispatchWorkItem?
     private var started = false
     /// The agent's own state, as last read.
     private var agentPresentation: ForkMacBackupPresentation = .unknown
@@ -93,6 +97,7 @@ final class ForkMacBackupStatusModel: ObservableObject {
             self?.reload()
         }
         if status == UInt32(NOTIFY_STATUS_OK) { stateToken = token }
+        if liveViewers > 0 { startLease() }
         settingsFingerprint = currentSettingsFingerprint()
         defaultsObserver = NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification,
                                                                   object: nil, queue: .main) { [weak self] _ in
@@ -109,9 +114,12 @@ final class ForkMacBackupStatusModel: ObservableObject {
         defaultsObserver = nil
         settingsPost?.cancel()
         settingsPost = nil
+        aliveCheck?.cancel()
+        aliveCheck = nil
+        // The views showing the progress keep their count (they will end
+        // it); only the lease stops.
         leaseTimer?.invalidate()
         leaseTimer = nil
-        liveViewers = 0
         started = false
         agentAlive = false
         restore = nil
@@ -131,15 +139,26 @@ final class ForkMacBackupStatusModel: ObservableObject {
             let alive = file?.agentPID.map { $0 > 0 && kill($0, 0) == 0 } ?? false
             DispatchQueue.main.async {
                 guard let self, self.started else { return }
+                if self.agentAlive != alive { self.agentAlive = alive }
                 if let file {
-                    self.agentPresentation = file.presentation
+                    self.agentPresentation = file.presentation.settled(agentAlive: alive)
                     self.publishMerged()
                     self.stateWrittenAt = file.writtenAt
                     self.agentBuild = file.agentBuild
                 }
-                if self.agentAlive != alive { self.agentAlive = alive }
+                self.scheduleAliveCheck(running: file.map { $0.presentation.phase.showsInClosedIsland
+                    || $0.presentation.phase == .maintaining } ?? false)
             }
         }
+    }
+
+    private func scheduleAliveCheck(running: Bool) {
+        aliveCheck?.cancel()
+        aliveCheck = nil
+        guard running, started else { return }
+        let check = DispatchWorkItem { [weak self] in self?.reload() }
+        aliveCheck = check
+        DispatchQueue.main.asyncAfter(deadline: .now() + 20, execute: check)
     }
 
     // MARK: Restores (in the app)
@@ -215,15 +234,13 @@ final class ForkMacBackupStatusModel: ObservableObject {
     /// A view that shows the live progress calls this on appear, and
     /// `endLiveViewing` on disappear: while one does, the agent publishes
     /// every second instead of every ten.
+    /// Counted even while the model is stopped, so every view's end matches
+    /// its own begin (a begin skipped then an end counted would stop another
+    /// view's lease).
     func beginLiveViewing() {
-        guard !isPreview, started else { return }
+        guard !isPreview else { return }
         liveViewers += 1
-        guard liveViewers == 1 else { return }
-        touchLease()
-        let timer = Timer(timeInterval: Self.leaseInterval, repeats: true) { [weak self] _ in self?.touchLease() }
-        timer.tolerance = 1
-        RunLoop.main.add(timer, forMode: .common)
-        leaseTimer = timer
+        if liveViewers == 1, started { startLease() }
     }
 
     func endLiveViewing() {
@@ -235,6 +252,15 @@ final class ForkMacBackupStatusModel: ObservableObject {
         if let url = paths?.viewerLease {
             queue.async { try? FileManager.default.removeItem(at: url) }
         }
+    }
+
+    private func startLease() {
+        guard leaseTimer == nil else { return }
+        touchLease()
+        let timer = Timer(timeInterval: Self.leaseInterval, repeats: true) { [weak self] _ in self?.touchLease() }
+        timer.tolerance = 1
+        RunLoop.main.add(timer, forMode: .common)
+        leaseTimer = timer
     }
 
     private func touchLease() {

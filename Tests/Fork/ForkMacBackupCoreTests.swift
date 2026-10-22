@@ -20,6 +20,7 @@ enum ForkMacBackupCoreTests {
         formatting(suite)
         strings(suite)
         headlines(suite)
+        staleAgent(suite)
     }
 
     // MARK: Helpers
@@ -628,5 +629,19 @@ enum ForkMacBackupCoreTests {
         suite.expect(ForkMacBackupPresentation.preview(.protected, now: now).rhythmLine(text, locale: fr).hasPrefix("Automatique")
                         && ForkMacBackupPresentation.preview(.protected, now: now).costLine(text, locale: fr) != nil,
                      "the rhythm and the cost read in words")
+    }
+
+    private static func staleAgent(_ suite: TestSuite) {
+        let next = Date(timeIntervalSince1970: 1_792_670_000)
+        var running = ForkMacBackupPresentation(phase: .uploading, progress: .init(bytesDone: 5, bytesTotal: 10), nextRun: next,
+                                                updatedAt: Date(timeIntervalSince1970: 1_792_663_440))
+        suite.expect(running.settled(agentAlive: true) == running, "a live agent's state is shown as written")
+        let settled = running.settled(agentAlive: false)
+        suite.expect(settled.phase == .ready(next: next) && settled.progress == nil && !settled.phase.showsInClosedIsland,
+                     "a dead agent's backup is over: the closed island shows nothing running")
+        running.phase = .verifying
+        suite.expect(running.settled(agentAlive: false).phase == .ready(next: next), "nor a verification")
+        running.phase = .waiting(reason: .power, until: nil)
+        suite.expect(running.settled(agentAlive: false) == running, "a wait or a result stays as written")
     }
 }
