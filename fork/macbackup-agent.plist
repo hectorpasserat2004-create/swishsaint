@@ -26,9 +26,7 @@
 	<key>RunAtLoad</key>
 	<true/>
 	<key>ProcessType</key>
-	<string>Background</string>
-	<key>LowPriorityBackgroundIO</key>
-	<true/>
+	<string>Standard</string>
 	<key>ThrottleInterval</key>
 	<integer>30</integer>
 	<key>ExitTimeOut</key>

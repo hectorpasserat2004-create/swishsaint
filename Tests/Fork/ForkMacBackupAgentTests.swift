@@ -930,12 +930,14 @@ enum ForkMacBackupAgentTests {
                         && release["BundleProgram"] as? String == "Contents/MacOS/Swishsaint"
                         && release["ProgramArguments"] as? [String] == ["Contents/MacOS/Swishsaint", "--fork-backup-agent"]
                         && keepAlive?["SuccessfulExit"] as? Bool == false && release["RunAtLoad"] as? Bool == true
-                        && release["ProcessType"] as? String == "Background"
-                        && release["LowPriorityBackgroundIO"] as? Bool == true && release["Program"] == nil
+                        && release["ProcessType"] as? String == "Standard"
+                        && release["LowPriorityBackgroundIO"] == nil && release["Program"] == nil
                         && release["AssociatedBundleIdentifiers"] as? [String] == [bundle]
                         && release["ExitTimeOut"] as? Int == 60,
-                     "the release plist: BundleProgram, the flag, KeepAlive on failure only, Background, low-priority I/O, 60 s to stop")
+                     "the release plist: BundleProgram, the flag, KeepAlive on failure only, a standard process (no Background, no low-priority I/O), 60 s to stop")
         let legacy = ForkMacBackupAgentPlist.legacy(bundleID: bundle, executablePath: "/tmp/App.app/Contents/MacOS/App")
+        suite.expect(legacy["ProcessType"] as? String == "Standard" && legacy["LowPriorityBackgroundIO"] == nil,
+                     "the Developer plist is a standard process too: priority is the engine's job, per run")
         suite.expect(legacy["Program"] as? String == "/tmp/App.app/Contents/MacOS/App" && legacy["BundleProgram"] == nil
                         && legacy["ProgramArguments"] as? [String] == ["/tmp/App.app/Contents/MacOS/App", "--fork-backup-agent"]
                         && legacy["LimitLoadToSessionType"] as? String == "Aqua",
@@ -1198,6 +1200,14 @@ enum ForkMacBackupAgentTests {
         suite.expect(low.enginePriority(for: .scheduled, firstBackup: true) == .normal
                         && low.enginePriority(for: .agent, firstBackup: true) == .normal,
                      "the first backup after the setup runs at normal priority, even started by the planner")
+        let background = ForkMacBackupKopiaInvocation.Priority.background
+        suite.expect(background.darwinValue == PRIO_DARWIN_BG
+                        && ForkMacBackupKopiaInvocation.Priority.normal.darwinValue == 0
+                        && ForkMacBackupKopiaInvocation.Priority.utility.darwinValue == 0,
+                     "only a scheduled run puts the server in the macOS background state")
+        suite.expect(background.serverSpawn == .utility
+                        && ForkMacBackupKopiaInvocation.Priority.normal.serverSpawn == .normal,
+                     "a server is never spawned in a background class it could not leave for « Sauvegarder maintenant »")
     }
 
     private static func prescanPlan(_ suite: TestSuite) {

@@ -40,6 +40,19 @@ struct ForkMacBackupKopiaInvocation: Equatable {
     var displayLine: String { (["kopia"] + arguments).joined(separator: " ") }
 }
 
+extension ForkMacBackupKopiaInvocation.Priority {
+    /// The `setpriority(PRIO_DARWIN_PROCESS)` value of a running child: the
+    /// macOS background state (CPU, disk and network throttled, and liftable)
+    /// for the scheduled work, none for the rest.
+    var darwinValue: Int32 { self == .background ? PRIO_DARWIN_BG : 0 }
+
+    /// What a `kopia server` is spawned with. Never `.background`: a spawn-time
+    /// background class cannot be lifted for « Sauvegarder maintenant », so the
+    /// server starts at utility and the engine puts it in the background state
+    /// itself, for scheduled runs only, and lifts it for the others.
+    var serverSpawn: Self { self == .background ? .utility : self }
+}
+
 /// Kopia's command lines and environments (plan Annex A, bench `SPIKES.md`).
 ///
 /// Every call names the repository's own config and log folder and turns

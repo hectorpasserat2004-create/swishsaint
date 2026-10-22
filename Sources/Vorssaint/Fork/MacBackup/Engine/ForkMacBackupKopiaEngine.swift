@@ -64,8 +64,11 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
     }
 
     /// Also applied at once to the running server (macOS background state
-    /// on or off, `setpriority(PRIO_DARWIN_PROCESS)`), so a « Sauvegarder
-    /// maintenant » runs at normal speed and a scheduled run stays quiet.
+    /// on or off, `setpriority(PRIO_DARWIN_PROCESS)`), and again to each new
+    /// server pid (start, restart after a crash), so a « Sauvegarder
+    /// maintenant » or the first backup runs at normal speed and only a
+    /// scheduled run is throttled. The agent itself is a standard process:
+    /// nothing is inherited.
     var priority: ForkMacBackupKopiaInvocation.Priority {
         get { lock.withLock { priorityValue } }
         set {
@@ -73,9 +76,7 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
                 priorityValue = newValue
                 return role == .owner ? ownerServerPID : nil
             }
-            if let pid, pid > 0 {
-                _ = setpriority(PRIO_DARWIN_PROCESS, id_t(pid), newValue == .background ? PRIO_DARWIN_BG : 0)
-            }
+            if let pid, pid > 0 { _ = setpriority(PRIO_DARWIN_PROCESS, id_t(pid), newValue.darwinValue) }
             work.async { [weak self] in self?.server?.priority = newValue }
         }
     }
@@ -270,7 +271,12 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
         let fresh = ForkMacBackupKopiaServer(binary: binary, paths: paths, files: files, queue: work)
         fresh.onChange = { [weak self, weak fresh] in
             let pid = fresh?.processIdentifier
-            self?.lock.withLock { self?.ownerServerPID = pid }
+            let priority: ForkMacBackupKopiaInvocation.Priority? = self?.lock.withLock {
+                self?.ownerServerPID = pid
+                return self?.priorityValue
+            }
+            // A new server pid gets the priority of the run in progress.
+            if let pid, pid > 0, let priority { _ = setpriority(PRIO_DARWIN_PROCESS, id_t(pid), priority.darwinValue) }
         }
         guard let old = server else {
             server = fresh

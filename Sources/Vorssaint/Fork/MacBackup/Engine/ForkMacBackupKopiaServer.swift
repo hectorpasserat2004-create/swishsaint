@@ -109,7 +109,8 @@ final class ForkMacBackupKopiaServer {
         let invocation = ForkMacBackupKopiaInvocation(
             arguments: ForkMacBackupKopiaCommand.global(files) + ForkMacBackupKopiaCommand.serverStart(socketPath: socket.path),
             environment: ForkMacBackupKopiaCommand.environment(credentials: credentials, files: files, extra: extra),
-            timeout: .infinity, silenceTimeout: nil, priority: priority, materializeDataless: materializeDataless)
+            timeout: .infinity, silenceTimeout: nil, priority: priority.serverSpawn,
+            materializeDataless: materializeDataless)
 
         generation += 1
         let current = generation

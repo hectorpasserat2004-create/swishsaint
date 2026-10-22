@@ -36,14 +36,19 @@ enum ForkMacBackupAgentPlist {
     /// canceled with its checkpoint, up to 25 s, then the server and a
     /// verification stopped) needs more than launchd's default 20 s before
     /// its SIGKILL, which would orphan a `kopia snapshot verify`.
+    /// `ProcessType = Standard`, no `LowPriorityBackgroundIO`: a child spawned
+    /// by a background process stays background whatever its parent does
+    /// afterwards, so « Sauvegarder maintenant » and the first backup would
+    /// run throttled. The agent runs as an ordinary process; the engine puts
+    /// the kopia server in the background itself, for scheduled runs only
+    /// (`ForkMacBackupKopiaInvocation.Priority`).
     private static func common(bundleID: String) -> [String: Any] {
         [
             "Label": label(bundleID: bundleID),
             "KeepAlive": ["SuccessfulExit": false],
             "ExitTimeOut": 60,
             "RunAtLoad": true,
-            "ProcessType": "Background",
-            "LowPriorityBackgroundIO": true,
+            "ProcessType": "Standard",
             "ThrottleInterval": 30,
             "AssociatedBundleIdentifiers": [bundleID],
         ]
