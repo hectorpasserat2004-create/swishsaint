@@ -666,14 +666,21 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
             }
             task.attach(handle)
         case .client:
-            requestDecoding(ForkMacBackupKopia.SourcesResponse.self, "GET", "/api/v1/sources", auth: .ui) { result in
-                switch result {
-                case .failure(let error): task.finish(.failure(error))
-                case .success(let sources):
-                    let wanted = sources.sources.compactMap(\.source).filter { path == nil || $0.path == path }
-                    self.collectSnapshots(wanted, incomplete: incomplete, collected: [], task: task, then: then)
+            // Every Mac and account of the repository (`multiUser`); the
+            // server learns new sources every 4 h only, so the whole list
+            // asks it to look again first (another Mac's first snapshot).
+            let list = {
+                self.requestDecoding(ForkMacBackupKopia.SourcesResponse.self, "GET", "/api/v1/sources", auth: .ui) { result in
+                    switch result {
+                    case .failure(let error): task.finish(.failure(error))
+                    case .success(let sources):
+                        let wanted = sources.sources.compactMap(\.source).filter { path == nil || $0.path == path }
+                        self.collectSnapshots(wanted, incomplete: incomplete, collected: [], task: task, then: then)
+                    }
                 }
             }
+            guard path == nil else { return list() }
+            request("POST", "/api/v1/control/refresh", auth: .control) { _ in list() }
         }
     }
 

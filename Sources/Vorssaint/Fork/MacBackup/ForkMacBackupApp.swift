@@ -23,5 +23,8 @@ enum ForkMacBackupApp {
         ForkMacBackupStatusModel.shared.sync()
         ForkMacBackupAgentLink.sync()
         ForkMacBackupIsland.sync()
+        // Off: an engine download stops too. The window closes itself on
+        // the `.off` state the status model publishes.
+        if !isEnabled, ForkMacBackupEngineStore.shared.isBusy { ForkMacBackupEngineStore.shared.cancel() }
     }
 }

@@ -844,6 +844,12 @@ final class ForkMacBackupRunner {
         case .applyPolicy(let source):
             applyPolicy(source)
         case .triggerSnapshot(let source):
+            // The server may only start with the run (its chain check): its
+            // CPU and reads are counted from its first snapshot.
+            if var start = runCostStart, start.reading == nil {
+                start.reading = serverPID.flatMap(ForkMacBackupCostMeter.read(pid:))
+                runCostStart = start
+            }
             engine?.startSnapshot(source) { [weak self] result in
                 guard let self else { return }
                 switch result {
