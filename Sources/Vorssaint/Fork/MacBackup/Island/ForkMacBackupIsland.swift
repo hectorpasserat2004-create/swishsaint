@@ -261,9 +261,9 @@ final class ForkMacBackupIslandModel: ObservableObject {
         if let result = ForkMacBackupIslandRules.endedRun(from: previous.phase, to: state.phase) {
             runEnded(result, previous: previous, state: state)
         }
-        if ForkMacBackupIslandRules.endedRestore(from: previous.phase, to: state.phase) {
-            restoreEnded(previous: previous)
-        }
+        // A restore's end is told by `restoreFinished` (the window's report),
+        // only when it succeeded: the phase leaving « restoring » says nothing
+        // of how it ended (canceled, failed).
         offerCards(state)
     }
 
@@ -275,10 +275,12 @@ final class ForkMacBackupIslandModel: ObservableObject {
         let notice = ForkMacBackupIslandRules.notice(for: result, sent: state.capacity.lastSentBytes) { [defaults] event in
             ForkMacBackupIslandRules.channel(defaults.string(forKey: ForkDefaultsKey.macBackupNotify(event)), event: event)
         }
+        // Nothing at all when the person chose « Rien » for this end: no
+        // notice, and no mascot reacting to a failure in the closed island
+        // (decision 3 of 22/10).
         let tell = {
-            if let notice {
-                ForkMacBackupIsland.show(notice, mascot: mascot)
-            }
+            guard let notice else { return }
+            ForkMacBackupIsland.show(notice, mascot: mascot)
             if let mascot { NotchService.shared.reactMascot(mascot) }
         }
         // The ring fills and turns into a checkmark before it leaves, when
@@ -303,15 +305,6 @@ final class ForkMacBackupIslandModel: ObservableObject {
         }
         finishWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + ForkMacBackupIslandRules.finishHold, execute: work)
-    }
-
-    private func restoreEnded(previous: ForkMacBackupPresentation) {
-        // The window's card already told it.
-        if let cardShownAt, Date().timeIntervalSince(cardShownAt) < 30, card?.kind.isRestore == true { return }
-        let channel = ForkMacBackupIslandRules.channel(defaults.string(forKey: ForkDefaultsKey.macBackupNotify(.restoreDone)),
-                                                      event: .restoreDone)
-        guard ForkMacBackupIslandRules.showsInIsland(channel) else { return }
-        ForkMacBackupIsland.show(.restored(files: previous.progress?.filesTotal ?? previous.progress?.files), mascot: nil)
     }
 
     /// Lays the island out again when the activity comes or goes, or its
