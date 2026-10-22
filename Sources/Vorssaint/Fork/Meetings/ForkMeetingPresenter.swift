@@ -395,30 +395,37 @@ final class ForkMeetingPresenter {
 
     /// "Sent to <CRM>" or "Not sent to <CRM>", the meeting's name under it
     /// (never its Google Meet code), [Show]: a result, silenced with the
-    /// others on the page.
-    func showCastral(folder: URL, name: String, sent: Bool) {
+    /// others on the page. An automatic send without a sure appointment
+    /// says "Choose the appointment" instead, and its button opens the
+    /// meeting with the choice.
+    func showCastral(folder: URL, name: String, outcome: ForkCastralOutcome) {
         guard Thread.isMainThread else {
-            DispatchQueue.main.async { self.showCastral(folder: folder, name: name, sent: sent) }
+            DispatchQueue.main.async { self.showCastral(folder: folder, name: name, outcome: outcome) }
             return
         }
         let wait = savedAt.map { Self.savedHold - Date().timeIntervalSince($0) } ?? 0
         guard wait <= 0 else {
             DispatchQueue.main.asyncAfter(deadline: .now() + wait) { [weak self] in
                 self?.savedAt = nil
-                self?.showCastral(folder: folder, name: name, sent: sent)
+                self?.showCastral(folder: folder, name: name, outcome: outcome)
             }
             return
         }
         let text = self.text
-        let title = sent ? text.noticeCastralSent(name) : text.noticeCastralFailed(name)
+        let sent = outcome == .sent
+        let chooses = outcome == .needsChoice
+        let title = sent ? text.noticeCastralSent(name) : chooses ? text.noticeCastralChoose : text.noticeCastralFailed(name)
         let detail = ForkMeetingExportDocument.name(folder.lastPathComponent, meetCode: nil, includesMeetCode: false)
         announce(ForkMeetingLiveText.sentences(title, detail))
         guard ForkMeetingNotifyEvent.isOn(.results) else { return }
         let shown = present({ dismiss in
-            ForkMeetingCard(symbol: sent ? "paperplane.fill" : "xmark.circle.fill", tint: sent ? .green : .red,
+            ForkMeetingCard(symbol: sent ? "paperplane.fill" : chooses ? "questionmark.circle.fill" : "xmark.circle.fill",
+                            tint: sent ? .green : chooses ? .orange : .red,
                             title: title, lines: [detail],
-                            actions: [ForkMeetingCard.Action(title: text.actionShowMeeting, prominent: true) {
+                            actions: [ForkMeetingCard.Action(title: chooses ? text.castralChooseAction : text.actionShowMeeting,
+                                                             prominent: true) {
                                 ForkMeetingLibraryWindow.shared.show(folder: folder)
+                                if chooses { ForkMeetingExports.shared.chooseCastral(folder) }
                                 dismiss()
                             }])
         }, height: Self.savedCardHeight, hold: sent ? Self.savedHold : Self.cardHold)

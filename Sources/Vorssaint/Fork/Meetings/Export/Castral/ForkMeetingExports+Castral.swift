@@ -127,12 +127,20 @@ extension ForkMeetingExports {
         }
     }
 
-    /// A send ended: said in a notice, then followed on the server.
+    /// A send ended: said in a notice, then followed on the server. An
+    /// automatic send that found no sure appointment asks for one instead.
     func castralSent(_ folder: URL, config: ForkMeetingExporterConfig, failed: Bool) {
         let name = title(config, ForkMeetingStrings.current)
+        let outcome = ForkCastralOutcome(failed: failed, failure: result(folder, config.id)?.failure)
         refreshResults(folder)
-        castralNoticed(folder, name, !failed)
+        castralNoticed(folder, name, outcome)
         if !failed { castralTracker.follow(folder, target: config.id) }
+    }
+
+    /// The notice's "Choose Appointment…": the same choice as Export To.
+    func chooseCastral(_ folder: URL) {
+        guard let config = castralConfig else { return }
+        export(folder, to: config.id)
     }
 
     // MARK: - The page

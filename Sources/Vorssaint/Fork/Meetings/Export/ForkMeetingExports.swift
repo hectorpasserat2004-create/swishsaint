@@ -93,8 +93,8 @@ final class ForkMeetingExports: ObservableObject {
     /// An automatic send failed for this meeting: the notice.
     private let failed: (URL) -> Void
     /// A send to a CRM ended, or the CRM failed a meeting: its notice
-    /// (folder, the CRM's name, sent).
-    let castralNoticed: (URL, String, Bool) -> Void
+    /// (folder, the CRM's name, outcome).
+    let castralNoticed: (URL, String, ForkCastralOutcome) -> Void
     /// Follows the deposits on their CRM.
     private(set) lazy var castralTracker = ForkCastralTracker(exports: self, store: store, wanted: wanted)
     let queue = DispatchQueue(label: "fork.meetings.export", qos: .utility)
@@ -113,8 +113,8 @@ final class ForkMeetingExports: ObservableObject {
          writing: @escaping () -> Set<String> = { ForkMeetingService.shared.writingFolders },
          wanted: @escaping () -> Bool = { ForkMeetingService.isWanted },
          failed: @escaping (URL) -> Void = { ForkMeetingService.shared.exportFailed($0) },
-         castralNoticed: @escaping (URL, String, Bool) -> Void = {
-             ForkMeetingService.shared.castralNotice(folder: $0, name: $1, sent: $2)
+         castralNoticed: @escaping (URL, String, ForkCastralOutcome) -> Void = {
+             ForkMeetingService.shared.castralNotice(folder: $0, name: $1, outcome: $2)
          }) {
         self.defaults = defaults
         self.store = store

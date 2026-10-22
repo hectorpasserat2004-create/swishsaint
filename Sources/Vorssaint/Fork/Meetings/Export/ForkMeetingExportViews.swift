@@ -142,10 +142,14 @@ struct ForkMeetingExportStatus: View {
         }
     }
 
+    /// A CRM's send that waits for its appointment is not an error: it
+    /// says so, and its button opens the choice.
     @ViewBuilder private func failed(_ failure: ForkMeetingExportFailure, config: ForkMeetingExporterConfig) -> some View {
-        Label(text.exportFailedShort, systemImage: "xmark.circle.fill")
-            .foregroundStyle(.red)
-        Button(text.exportRetry) { exports.export(folder, to: config.id) }
+        let chooses = failure.castralNeedsChoice
+        Label(chooses ? text.castralPhaseChoose : text.exportFailedShort,
+              systemImage: chooses ? "questionmark.circle.fill" : "xmark.circle.fill")
+            .foregroundStyle(chooses ? .orange : .red)
+        Button(chooses ? text.castralChooseAction : text.exportRetry) { exports.export(folder, to: config.id) }
             .controlSize(.small)
             .disabled(live || exports.listChanged || !exports.isConfigured(config))
             .help(failure.message(text))

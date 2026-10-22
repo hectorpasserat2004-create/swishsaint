@@ -78,8 +78,34 @@ enum ForkCastralFailure: Equatable {
         }
     }
 
-    /// Fixed by choosing the appointment by hand (Export To, Retry).
+    /// Fixed by choosing the appointment by hand (Export To, Choose
+    /// Appointment…).
     var needsChoice: Bool { [.noBooking, .uncertain, .orphan, .alreadyReported, .alreadyDeposited].contains(self) }
+}
+
+/// What a send to a CRM, or the CRM's follow, ends with: its notice.
+enum ForkCastralOutcome: Equatable {
+    case sent
+    case failed
+    /// Not sent on its own: the person picks the appointment.
+    case needsChoice
+
+    /// A send's end, from the failure it wrote (none when sent).
+    init(failed: Bool, failure: ForkMeetingExportFailure?) {
+        if !failed {
+            self = .sent
+        } else {
+            self = failure?.castralNeedsChoice == true ? .needsChoice : .failed
+        }
+    }
+}
+
+extension ForkMeetingExportFailure {
+    /// A CRM's send that waits for the person's appointment.
+    var castralNeedsChoice: Bool {
+        guard case let .castral(failure) = self else { return false }
+        return failure.needsChoice
+    }
 }
 
 /// Where a meeting is in the CRM, kept in its `meeting.json` (`castral`),

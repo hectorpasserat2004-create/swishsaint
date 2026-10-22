@@ -102,7 +102,7 @@ final class ForkCastralTracker {
             DispatchQueue.main.async { [exports] in
                 exports.castralRecords[folder.standardizedFileURL.path] = shown
                 if shown.stage == .failed, before != .failed, let config = exports.config(shown.target) {
-                    exports.castralNoticed(folder, exports.title(config, .current), false)
+                    exports.castralNoticed(folder, exports.title(config, .current), .failed)
                 }
             }
             if record.isSettled { return stop() }
