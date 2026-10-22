@@ -45,6 +45,9 @@ final class ForkUpdateService: ObservableObject {
         /// A build to install once the meeting recording or finishing is
         /// saved (installing quits the app): no failure, said as a wait.
         case waitingForMeeting
+        /// A build to install once the Mac backup running ends (30 min at
+        /// most, then it is stopped with a checkpoint).
+        case waitingForBackup
     }
 
     @Published private(set) var state: State = .idle
