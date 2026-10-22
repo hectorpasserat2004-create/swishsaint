@@ -21,14 +21,20 @@ struct ForkMacBackupIslandTile: View {
     }
 
     var body: some View {
-        let now = Date()
+        // The age at rest moves by the minute: the tile wakes only then.
+        TimelineView(.periodic(from: Date(), by: 60)) { context in
+            tile(now: context.date)
+        }
+    }
+
+    private func tile(now: Date) -> some View {
         let state = status.presentation
         let text = ForkMacBackupStrings.strings(l10n.language)
         let reading = ForkMacBackupIslandRules.tileReading(
             state, text: text, locale: l10n.language.formattingLocale(),
             reading: ForkMacBackupReading(rawValue: readingStored) ?? .fallback, now: now)
-        NotchActionTile(symbol: NotchControlItem.macBackup.symbol, title: Self.title(l10n.language),
-                        reading: reading, active: ForkMacBackupIslandRules.tileLit(state), accent: .selection) {
+        return NotchActionTile(symbol: NotchControlItem.macBackup.symbol, title: Self.title(l10n.language),
+                               reading: reading, active: ForkMacBackupIslandRules.tileLit(state), accent: .selection) {
             ForkMacBackupIsland.openSection(from: service)
         }
         .accessibilityHint(ForkMacBackupIslandStrings.strings(l10n.language).activityHint)

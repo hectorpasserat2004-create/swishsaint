@@ -360,11 +360,6 @@ struct ForkMacBackupSettingsStrings {
     let verifyFullCaption: String
     let openVerifications: String
     let notifyHeader: String
-    let eventComplete: String
-    let eventPartial: String
-    let eventFailure: String
-    let eventRestoreDone: String
-    let notifyFooter: String
     let engineHeader: String
     let engineVersion: String
     let cacheSize: String
@@ -708,15 +703,6 @@ extension ForkMacBackupSettingsStrings {
         case .verifications: return optionsTabVerifications
         case .notifications: return optionsTabNotifications
         case .advanced: return optionsTabAdvanced
-        }
-    }
-
-    func notifyEventTitle(_ event: ForkMacBackupNoticeEvent) -> String {
-        switch event {
-        case .complete: return eventComplete
-        case .partial: return eventPartial
-        case .failure: return eventFailure
-        case .restoreDone: return eventRestoreDone
         }
     }
 
@@ -1197,11 +1183,6 @@ extension ForkMacBackupSettingsStrings {
         verifyFullCaption: "“Everything” reads the whole repository back: hours for a big one.",
         openVerifications: "Open the Verifications History",
         notifyHeader: "What tells you",
-        eventComplete: "Backup complete",
-        eventPartial: "Partial backup",
-        eventFailure: "Backup failed",
-        eventRestoreDone: "Restore finished",
-        notifyFooter: "By default nothing leaves the island’s section but the end-of-backup notice.",
         engineHeader: "Engine",
         engineVersion: "Version",
         cacheSize: "Local cache",
@@ -1703,11 +1684,6 @@ extension ForkMacBackupSettingsStrings {
         verifyFullCaption: "«\u{00A0}Tout\u{00A0}» relit le dépôt entier\u{00A0}: des heures pour un gros dépôt.",
         openVerifications: "Ouvrir l’historique des vérifications",
         notifyHeader: "Ce qui vous prévient",
-        eventComplete: "Sauvegarde terminée",
-        eventPartial: "Sauvegarde partielle",
-        eventFailure: "Sauvegarde échouée",
-        eventRestoreDone: "Restauration terminée",
-        notifyFooter: "Par défaut, rien ne sort de la section de l’île, sauf la notice de fin de sauvegarde.",
         engineHeader: "Moteur",
         engineVersion: "Version",
         cacheSize: "Cache local",
@@ -2209,11 +2185,6 @@ extension ForkMacBackupSettingsStrings {
         verifyFullCaption: "“Tudo” relê o repositório inteiro: horas para um grande.",
         openVerifications: "Abrir o Histórico de Verificações",
         notifyHeader: "O que avisa você",
-        eventComplete: "Backup concluído",
-        eventPartial: "Backup parcial",
-        eventFailure: "Falha no backup",
-        eventRestoreDone: "Restauração concluída",
-        notifyFooter: "Por padrão, nada sai da seção da ilha, exceto o aviso de fim de backup.",
         engineHeader: "Motor",
         engineVersion: "Versão",
         cacheSize: "Cache local",
@@ -2715,11 +2686,6 @@ extension ForkMacBackupSettingsStrings {
         verifyFullCaption: "“Tümü” deponun tamamını geri okur: büyük bir depo için saatler sürer.",
         openVerifications: "Doğrulama Geçmişini Aç",
         notifyHeader: "Sizi neyin uyaracağı",
-        eventComplete: "Yedekleme tamamlandı",
-        eventPartial: "Kısmi yedekleme",
-        eventFailure: "Yedekleme başarısız",
-        eventRestoreDone: "Geri yükleme bitti",
-        notifyFooter: "Varsayılan olarak, yedekleme sonu bildirimi dışında adanın bölümünden hiçbir şey çıkmaz.",
         engineHeader: "Motor",
         engineVersion: "Sürüm",
         cacheSize: "Yerel önbellek",
@@ -3221,11 +3187,6 @@ extension ForkMacBackupSettingsStrings {
         verifyFullCaption: "«Всё» перечитывает весь репозиторий: для большого — часы.",
         openVerifications: "Открыть историю проверок",
         notifyHeader: "Как сообщать",
-        eventComplete: "Копирование завершено",
-        eventPartial: "Частичная копия",
-        eventFailure: "Копирование не удалось",
-        eventRestoreDone: "Восстановление завершено",
-        notifyFooter: "По умолчанию за пределы раздела острова выходит только уведомление о завершении копирования.",
         engineHeader: "Движок",
         engineVersion: "Версия",
         cacheSize: "Локальный кэш",
@@ -3727,11 +3688,6 @@ extension ForkMacBackupSettingsStrings {
         verifyFullCaption: "“Todo” relee el repositorio entero: horas si es grande.",
         openVerifications: "Abrir el historial de verificaciones",
         notifyHeader: "Qué te avisa",
-        eventComplete: "Copia completada",
-        eventPartial: "Copia parcial",
-        eventFailure: "Copia fallida",
-        eventRestoreDone: "Restauración terminada",
-        notifyFooter: "Por omisión, nada sale de la sección de la isla salvo el aviso de fin de copia.",
         engineHeader: "Motor",
         engineVersion: "Versión",
         cacheSize: "Caché local",
@@ -4233,11 +4189,6 @@ extension ForkMacBackupSettingsStrings {
         verifyFullCaption: "„Všetko“ prečíta celý repozitár: pri veľkom to trvá hodiny.",
         openVerifications: "Otvoriť históriu overení",
         notifyHeader: "Čo vás upozorní",
-        eventComplete: "Záloha dokončená",
-        eventPartial: "Čiastočná záloha",
-        eventFailure: "Záloha zlyhala",
-        eventRestoreDone: "Obnovenie dokončené",
-        notifyFooter: "Predvolene z časti ostrova nevychádza nič okrem hlásenia o konci zálohy.",
         engineHeader: "Nástroj",
         engineVersion: "Verzia",
         cacheSize: "Lokálna vyrovnávacia pamäť",
@@ -4739,11 +4690,6 @@ extension ForkMacBackupSettingsStrings {
         verifyFullCaption: "„Alles“ liest das ganze Repository zurück: Bei einem großen dauert das Stunden.",
         openVerifications: "Prüfverlauf öffnen",
         notifyHeader: "Was dich informiert",
-        eventComplete: "Backup abgeschlossen",
-        eventPartial: "Unvollständiges Backup",
-        eventFailure: "Backup fehlgeschlagen",
-        eventRestoreDone: "Wiederherstellung beendet",
-        notifyFooter: "Standardmäßig verlässt nichts den Bereich der Insel außer dem Hinweis am Ende eines Backups.",
         engineHeader: "Modul",
         engineVersion: "Modulversion",
         cacheSize: "Lokaler Cache",
@@ -5245,11 +5191,6 @@ extension ForkMacBackupSettingsStrings {
         verifyFullCaption: "“Tutto” rilegge l’intero archivio: ore per uno grande.",
         openVerifications: "Apri la cronologia delle verifiche",
         notifyHeader: "Cosa ti avvisa",
-        eventComplete: "Backup completato",
-        eventPartial: "Backup parziale",
-        eventFailure: "Backup non riuscito",
-        eventRestoreDone: "Ripristino terminato",
-        notifyFooter: "Di default nulla esce dalla sezione dell’isola, tranne l’avviso di fine backup.",
         engineHeader: "Motore",
         engineVersion: "Versione",
         cacheSize: "Cache locale",
@@ -5751,11 +5692,6 @@ extension ForkMacBackupSettingsStrings {
         verifyFullCaption: "「すべて」はリポジトリ全体を読み戻します。大きなリポジトリでは数時間かかります。",
         openVerifications: "検証履歴を開く",
         notifyHeader: "知らせる方法",
-        eventComplete: "バックアップ完了",
-        eventPartial: "一部のみのバックアップ",
-        eventFailure: "バックアップ失敗",
-        eventRestoreDone: "復元完了",
-        notifyFooter: "デフォルトでは、バックアップ終了の通知以外はアイランドの外に出ません。",
         engineHeader: "エンジン",
         engineVersion: "バージョン",
         cacheSize: "ローカルキャッシュ",
@@ -6257,11 +6193,6 @@ extension ForkMacBackupSettingsStrings {
         verifyFullCaption: "‘전체’는 저장소 전체를 다시 읽습니다. 큰 저장소는 몇 시간이 걸립니다.",
         openVerifications: "검증 기록 열기",
         notifyHeader: "알림 방식",
-        eventComplete: "백업 완료",
-        eventPartial: "부분 백업",
-        eventFailure: "백업 실패",
-        eventRestoreDone: "복원 완료",
-        notifyFooter: "기본적으로 백업 종료 알림 외에는 아일랜드 밖으로 나가지 않습니다.",
         engineHeader: "엔진",
         engineVersion: "버전",
         cacheSize: "로컬 캐시",
@@ -6763,11 +6694,6 @@ extension ForkMacBackupSettingsStrings {
         verifyFullCaption: "«Усе» перечитує весь репозиторій: для великого — години.",
         openVerifications: "Відкрити історію перевірок",
         notifyHeader: "Як повідомляти",
-        eventComplete: "Копіювання завершено",
-        eventPartial: "Часткова копія",
-        eventFailure: "Копіювання не вдалося",
-        eventRestoreDone: "Відновлення завершено",
-        notifyFooter: "Типово за межі розділу острова виходить лише сповіщення про завершення копіювання.",
         engineHeader: "Рушій",
         engineVersion: "Версія",
         cacheSize: "Локальний кеш",
@@ -7269,11 +7195,6 @@ extension ForkMacBackupSettingsStrings {
         verifyFullCaption: "“全部”会读回整个存储库：大型存储库需要数小时。",
         openVerifications: "打开验证历史记录",
         notifyHeader: "提醒方式",
-        eventComplete: "备份完成",
-        eventPartial: "部分备份",
-        eventFailure: "备份失败",
-        eventRestoreDone: "恢复完成",
-        notifyFooter: "默认情况下，除备份结束提示外，其他内容都只显示在岛上。",
         engineHeader: "引擎",
         engineVersion: "版本",
         cacheSize: "本地缓存",
@@ -7775,11 +7696,6 @@ extension ForkMacBackupSettingsStrings {
         verifyFullCaption: "「全部」會讀回整個儲存庫：大型儲存庫需要數小時。",
         openVerifications: "打開驗證歷史記錄",
         notifyHeader: "提醒方式",
-        eventComplete: "備份完成",
-        eventPartial: "部分備份",
-        eventFailure: "備份失敗",
-        eventRestoreDone: "回復完成",
-        notifyFooter: "預設情況下，除了備份結束的提示外，其他內容都只會顯示在島上。",
         engineHeader: "引擎",
         engineVersion: "版本",
         cacheSize: "本機快取",
@@ -8281,11 +8197,6 @@ extension ForkMacBackupSettingsStrings {
         verifyFullCaption: "「全部」會讀回整個儲存庫：大型儲存庫需要數小時。",
         openVerifications: "打開驗證歷史記錄",
         notifyHeader: "提醒方式",
-        eventComplete: "備份完成",
-        eventPartial: "部分備份",
-        eventFailure: "備份失敗",
-        eventRestoreDone: "還原完成",
-        notifyFooter: "預設情況下，除了備份結束的提示外，其他內容都只會顯示在島上。",
         engineHeader: "引擎",
         engineVersion: "版本",
         cacheSize: "本機快取",

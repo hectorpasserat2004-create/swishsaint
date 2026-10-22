@@ -288,9 +288,13 @@ enum ForkMacBackupIslandRules {
         return String(format: shared.nextAt, time)
     }
 
-    /// The section's height: compact (180 pt) unless « spacious » (264 pt).
+    /// The section's height, as tall as what it shows, the way the
+    /// timer's page is: compact, the card (its 52 pt ring and padding), the
+    /// chain and the actions (152 pt, with a few points of air), unless
+    /// « spacious » (264 pt) adds the sources, the rhythm and the cost. The
+    /// island's own budget caps it.
     static func sectionHeight(_ stored: String?) -> Double {
-        stored == "spacious" ? 264 : 180
+        stored == "spacious" ? 264 : 152
     }
 
     // MARK: - The tile
