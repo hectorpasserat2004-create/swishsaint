@@ -33,7 +33,8 @@ A profile never holds the token: it is typed once on the page, written at Save.
 1. **Appointment** (`ForkCastralMatch`): by hand, the person picks it in a sheet (the likeliest
    first: the meeting's own Google Meet code, then a time overlap ± 15 min, then the closest start
    within 2 h). On its own, only a sure one (code, or the only overlap) that has a company and no
-   report yet; anything else is recorded as a failure with its Retry. `is_active`, then only
+   report yet; anything else is recorded as waiting for its appointment (`needsChoice`): the notice
+   says "Choose the appointment" and its button, like the detail's, opens this sheet. `is_active`, then only
    `cancelled`/`no_show`, block; a report is a deposit `ready` or with `has_summary`.
 2. **Sound** (`ForkCastralAudioPlan`, `ForkCastralAudio`): FLAC mono from the mix, 16 kHz, or
    8 kHz when 16 kHz is over the cap, else refused before anything opens on the server.
