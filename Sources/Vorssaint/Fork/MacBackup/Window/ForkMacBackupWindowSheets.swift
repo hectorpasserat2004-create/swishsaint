@@ -125,25 +125,30 @@ struct ForkMacBackupRestoreSheet: View {
     private var place: some View {
         VStack(alignment: .leading, spacing: 14) {
             Picker(text.stepWhere, selection: $flow.destination) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(text.whereSeparate)
-                    HStack {
-                        Text((flow.separateFolder.path as NSString).abbreviatingWithTildeInPath)
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                        Button(text.chooseFolder) { flow.chooseFolder(in: NSApp.keyWindow) }
-                            .controlSize(.small)
-                    }
-                }
-                .tag(ForkMacBackupRestoreFlow.Destination.separate)
+                Text(text.whereSeparate).tag(ForkMacBackupRestoreFlow.Destination.separate)
                 if flow.canRestoreInPlace {
                     Text(text.whereOriginal).tag(ForkMacBackupRestoreFlow.Destination.original)
                 }
             }
             .pickerStyle(.radioGroup)
             .labelsHidden()
+            if flow.destination == .separate {
+                HStack(spacing: 8) {
+                    Image(systemName: "folder")
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                    Text((flow.separateFolder.path as NSString).abbreviatingWithTildeInPath)
+                        .font(.callout.monospaced())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .textSelection(.enabled)
+                    Spacer(minLength: 4)
+                    Button(text.chooseFolder) { flow.chooseFolder(in: NSApp.keyWindow) }
+                        .controlSize(.small)
+                }
+                .padding(.leading, 22)
+            }
             if flow.destination == .original {
                 Picker(text.whereOriginal, selection: $flow.policy) {
                     ForEach(ForkMacBackupRestoreRequest.Overwrite.allCases, id: \.self) { policy in

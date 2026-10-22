@@ -61,15 +61,18 @@ final class ForkMacBackupWindowController: NSWindowController, NSWindowDelegate 
     }
 
     #if VORSSAINT_DEVELOPMENT
-    static func demoModel(now: Date = Date(), language: AppLanguage? = nil) -> ForkMacBackupWindowModel {
+    static func demoModel(now: Date = Date(), language: AppLanguage? = nil,
+                          scenario: ForkMacBackupPresentation.Scenario = .protected,
+                          engineAvailable: Bool = true) -> ForkMacBackupWindowModel {
         let engine = ForkMacBackupDemoEngine(now: now, home: NSHomeDirectory())
         let calendar = Calendar.autoupdatingCurrent
-        return ForkMacBackupWindowModel(status: ForkMacBackupStatusModel(preview: .protected, now: now),
+        return ForkMacBackupWindowModel(status: ForkMacBackupStatusModel(preview: scenario, now: now),
                                         ledgerReader: ForkMacBackupDemoLedger(engine.ledger(calendar: calendar)),
                                         previewFolder: FileManager.default.temporaryDirectory
                                             .appendingPathComponent("fork-macbackup-demo-preview", isDirectory: true),
                                         language: language, now: { now }, calendar: calendar,
-                                        localFacts: engine.localFacts, makeEngine: { engine })
+                                        localFacts: engine.localFacts,
+                                        makeEngine: { engineAvailable ? engine : nil })
     }
     #endif
 
