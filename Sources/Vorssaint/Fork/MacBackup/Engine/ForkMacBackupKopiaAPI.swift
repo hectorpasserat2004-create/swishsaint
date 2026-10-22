@@ -25,6 +25,14 @@ final class ForkMacBackupKopiaAPI {
         /// The server answered with this status (not 2xx, not handled).
         case status(Int, String)
 
+        /// « policy not found » (400), « no source matching the provided
+        /// filters » (404): the thing asked for does not exist (yet).
+        var isNotFound: Bool {
+            guard case .status(let code, let message) = self else { return false }
+            let text = message.lowercased()
+            return code == 404 || text.contains("not found") || text.contains("no source matching")
+        }
+
         var engineError: ForkMacBackupEngineError {
             switch self {
             case .engine(let error): return error

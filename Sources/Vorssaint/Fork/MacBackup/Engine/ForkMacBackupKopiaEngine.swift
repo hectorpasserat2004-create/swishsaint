@@ -119,8 +119,13 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
         return fresh
     }
 
+    /// A server this young may still be opening the repository
+    /// (`--async-repo-connect`): « not connected » is waited out.
+    static let connectGrace: TimeInterval = 20
+
     /// One API call; a client whose server restarted (new passwords, new
-    /// socket) re-reads `server.json` once.
+    /// socket) re-reads `server.json` once; a server just started gets
+    /// `connectGrace` to open the repository.
     func request(_ method: String, _ path: String, query: [(String, String)] = [], json: Any? = nil,
                  auth: ForkMacBackupKopiaAPI.Auth, timeout: TimeInterval = ForkMacBackupKopiaAPI.jsonTimeout,
                  retry: Bool = true, completion: @escaping (Result<Data, ForkMacBackupKopiaAPI.Failure>) -> Void) {
@@ -131,6 +136,13 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
                     self.api = nil
                     return self.request(method, path, query: query, json: json, auth: auth, timeout: timeout,
                                         retry: false, completion: completion)
+                }
+                if case .failure(.engine(.notConnected)) = result,
+                   Date().timeIntervalSince(api.info.startedAt) < Self.connectGrace {
+                    return self.work.asyncAfter(deadline: .now() + 0.5) {
+                        self.request(method, path, query: query, json: json, auth: auth, timeout: timeout,
+                                     retry: retry, completion: completion)
+                    }
                 }
                 completion(result)
             }
@@ -442,7 +454,7 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
                 var existing: [String: Any]?
                 switch result {
                 case .success(let data): existing = ForkMacBackupPolicyDocument.object(data)
-                case .failure(.status(404, _)): existing = nil
+                case .failure(let failure) where failure.isNotFound: existing = nil
                 case .failure(.engine(.serverUnavailable)):
                     return self.applyPolicyWithCLI(rules, source: source, task: task)
                 case .failure(let failure): return task.finish(.failure(failure.engineError))
@@ -567,6 +579,9 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
         let run = {
             self.request("POST", "/api/v1/control/" + action, query: self.sourceQuery(source.path), auth: .control) { result in
                 switch result {
+                case .failure(let failure) where failure.isNotFound && !refreshFirst:
+                    // « no source matching the provided filters »: not known yet.
+                    self.controlSource(action, source: source, refreshFirst: true, task: task)
                 case .failure(let failure): task.finish(.failure(failure.engineError))
                 case .success(let data):
                     let answers = (ForkMacBackupPolicyDocument.object(data)?["sources"] as? [String: Any]) ?? [:]
@@ -653,7 +668,9 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
         guard let source = sources.first else {
             return then(collected.sorted { ($0.startDate ?? .distantPast) < ($1.startDate ?? .distantPast) })
         }
-        let query = [("userName", source.userName ?? ""), ("host", source.host ?? ""), ("path", source.path ?? "")]
+        // `all=1`: without it the server folds identical snapshots into one.
+        let query = [("userName", source.userName ?? ""), ("host", source.host ?? ""), ("path", source.path ?? ""),
+                     ("all", "1")]
         requestDecoding(ForkMacBackupKopia.SnapshotsResponse.self, "GET", "/api/v1/snapshots", query: query,
                         auth: .ui) { result in
             switch result {
@@ -702,15 +719,45 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
         work.async { [self] in
             let path = ForkMacBackupSourcePath.normalized(source.path)
             listManifests(sourcePath: path, incomplete: true, task: task) { manifests in
-                guard let manifest = ForkMacBackupRunConclusion.manifest(of: path, startedAt: startedAt, in: manifests) else {
-                    return task.finish(.success(.conclude(sourcePath: path, startedAt: startedAt, manifests: manifests,
-                                                          failures: nil, iCloud: iCloud)))
-                }
-                self.collectFailures(of: manifest, taskID: taskID, task: task) { failures in
-                    task.finish(.success(.conclude(sourcePath: path, startedAt: startedAt, manifests: manifests,
-                                                   failures: failures, iCloud: iCloud)))
+                self.snapshotTask(path: path, startedAt: startedAt, knownID: taskID) { info in
+                    let finish = { (conclusion: ForkMacBackupRunConclusion) in
+                        var conclusion = conclusion
+                        conclusion.taskID = info?.id ?? taskID
+                        conclusion.uploadedBytes = info.flatMap(ForkMacBackupLiveProgress.uploadedBytes(of:))
+                        task.finish(.success(conclusion))
+                    }
+                    guard let manifest = ForkMacBackupRunConclusion.manifest(of: path, startedAt: startedAt,
+                                                                             in: manifests) else {
+                        return finish(.conclude(sourcePath: path, startedAt: startedAt, manifests: manifests,
+                                                failures: nil, iCloud: iCloud))
+                    }
+                    self.collectFailures(of: manifest, taskID: info?.id ?? taskID, task: task) { failures in
+                        finish(.conclude(sourcePath: path, startedAt: startedAt, manifests: manifests,
+                                         failures: failures, iCloud: iCloud))
+                    }
                 }
             }
+        }
+    }
+
+    /// The server's snapshot task of the run: `knownID`'s, else the latest
+    /// one of this source started since `startedAt` (a short run may end
+    /// before the agent ever sees its `currentTask`). Nil when the server
+    /// does not answer or forgot it.
+    private func snapshotTask(path: String, startedAt: Date, knownID: String?,
+                              completion: @escaping (ForkMacBackupKopia.TaskInfo?) -> Void) {
+        if let knownID, !knownID.isEmpty {
+            return requestDecoding(ForkMacBackupKopia.TaskInfo.self, "GET",
+                                   "/api/v1/tasks/" + ForkMacBackupHTTP.percentEncoded(knownID), auth: .ui) {
+                completion(try? $0.get())
+            }
+        }
+        let identity = self.identity ?? repository?.clientIdentity
+        guard let identity else { return completion(nil) }
+        requestDecoding(ForkMacBackupKopia.TasksResponse.self, "GET", "/api/v1/tasks", auth: .ui) { result in
+            let tasks = (try? result.get())?.tasks ?? []
+            completion(ForkMacBackupRunConclusion.snapshotTask(in: tasks, identity: identity, sourcePath: path,
+                                                               startedAt: startedAt))
         }
     }
 

@@ -26,6 +26,31 @@ struct ForkMacBackupRunConclusion: Equatable {
     var manifest: ForkMacBackupKopia.SnapshotManifest?
     /// The proof of that manifest, failures complete.
     var proof: ForkMacBackupSnapshotProof?
+    /// The server's snapshot task, and the bytes it really sent (its
+    /// « Uploaded Bytes »); nil when the server no longer knows it.
+    var taskID: String?
+    var uploadedBytes: Int64?
+
+    init(outcome: Outcome, manifest: ForkMacBackupKopia.SnapshotManifest?, proof: ForkMacBackupSnapshotProof?,
+         taskID: String? = nil, uploadedBytes: Int64? = nil) {
+        self.outcome = outcome
+        self.manifest = manifest
+        self.proof = proof
+        self.taskID = taskID
+        self.uploadedBytes = uploadedBytes
+    }
+
+    /// The latest `Snapshot` task of `user@host:path` started at or after
+    /// `startedAt` (less a few seconds); its description reads
+    /// « user@host:/path at 2026-10-22T16:28:29+02:00 ».
+    static func snapshotTask(in tasks: [ForkMacBackupKopia.TaskInfo], identity: ForkMacBackupRepository.Identity,
+                             sourcePath: String, startedAt: Date, slack: TimeInterval = 5) -> ForkMacBackupKopia.TaskInfo? {
+        let prefix = "\(identity.userName)@\(identity.hostName):\(sourcePath) at "
+        return tasks
+            .filter { $0.kind == "Snapshot" && ($0.description ?? "").hasPrefix(prefix) }
+            .filter { (ForkMacBackupKopia.date($0.startTime) ?? .distantPast) >= startedAt.addingTimeInterval(-slack) }
+            .max { (ForkMacBackupKopia.date($0.startTime) ?? .distantPast) < (ForkMacBackupKopia.date($1.startTime) ?? .distantPast) }
+    }
 
     /// The latest manifest of `sourcePath` started at or after `startedAt`
     /// (less `slack`: the server stamps its own start a moment after the

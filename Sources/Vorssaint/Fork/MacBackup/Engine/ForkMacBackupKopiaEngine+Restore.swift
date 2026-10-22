@@ -338,6 +338,7 @@ extension ForkMacBackupKopiaEngine {
                     case .canceled?:
                         completion(.failure(.canceled))
                     default:
+                        Self.log.error("restore task \(info.id, privacy: .public) ended \(info.status ?? "-", privacy: .public): \(info.errorMessage ?? "", privacy: .public)")
                         completion(.failure(.kopia(exitCode: 1, message: info.errorMessage ?? info.status ?? "restore")))
                     }
                 })

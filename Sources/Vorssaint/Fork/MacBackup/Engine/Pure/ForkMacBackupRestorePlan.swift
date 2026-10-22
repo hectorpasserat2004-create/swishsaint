@@ -160,10 +160,10 @@ enum ForkMacBackupRestorePlan {
             return existing.modified < restored.modified && !sameDate ? .replace : .keep
         case .keepBoth:
             if existing.size == restored.size && sameDate { return .keep }
-            var candidate = suffixed(name, " " + suffix)
+            var candidate = suffixed(name, " (\(suffix))")
             var index = 2
             while isTaken(candidate) {
-                candidate = suffixed(name, " \(suffix) \(index)")
+                candidate = suffixed(name, " (\(suffix) \(index))")
                 index += 1
             }
             return .moveRenamed(candidate)

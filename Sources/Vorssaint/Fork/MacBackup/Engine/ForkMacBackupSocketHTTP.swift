@@ -65,6 +65,7 @@ final class ForkMacBackupSocketHTTP {
         private var reader = ForkMacBackupHTTP.ResponseReader()
         private var body = Data()
         private var done = false
+        private var isReady = false
         private var idle: DispatchWorkItem?
         private var keepAlive: Exchange?
 
@@ -96,16 +97,19 @@ final class ForkMacBackupSocketHTTP {
             guard !done else { return }
             switch state {
             case .ready:
+                isReady = true
                 connection.send(content: request.serialized(), completion: .contentProcessed { [weak self] error in
                     guard let self, let error else { return }
                     self.finish(.failure(.unavailable(error.localizedDescription)))
                 })
                 receive()
-            case .waiting(let error):
-                // A unix socket that refuses does not come back by itself.
-                finish(.failure(.unavailable(error.localizedDescription)))
-            case .failed(let error):
-                finish(.failure(.unavailable(error.localizedDescription)))
+            case .waiting(let error), .failed(let error):
+                // Before « ready »: nobody listens (a unix socket that refuses
+                // does not come back by itself). After: the server closing
+                // its side after the response can be reported here BEFORE the
+                // last bytes are handed to `receive`, which decides (data,
+                // end of stream or error), the idle timeout as a backstop.
+                if !isReady { finish(.failure(.unavailable(error.localizedDescription))) }
             case .cancelled:
                 finish(.failure(.canceled))
             default:
