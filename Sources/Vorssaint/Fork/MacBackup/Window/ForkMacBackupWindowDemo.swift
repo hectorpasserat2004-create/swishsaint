@@ -33,6 +33,9 @@ final class ForkMacBackupDemoEngine: ForkMacBackupEngineDriving {
     var delay: TimeInterval = 0
 
     private(set) var files: [File]
+    /// Deleted on the Mac since the last backup (⊘ in the browser).
+    static let goneFromMac: Set<String> = ["Documents/Castral/closing/pronic.com/devis-pronic.pdf",
+                                           "Documents/Budget 2026.numbers"]
     private let otherFiles: [File]
 
     init(now: Date, home: String = "/Users/martial") {
@@ -122,8 +125,8 @@ final class ForkMacBackupDemoEngine: ForkMacBackupEngineDriving {
         let last = snapshotCount - 1
         if relative.isEmpty { return .init(isDirectory: true, size: 0, modified: nil) }
         if let file = files.first(where: { $0.path == relative }) {
-            guard present(file, at: snapshotCount) else { return nil }
-            let changed = file.editEvery.map { $0 <= 4 } ?? false
+            guard present(file, at: snapshotCount), !Self.goneFromMac.contains(file.path) else { return nil }
+            let changed = file.editEvery.map { $0 <= 9 } ?? false
             return .init(isDirectory: false, size: size(file, at: last) + (changed ? 120 : 0),
                          modified: changed ? now.addingTimeInterval(-1_200) : modified(file, at: last))
         }

@@ -26,10 +26,11 @@ struct ForkMacBackupWindowLedger: Equatable {
         runs.last { $0.kind == .backup && $0.proofs.contains { $0.manifestID == manifestID } }
     }
 
-    /// Keeps the higher proof of two for the same snapshot.
+    /// Keeps the higher proof of two for the same snapshot; at the same
+    /// level, the later one (`rhs`: the agent's, with its complete lists).
     static func better(_ lhs: ForkMacBackupSnapshotProof?, _ rhs: ForkMacBackupSnapshotProof) -> ForkMacBackupSnapshotProof {
         guard let lhs else { return rhs }
-        return rhs.level > lhs.level ? rhs : lhs
+        return rhs.level >= lhs.level ? rhs : lhs
     }
 }
 

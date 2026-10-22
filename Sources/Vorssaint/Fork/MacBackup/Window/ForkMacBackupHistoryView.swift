@@ -29,30 +29,30 @@ struct ForkMacBackupHistoryView: View {
         } else {
             Table(sortedRuns) {
                 TableColumn(text.columnDate) { run in
-                    Text(ForkMacBackupFormat.dayAndTime(run.start, locale: model.locale))
+                    Text(ForkMacBackupWindowDates.short(run.start, now: model.now(), locale: model.locale))
                         .monospacedDigit()
                 }
-                .width(min: 120, ideal: 150)
+                .width(min: 100, ideal: 120)
                 TableColumn(text.columnOperation) { run in
                     Label(text.title(run.kind), systemImage: symbol(run.kind))
                 }
-                .width(min: 110, ideal: 130)
+                .width(min: 100, ideal: 120)
                 TableColumn(text.columnTrigger) { run in
                     Text(text.title(run.trigger)).foregroundStyle(.secondary)
                 }
-                .width(min: 80, ideal: 110)
+                .width(min: 70, ideal: 95)
                 TableColumn(text.duration) { run in
                     Text(run.duration.map { ForkMacBackupFormat.duration($0, locale: model.locale) } ?? "—")
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
                 }
-                .width(min: 60, ideal: 80)
+                .width(min: 50, ideal: 65)
                 TableColumn(text.sent) { run in
                     Text(run.kind == .backup ? ForkMacBackupFormat.bytes(run.bytesSent, locale: model.locale) : "—")
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
                 }
-                .width(min: 60, ideal: 80)
+                .width(min: 55, ideal: 70)
                 TableColumn(text.proof) { run in
                     if let proof = run.proofs.max(by: { $0.level < $1.level }) {
                         ForkMacBackupProofDots(level: proof.level, isPartial: proof.isPartial, dot: 6, gap: 3)
@@ -66,11 +66,11 @@ struct ForkMacBackupHistoryView: View {
                 TableColumn(text.columnConditions) { run in
                     Text(conditions(run)).foregroundStyle(.secondary)
                 }
-                .width(min: 100, ideal: 160)
+                .width(min: 100, ideal: 170)
                 TableColumn(text.columnResult) { run in
                     result(run)
                 }
-                .width(min: 110, ideal: 170)
+                .width(min: 100, ideal: 150)
             }
             .tableStyle(.inset(alternatesRowBackgrounds: true))
         }

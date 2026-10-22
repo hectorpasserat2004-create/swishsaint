@@ -49,7 +49,7 @@ struct ForkMacBackupFileTable: NSViewRepresentable {
         table.menu = menu
         context.coordinator.table = table
 
-        let scroll = NSScrollView()
+        let scroll = FileScrollView()
         scroll.documentView = table
         scroll.hasVerticalScroller = true
         scroll.hasHorizontalScroller = false
@@ -78,10 +78,10 @@ struct ForkMacBackupFileTable: NSViewRepresentable {
 
             var width: CGFloat {
                 switch self {
-                case .name: return 360
-                case .status: return 130
-                case .size: return 90
-                case .modified: return 170
+                case .name: return 250
+                case .status: return 120
+                case .size: return 80
+                case .modified: return 140
                 }
             }
 
@@ -372,6 +372,24 @@ struct ForkMacBackupFileTable: NSViewRepresentable {
         }
     }
 
+    /// Keeps the list as wide as what shows it: the name column gives or
+    /// takes the difference, the others keep their width.
+    final class FileScrollView: NSScrollView {
+        override func tile() {
+            super.tile()
+            guard let table = documentView as? NSTableView else { return }
+            let width = contentSize.width
+            if abs(table.frame.width - width) > 0.5 {
+                let fixed = table.tableColumns.dropFirst().reduce(CGFloat(0)) { $0 + $1.width }
+                    + table.intercellSpacing.width * CGFloat(table.numberOfColumns)
+                if let first = table.tableColumns.first {
+                    first.width = max(first.minWidth, width - fixed)
+                }
+                table.setFrameSize(NSSize(width: width, height: table.frame.height))
+            }
+        }
+    }
+
     /// One cell: an icon and a text, with a badge for unread files.
     final class FileCell: NSTableCellView {
         private let icon = NSImageView()
@@ -473,7 +491,7 @@ struct ForkMacBackupFileTable: NSViewRepresentable {
                 icon.image = nil
                 icon.isHidden = true
                 label.textColor = .secondaryLabelColor
-                label.stringValue = entry.modified.map { ForkMacBackupFormat.dayAndTime($0, locale: locale) } ?? "—"
+                label.stringValue = entry.modified.map { ForkMacBackupWindowDates.short($0, now: Date(), locale: locale) } ?? "—"
             }
         }
 

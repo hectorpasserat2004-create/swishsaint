@@ -75,7 +75,7 @@ struct ForkMacBackupHealthView: View {
                         Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(text.lastProblem + " · " + error.cause.title(shared)
-                                 + " · " + ForkMacBackupFormat.relative(error.at, now: model.now(), locale: locale))
+                                 + " · " + ForkMacBackupWindowDates.relative(error.at, now: model.now(), locale: locale))
                                 .font(.callout.weight(.semibold))
                             Text(error.cause.remedy(shared))
                                 .font(.callout)
@@ -125,7 +125,7 @@ struct ForkMacBackupHealthView: View {
                 .font(.caption)
                 .foregroundStyle(color)
             if let checked = node.status?.checkedAt {
-                Text(String(format: text.checkedAgo, ForkMacBackupFormat.relative(checked, now: model.now(), locale: locale)))
+                Text(String(format: text.checkedAgo, ForkMacBackupWindowDates.relative(checked, now: model.now(), locale: locale)))
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
@@ -166,7 +166,8 @@ struct ForkMacBackupHealthView: View {
             HStack {
                 Text(text.chartTitle).font(.callout.weight(.semibold))
                 Spacer()
-                if let months = ForkMacBackupCapacitySupport.monthsUntilFull(physical: physical, free: free?.bytes) {
+                if let months = ForkMacBackupCapacitySupport.monthsUntilFull(physical: physical, free: free?.bytes),
+                   months < 60 {
                     Text(text.fullIn(months: max(1, Int(months.rounded())), model.language))
                         .font(.callout)
                         .foregroundStyle(months < 6 ? Color.orange : Color.secondary)
@@ -194,7 +195,7 @@ struct ForkMacBackupHealthView: View {
                         AxisGridLine()
                         AxisValueLabel {
                             if let bytes = value.as(Double.self) {
-                                Text(ForkMacBackupFormat.bytes(Int64(bytes), locale: locale))
+                                Text(bytes <= 0 ? "0" : ForkMacBackupFormat.bytes(Int64(bytes), locale: locale))
                             }
                         }
                     }
@@ -205,6 +206,7 @@ struct ForkMacBackupHealthView: View {
                         AxisValueLabel(format: .dateTime.month(.abbreviated).locale(locale))
                     }
                 }
+                .chartYScale(domain: .automatic(includesZero: false))
                 .chartLegend(position: .bottom, alignment: .leading)
                 .frame(height: 180)
             }
@@ -217,14 +219,14 @@ struct ForkMacBackupHealthView: View {
             if let sample {
                 Text(ForkMacBackupFormat.bytes(sample.bytes, locale: locale))
                     .font(.title2.weight(.semibold).monospacedDigit())
-                Text(String(format: text.measured, ForkMacBackupFormat.relative(sample.date, now: model.now(), locale: locale),
+                Text(String(format: text.measured, ForkMacBackupWindowDates.relative(sample.date, now: model.now(), locale: locale),
                             text.capacitySource(sample.source)))
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             } else if let fallback, let measured = presentation.capacity.measuredAt {
                 Text(ForkMacBackupFormat.bytes(fallback, locale: locale))
                     .font(.title2.weight(.semibold).monospacedDigit())
-                Text(String(format: text.measured, ForkMacBackupFormat.relative(measured, now: model.now(), locale: locale),
+                Text(String(format: text.measured, ForkMacBackupWindowDates.relative(measured, now: model.now(), locale: locale),
                             text.agentTitle.lowercased()))
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
@@ -252,7 +254,7 @@ struct ForkMacBackupHealthView: View {
                     Text(String(format: text.agentBuild, build))
                 }
                 if let written = status.stateWrittenAt {
-                    Text(String(format: text.stateWritten, ForkMacBackupFormat.relative(written, now: model.now(), locale: locale)))
+                    Text(String(format: text.stateWritten, ForkMacBackupWindowDates.relative(written, now: model.now(), locale: locale)))
                 }
                 Text(engineLine)
                 Text(presentation.headline(shared, language: model.language, locale: locale, now: model.now()))
@@ -319,9 +321,10 @@ struct ForkMacBackupVerificationsView: View {
             } else {
                 Table(verifications) {
                     TableColumn(text.columnDate) { run in
-                        Text(ForkMacBackupFormat.dayAndTime(run.start, locale: model.locale)).monospacedDigit()
+                        Text(ForkMacBackupWindowDates.short(run.start, now: model.now(), locale: model.locale))
+                            .monospacedDigit()
                     }
-                    .width(min: 120, ideal: 150)
+                    .width(min: 100, ideal: 130)
                     TableColumn(text.columnLevel) { run in
                         Label(run.verifyLevel.map { text.title($0, locale: model.locale) } ?? "—",
                               systemImage: isRestoreTest(run) ? "arrow.counterclockwise.circle" : "checkmark.shield")

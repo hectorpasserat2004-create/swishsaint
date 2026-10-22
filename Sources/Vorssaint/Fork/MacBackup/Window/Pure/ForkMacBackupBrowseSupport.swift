@@ -173,3 +173,28 @@ struct ForkMacBackupNameQuery: Equatable {
         text.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: nil)
     }
 }
+
+/// The window's own date lines: without the year when it is this year's,
+/// « à l'instant » rather than « dans 0 s ».
+enum ForkMacBackupWindowDates {
+    /// « 22 oct., 10:04 » this year, « 22 oct. 2025, 10:04 » before.
+    static func short(_ date: Date, now: Date, locale: Locale, calendar: Calendar = .autoupdatingCurrent) -> String {
+        var style = Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone)
+            .day().month(.abbreviated).hour().minute()
+        if calendar.component(.year, from: date) != calendar.component(.year, from: now) { style = style.year() }
+        return date.formatted(style)
+    }
+
+    /// « il y a 5 min », « maintenant » within a minute either way.
+    static func relative(_ date: Date, now: Date, locale: Locale) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.locale = locale
+        formatter.unitsStyle = .short
+        if abs(date.timeIntervalSince(now)) < 60 {
+            formatter.dateTimeStyle = .named
+            return formatter.localizedString(fromTimeInterval: 0)
+        }
+        formatter.dateTimeStyle = .numeric
+        return formatter.localizedString(for: min(date, now), relativeTo: now)
+    }
+}

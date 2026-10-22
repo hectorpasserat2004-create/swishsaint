@@ -42,8 +42,10 @@ struct ForkMacBackupTimelineBar: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
+                .controlSize(.small)
                 .fixedSize()
                 Button(text.now) { model.showNow() }
+                    .controlSize(.small)
                     .disabled(model.currentSnapshots.last?.id == model.selectedSnapshotID
                               && timeline.end >= model.now().addingTimeInterval(-60))
             }
@@ -67,11 +69,14 @@ struct ForkMacBackupTimelineBar: View {
                         .fill(Color.secondary.opacity(0.35))
                         .frame(width: 1, height: 6)
                         .offset(x: tick.fraction * width, y: 11)
-                    Text(tickLabel(tick.date))
+                }
+                ForEach(Array(labels(timeline, width: width).enumerated()), id: \.offset) { _, label in
+                    Text(label.text)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                        .fixedSize()
-                        .offset(x: min(max(0, tick.fraction * width - 14), max(0, width - 40)), y: 22)
+                        .lineLimit(1)
+                        .frame(width: label.width)
+                        .offset(x: label.x, y: 22)
                         .accessibilityHidden(true)
                 }
                 if timeline.points.isEmpty {
@@ -115,6 +120,32 @@ struct ForkMacBackupTimelineBar: View {
             if value.magnification > 1.3, let narrower = model.zoom.narrower { model.setZoom(narrower) }
             if value.magnification < 0.75, let wider = model.zoom.wider { model.setZoom(wider) }
         })
+    }
+
+    /// The axis' words, placed where they do not run into each other: a
+    /// time under its tick, a day in the middle of its day, a week from its
+    /// first day.
+    private func labels(_ timeline: ForkMacBackupTimeline, width: CGFloat) -> [(text: String, x: CGFloat, width: CGFloat)] {
+        var result: [(text: String, x: CGFloat, width: CGFloat)] = []
+        var lastEnd: CGFloat = -.infinity
+        let ticks = timeline.ticks
+        for (index, tick) in ticks.enumerated() {
+            let label = tickLabel(tick.date)
+            let labelWidth = CGFloat(label.count) * 6 + 8
+            let start = tick.fraction * width
+            let next = index + 1 < ticks.count ? ticks[index + 1].fraction * width : width
+            let center: CGFloat
+            switch model.zoom {
+            case .day: center = start
+            case .week: center = (start + next) / 2
+            case .month: center = start + labelWidth / 2
+            }
+            let x = min(max(0, center - labelWidth / 2), max(0, width - labelWidth))
+            guard x >= lastEnd + 4 else { continue }
+            result.append((label, x, labelWidth))
+            lastEnd = x + labelWidth
+        }
+        return result
     }
 
     private func tickLabel(_ date: Date) -> String {

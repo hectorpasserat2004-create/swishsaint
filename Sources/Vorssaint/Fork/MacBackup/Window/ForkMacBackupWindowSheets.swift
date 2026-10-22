@@ -371,16 +371,16 @@ struct ForkMacBackupVersionsSheet: View {
     private func row(_ version: ForkMacBackupDistinctVersion, isLatest: Bool) -> some View {
         let locale = model.locale
         let range = version.snapshotCount > 1
-            ? String(format: text.seenFromTo, ForkMacBackupFormat.dayAndTime(version.firstSeen, locale: locale),
-                     ForkMacBackupFormat.dayAndTime(version.lastSeen, locale: locale))
-            : String(format: text.seenOnce, ForkMacBackupFormat.dayAndTime(version.lastSeen, locale: locale))
+            ? String(format: text.seenFromTo, ForkMacBackupWindowDates.short(version.firstSeen, now: model.now(), locale: locale),
+                     ForkMacBackupWindowDates.short(version.lastSeen, now: model.now(), locale: locale))
+            : String(format: text.seenOnce, ForkMacBackupWindowDates.short(version.lastSeen, now: model.now(), locale: locale))
         var entry = sheet.entry
         entry.objectID = version.newest.objectID
         entry.size = version.newest.size
         entry.modified = version.newest.modified
         return HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(version.newest.modified.map { ForkMacBackupFormat.dayAndTime($0, locale: locale) } ?? range)
+                Text(version.newest.modified.map { ForkMacBackupWindowDates.short($0, now: model.now(), locale: locale) } ?? range)
                     .font(.body.weight(isLatest ? .semibold : .regular))
                 Text(range + " · " + text.saves(version.snapshotCount, model.language))
                     .font(.caption)
@@ -483,7 +483,7 @@ struct ForkMacBackupVerdictSheet: View {
         case .notYet(let next):
             if let next {
                 return ("clock", .orange, String(format: text.verdictNotYet,
-                                                 ForkMacBackupFormat.relative(next, now: model.now(), locale: locale)))
+                                                 ForkMacBackupWindowDates.relative(next, now: model.now(), locale: locale)))
             }
             return ("clock", .orange, text.verdictNotYetSoon)
         case .excluded(let rule):

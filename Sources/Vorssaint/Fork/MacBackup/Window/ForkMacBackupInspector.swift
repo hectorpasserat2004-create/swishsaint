@@ -17,9 +17,11 @@ struct ForkMacBackupInspector: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                selectionSection
-                if let snapshot = model.selectedSnapshot {
+                if !model.selectedEntries.isEmpty {
+                    selectionSection
                     Divider()
+                }
+                if let snapshot = model.selectedSnapshot {
                     snapshotSection(snapshot)
                     failuresSection(snapshot)
                 }
@@ -77,10 +79,6 @@ struct ForkMacBackupInspector: View {
                 }
                 .controlSize(.regular)
             }
-        } else {
-            Text(text.noVersionHint)
-                .font(.callout)
-                .foregroundStyle(.secondary)
         }
     }
 

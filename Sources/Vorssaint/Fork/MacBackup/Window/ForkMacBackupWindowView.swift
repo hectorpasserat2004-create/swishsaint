@@ -336,16 +336,6 @@ struct ForkMacBackupPathBar: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .overlay(alignment: .bottomLeading) {
-            if let note = model.folderNote {
-                Label(note, systemImage: "info.circle")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 12)
-                    .offset(y: 16)
-                    .hidden()
-            }
-        }
     }
 
     private func crumb(_ title: String, symbol: String, depth: Int, last: Bool) -> some View {

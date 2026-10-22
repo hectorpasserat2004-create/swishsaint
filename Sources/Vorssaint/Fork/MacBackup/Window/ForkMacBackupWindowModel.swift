@@ -137,6 +137,7 @@ final class ForkMacBackupWindowModel: ObservableObject {
     private var noticeClear: DispatchWorkItem?
     private var languageObserver: AnyCancellable?
     private var isOpen = false
+    private var lastSourceID: String?
     let quickLook = ForkMacBackupQuickLook()
 
     static let directoryCacheLimit = 300
@@ -298,11 +299,16 @@ final class ForkMacBackupWindowModel: ObservableObject {
 
     var isOtherMac: Bool { selectedKey.map { !isThisMac($0) } ?? false }
 
+    /// Another source: its latest backup, at its root. Back on the same
+    /// source after another tab: where it was.
     private func sidebarDidChange(from old: ForkMacBackupSidebarItem?) {
-        guard case .source = sidebarSelection else { return }
-        if case .source = old {} else if selectedSnapshotID != nil, selectedSnapshot != nil { return }
+        guard case .source(let id) = sidebarSelection else { return }
+        if id == lastSourceID, selectedSnapshot != nil { return }
+        lastSourceID = id
         folder = []
         cancelSearch()
+        selectedSnapshotID = nil
+        folderState = .idle
         selectLatestSnapshot()
     }
 
@@ -578,9 +584,30 @@ final class ForkMacBackupWindowModel: ObservableObject {
         searchTask?.cancel()
         guard let engine, let snapshot = selectedSnapshot, let root = snapshot.rootObjectID else { return }
         let query = searchText
+        let isLocal = selectedKey.map(isThisMac) ?? false
+        let sourcePath = selectedKey?.path ?? ""
+        let facts = localFacts
+        let queue = localQueue
         let task = ForkMacBackupSnapshotSearch(engine: engine, rootObjectID: root, query: query) { [weak self] state in
             guard let self, state.query == self.searchText else { return }
-            self.search = state
+            guard isLocal else {
+                self.search = state
+                return
+            }
+            // The results compared with this Mac, off the main thread.
+            queue.async { [weak self] in
+                var compared = state
+                for index in compared.results.indices {
+                    let entry = compared.results[index]
+                    compared.results[index].localStatus = ForkMacBackupLocalStatus.compare(
+                        isDirectory: entry.isDirectory, size: entry.size, modified: entry.modified,
+                        local: facts(ForkMacBackupFolderPath.absolute(entry.relativePath, in: sourcePath)))
+                }
+                DispatchQueue.main.async {
+                    guard let self, compared.query == self.searchText, self.searchTask != nil || !compared.running else { return }
+                    self.search = compared
+                }
+            }
         }
         searchTask = task
         search = ForkMacBackupSnapshotSearch.State(query: query, results: [], running: true, truncated: false)
