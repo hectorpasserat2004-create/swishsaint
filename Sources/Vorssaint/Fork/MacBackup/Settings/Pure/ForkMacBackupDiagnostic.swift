@@ -95,11 +95,7 @@ enum ForkMacBackupDiagnostic {
     /// Kopia's messages may quote a URL with credentials or a path: the
     /// user part of a URL and the home are removed.
     static func scrub(_ text: String) -> String {
-        var result = scrubHome(text)
-        while let range = result.range(of: #"://[^/\s@]+@"#, options: .regularExpression) {
-            result.replaceSubrange(range, with: "://***@")
-        }
-        return result
+        scrubHome(text).replacingOccurrences(of: #"://[^/\s@]+@"#, with: "://***@", options: .regularExpression)
     }
 }
 

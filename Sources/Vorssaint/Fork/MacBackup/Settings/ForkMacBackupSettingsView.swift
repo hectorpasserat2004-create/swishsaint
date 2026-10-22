@@ -57,9 +57,8 @@ struct ForkMacBackupSettingsView: View {
         let language = l10n.language
         let text = ForkMacBackupSettingsStrings.strings(language)
         let shared = ForkMacBackupStrings.strings(language)
-        let setup = ForkMacBackupSetupState(engine: engineStore.state, fullDiskAccess: context.fullDiskAccess,
-                                            registration: agentLink.registration, repository: context.repository,
-                                            kitCreatedAt: context.kitCreatedAt)
+        _ = (engineStore.state, agentLink.registration)
+        let setup = context.setup
 
         if let error = status.presentation.lastError, context.repository != nil, enabled {
             ForkMacBackupFailureBanner(error: error, text: text, shared: shared, context: context) { sheet = $0 }

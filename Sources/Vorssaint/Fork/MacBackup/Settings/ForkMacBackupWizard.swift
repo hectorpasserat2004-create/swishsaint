@@ -14,6 +14,7 @@ struct ForkMacBackupWizard: View {
 
     @ObservedObject private var l10n = L10n.shared
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.forkMacBackupSheetHeight) private var heightOverride
     @State private var confirmingStop = false
     @State private var startProblem: String?
 
@@ -50,7 +51,7 @@ struct ForkMacBackupWizard: View {
             Divider()
             footer
         }
-        .frame(width: 640, height: 660)
+        .frame(width: 640, height: heightOverride ?? 660)
         .alert(text.stopBranTitle, isPresented: $confirmingStop) {
             Button(text.cancel, role: .cancel) {}
             Button(text.stopBran, role: .destructive) { model.stopBran() }

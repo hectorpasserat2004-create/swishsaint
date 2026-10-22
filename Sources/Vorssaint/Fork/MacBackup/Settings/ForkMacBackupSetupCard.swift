@@ -100,7 +100,7 @@ struct ForkMacBackupSetupCard: View {
         case .engine: return text.stepEngineCaption
         case .diskAccess: return String(format: text.stepDiskAccessCaption, ForkMacBackupAppName.current)
         case .background:
-            switch context.agentLink.registration {
+            switch context.registration {
             case .failed: return text.stepBackgroundFailed
             case .notRegistered: return enabled ? text.stepBackgroundCaption : text.stepBackgroundAfterSwitch
             default: return text.stepBackgroundCaption
@@ -113,7 +113,7 @@ struct ForkMacBackupSetupCard: View {
     @ViewBuilder
     private func detail(_ step: ForkMacBackupSetupStep) -> some View {
         if step == .engine {
-            switch context.engineStore.state {
+            switch context.engineState {
             case .downloading(let progress):
                 VStack(alignment: .leading, spacing: 3) {
                     ProgressView(value: progress)
@@ -139,7 +139,7 @@ struct ForkMacBackupSetupCard: View {
     private func control(_ step: ForkMacBackupSetupStep, prominent: Bool) -> some View {
         switch step {
         case .engine:
-            switch context.engineStore.state {
+            switch context.engineState {
             case .downloading:
                 Button(text.cancel) { context.engineStore.cancel() }
                     .controlSize(.small)
@@ -158,7 +158,7 @@ struct ForkMacBackupSetupCard: View {
                     .font(.caption)
             }
         case .background:
-            switch context.agentLink.registration {
+            switch context.registration {
             case .requiresApproval:
                 action(text.allow, prominent: prominent) { context.agentLink.openApprovalSettings() }
             case .failed:

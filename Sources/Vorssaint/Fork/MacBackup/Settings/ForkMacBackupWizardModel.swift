@@ -328,7 +328,7 @@ final class ForkMacBackupWizardModel: ObservableObject {
     private func runProbes(repository: ForkMacBackupRepository, password: String, secretKey: String?,
                            text: ForkMacBackupSettingsStrings) {
         // This Mac: the engine.
-        if case .installed(let version) = context.engineStore.state {
+        if case .installed(let version) = context.engineState {
             set(.mac, .ok("Kopia \(version)"))
         } else {
             set(.mac, .failed(text.testEngineMissing))

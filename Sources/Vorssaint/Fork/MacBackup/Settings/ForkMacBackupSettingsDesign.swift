@@ -230,6 +230,7 @@ struct ForkMacBackupSheetScaffold<Content: View, Footer: View>: View {
     let footer: Footer
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.forkMacBackupSheetHeight) private var heightOverride
 
     init(symbol: String, title: String, subtitle: String? = nil, done: String, width: CGFloat = 600,
          height: CGFloat = 640, @ViewBuilder content: () -> Content, @ViewBuilder footer: () -> Footer) {
@@ -276,7 +277,19 @@ struct ForkMacBackupSheetScaffold<Content: View, Footer: View>: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
         }
-        .frame(width: width, height: height)
+        .frame(width: width, height: heightOverride ?? height)
+    }
+}
+
+/// Offscreen renders only: a taller sheet, so a whole sheet fits one image.
+private struct ForkMacBackupSheetHeightKey: EnvironmentKey {
+    static let defaultValue: CGFloat? = nil
+}
+
+extension EnvironmentValues {
+    var forkMacBackupSheetHeight: CGFloat? {
+        get { self[ForkMacBackupSheetHeightKey.self] }
+        set { self[ForkMacBackupSheetHeightKey.self] = newValue }
     }
 }
 

@@ -200,15 +200,19 @@ enum ForkMacBackupContentScanner {
         var seen: Int64 = 0
         var complete = true
 
+        // The enumerator hands resolved paths (/var → /private/var): both
+        // spellings of the home and of each root are recognised.
+        let homes = Set([home, realPath(home)])
         func display(_ path: String) -> String {
-            path.hasPrefix(home + "/") ? "~" + path.dropFirst(home.count) : path
+            for candidate in homes where path.hasPrefix(candidate + "/") { return "~" + path.dropFirst(candidate.count) }
+            return path
         }
 
         let keys: [URLResourceKey] = [.isDirectoryKey, .isSymbolicLinkKey, .isRegularFileKey,
                                       .totalFileAllocatedSizeKey, .fileAllocatedSizeKey, .fileSizeKey]
         outer: for source in sources {
             let root = URL(fileURLWithPath: source, isDirectory: true).standardizedFileURL
-            let rootPath = root.path
+            let roots = [root.path, realPath(root.path)]
             guard let enumerator = FileManager.default.enumerator(
                 at: root, includingPropertiesForKeys: keys, options: [],
                 errorHandler: { _, _ in
@@ -229,7 +233,7 @@ enum ForkMacBackupContentScanner {
                 let level = enumerator.level
                 guard level >= 1 else { continue }
                 let path = url.path
-                guard path.hasPrefix(rootPath + "/") else { continue }
+                guard let rootPath = roots.first(where: { path.hasPrefix($0 + "/") }) else { continue }
                 let relative = String(path.dropFirst(rootPath.count + 1))
                 let name = url.lastPathComponent
                 guard let values = try? url.resourceValues(forKeys: Set(keys)) else { continue }
@@ -312,6 +316,14 @@ enum ForkMacBackupContentScanner {
             sparse: sparse.sorted { $0.logicalBytes > $1.logicalBytes },
             topFolders: top(firstLevel, 8) + top(secondLevel, 8), cloudOnlyFiles: cloudOnlyFiles,
             cloudOnlyBytes: cloudOnlyBytes, unreadable: unreadable, complete: complete)
+    }
+
+    /// The path with every link resolved, `/private` kept (unlike
+    /// `resolvingSymlinksInPath`, which strips it again).
+    static func realPath(_ path: String) -> String {
+        guard let resolved = realpath(path, nil) else { return path }
+        defer { free(resolved) }
+        return String(cString: resolved)
     }
 
     /// An iCloud file with no data on the Mac (`SF_DATALESS`).

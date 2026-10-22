@@ -13,6 +13,7 @@ struct ForkMacBackupOptionsSheet: View {
 
     @ObservedObject private var l10n = L10n.shared
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.forkMacBackupSheetHeight) private var heightOverride
 
     init(context: ForkMacBackupSettingsContext, tab: ForkMacBackupOptionsTab, open: @escaping (ForkMacBackupSheet) -> Void) {
         self.context = context
@@ -59,7 +60,7 @@ struct ForkMacBackupOptionsSheet: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
         }
-        .frame(width: 640, height: 680)
+        .frame(width: 640, height: heightOverride ?? 680)
         .onAppear { context.loadRecords() }
     }
 }
@@ -516,7 +517,7 @@ struct ForkMacBackupAdvancedPane: View {
     var body: some View {
         Section {
             LabeledContent(text.engineVersion) {
-                switch context.engineStore.state {
+                switch context.engineState {
                 case .installed(let version): Text("Kopia \(version)")
                 case .downloading(let progress): Text(ForkMacBackupFormat.percent(progress, locale: locale))
                 case .verifying: Text(text.engineVerifying)
@@ -598,12 +599,12 @@ struct ForkMacBackupAdvancedPane: View {
             if let value = context.defaults.object(forKey: key) { settings[key] = String(describing: value) }
         }
         var engineVersion: String?
-        if case .installed(let version) = context.engineStore.state { engineVersion = version }
+        if case .installed(let version) = context.engineState { engineVersion = version }
         let input = ForkMacBackupDiagnostic.Input(
             appName: ForkMacBackupAppName.current,
             appBuild: Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?",
             agentBuild: status.agentBuild, agentAlive: status.agentAlive, engineVersion: engineVersion,
-            registration: context.agentLink.registration, fullDiskAccess: context.fullDiskAccess,
+            registration: context.registration, fullDiskAccess: context.fullDiskAccess,
             presentation: status.presentation, repository: context.repository, profileName: context.profile?.name,
             sources: context.effectiveSources, settings: settings, now: context.services.now())
         let data = Data(ForkMacBackupDiagnostic.text(input).utf8)
@@ -622,7 +623,7 @@ struct ForkMacBackupAdvancedPane: View {
 
     private func openTerminal() {
         guard let files = context.repositoryFiles, let paths = context.paths,
-              case .installed(let version) = context.engineStore.state else {
+              case .installed(let version) = context.engineState else {
             message = text.engineNotInstalled
             return
         }

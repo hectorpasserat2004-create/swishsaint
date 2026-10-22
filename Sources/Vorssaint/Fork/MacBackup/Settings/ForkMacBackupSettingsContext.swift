@@ -95,6 +95,13 @@ final class ForkMacBackupSettingsContext: ObservableObject {
     /// Non-nil while « Aperçu » walks the disk.
     @Published private(set) var scanProgress: ForkMacBackupContentScanner.Progress?
     @Published private(set) var records = ForkMacBackupSettingsRecords()
+    /// Renders only: the engine and agent states to show instead of the
+    /// real stores' (their stubs cannot be set from outside).
+    @Published var previewEngineState: ForkMacBackupEngineInstallState?
+    @Published var previewRegistration: ForkMacBackupAgentRegistration?
+
+    var engineState: ForkMacBackupEngineInstallState { previewEngineState ?? engineStore.state }
+    var registration: ForkMacBackupAgentRegistration { previewRegistration ?? agentLink.registration }
 
     private let queue = DispatchQueue(label: "fork.macbackup.settings", qos: .utility)
     private var scanCancelled = ForkMacBackupFlag()
@@ -196,8 +203,8 @@ final class ForkMacBackupSettingsContext: ObservableObject {
     }
 
     var setup: ForkMacBackupSetupState {
-        ForkMacBackupSetupState(engine: engineStore.state, fullDiskAccess: fullDiskAccess,
-                                registration: agentLink.registration, repository: repository, kitCreatedAt: kitCreatedAt)
+        ForkMacBackupSetupState(engine: engineState, fullDiskAccess: fullDiskAccess,
+                                registration: registration, repository: repository, kitCreatedAt: kitCreatedAt)
     }
 
     /// The identity this Mac would take when nothing is found to continue.
