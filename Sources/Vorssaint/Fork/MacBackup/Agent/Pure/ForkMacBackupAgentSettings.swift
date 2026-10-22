@@ -79,9 +79,14 @@ enum ForkMacBackupAgentTuning {
     static let updateWaitLimit: TimeInterval = 30 * 60
     /// …and a hold older than this is stale (the update failed or was dropped).
     static let updateHoldLifetime: TimeInterval = 20 * 60
-    /// A source's pre-scan (real size, sparse images, cloud-only files) is
-    /// trusted this long.
-    static let prescanLifetime: TimeInterval = 6 * 3_600
+    /// A source's full pre-scan walk (real size, sparse images, cloud-only
+    /// files) is reused this long, kept up to date in between with the files
+    /// FSEvents saw change (`ForkMacBackupPrescanPlan`). Measured 22/10 on a
+    /// 2.4 M-file home folder: one walk takes 2.5 to 3.5 min and 2 min of CPU.
+    static let prescanLifetime: TimeInterval = 24 * 3_600
+    /// Past `prescanLifetime`, a Mac on battery keeps using it up to this
+    /// age; on mains power it walks again.
+    static let prescanBatteryLifetime: TimeInterval = 7 * 86_400
     /// `maintenance info` is read this often (Kopia's server runs it).
     static let maintenanceRecheck: TimeInterval = 6 * 3_600
 
@@ -292,8 +297,12 @@ struct ForkMacBackupAgentSettings: Equatable {
     }
 
     /// The engine's priority for a run: « Sauvegarder maintenant » and the
-    /// other buttons run normal, the planner's runs as the person chose.
-    func enginePriority(for trigger: ForkMacBackupTrigger) -> ForkMacBackupKopiaInvocation.Priority {
+    /// other buttons run normal, the planner's runs as the person chose,
+    /// except the very first backup (nothing protected yet, the setup just
+    /// ended): it runs normal too, whoever started it.
+    func enginePriority(for trigger: ForkMacBackupTrigger, firstBackup: Bool = false)
+        -> ForkMacBackupKopiaInvocation.Priority {
+        if firstBackup { return .normal }
         switch trigger {
         case .island, .settings, .commandBar, .window: return .normal
         case .scheduled, .catchUp, .early, .agent: return priority == .low ? .background : .utility

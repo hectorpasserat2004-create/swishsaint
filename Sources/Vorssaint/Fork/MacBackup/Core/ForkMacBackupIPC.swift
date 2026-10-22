@@ -38,15 +38,43 @@ enum ForkMacBackupJSON {
     /// Appends one line to a journal (`runs.jsonl`, `slots.jsonl`,
     /// `capacity.jsonl`) in ONE `write` with `O_APPEND`, 0600 when created:
     /// the agent and the app (the window's restores) append to
-    /// `runs.jsonl` side by side without ever tearing a line.
+    /// `runs.jsonl` side by side without ever tearing a line. Under the
+    /// journal's lock, so the agent's trim (`rewrite`) never loses it.
     @discardableResult
     static func append<Value: Encodable>(_ value: Value, to url: URL) -> Bool {
         guard let line = line(value) else { return false }
-        let descriptor = open(url.path, O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0o600)
-        guard descriptor >= 0 else { return false }
+        return withJournalLock(url) {
+            let descriptor = open(url.path, O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0o600)
+            guard descriptor >= 0 else { return false }
+            defer { close(descriptor) }
+            let written = line.withUnsafeBytes { buffer in write(descriptor, buffer.baseAddress, buffer.count) }
+            return written == line.count
+        }
+    }
+
+    /// Rewrites a journal (the agent's trim) under the same lock as
+    /// `append`: a line the other process appends meanwhile waits for the
+    /// new file instead of landing in the old one, which the atomic rename
+    /// would throw away. `transform` nil: nothing written.
+    @discardableResult
+    static func rewrite(_ url: URL, _ transform: (Data) -> Data?) -> Bool {
+        withJournalLock(url) {
+            guard let data = try? Data(contentsOf: url), let new = transform(data) else { return false }
+            return PrivateFileStore.write(new, to: url)
+        }
+    }
+
+    /// `flock` on the journal's sidecar `<name>.lock` (0600): the journal
+    /// itself is replaced by the trim's rename, so it cannot carry the lock.
+    /// Without the sidecar (unwritable folder) the body runs unlocked, as
+    /// before.
+    static func withJournalLock<Result>(_ url: URL, _ body: () -> Result) -> Result {
+        let descriptor = open(url.path + ".lock", O_RDWR | O_CREAT | O_CLOEXEC, 0o600)
+        guard descriptor >= 0 else { return body() }
         defer { close(descriptor) }
-        let written = line.withUnsafeBytes { buffer in write(descriptor, buffer.baseAddress, buffer.count) }
-        return written == line.count
+        while flock(descriptor, LOCK_EX) != 0, errno == EINTR {}
+        defer { flock(descriptor, LOCK_UN) }
+        return body()
     }
 }
 

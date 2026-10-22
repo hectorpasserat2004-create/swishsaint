@@ -23,7 +23,7 @@ struct ForkMacBackupDiskUsage: Equatable {
 
     /// A file that announces much more than it holds (Docker's
     /// `Docker.raw`, Apple Container's `.ext4`, a VM disk).
-    struct SparseImage: Equatable {
+    struct SparseImage: Codable, Equatable {
         var relativePath: String
         var logicalBytes: Int64
         var allocatedBytes: Int64
@@ -44,6 +44,9 @@ struct ForkMacBackupDiskUsage: Equatable {
     /// The cloud-only entries (`SF_DATALESS`), relative to the root; a
     /// folder ends with « / » and was not entered. Only filled when asked.
     var dataless: [String] = []
+    /// The size the cloud-only FILES announce (what downloading them would
+    /// take); a cloud-only folder's content is not known without listing it.
+    var datalessBytes: Int64 = 0
     /// Entries the scan could not read (permissions).
     var unreadable: Int64 = 0
     var canceled = false
@@ -171,6 +174,7 @@ enum ForkMacBackupContentScan {
             if collectDataless, !entry.isSymbolicLink, entry.isDataless {
                 // Its data is in the cloud: nothing of it is on this Mac.
                 usage.dataless.append(entry.relativePath)
+                usage.datalessBytes += entry.logicalBytes
                 return .enter
             }
             usage.files += 1

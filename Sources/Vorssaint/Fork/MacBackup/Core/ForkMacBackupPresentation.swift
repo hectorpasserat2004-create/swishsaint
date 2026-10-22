@@ -224,6 +224,18 @@ struct ForkMacBackupPresentation: Codable, Equatable {
     /// Before the agent ever wrote a state.
     static let unknown = ForkMacBackupPresentation(phase: .notConfigured, updatedAt: .distantPast)
 
+    /// The last state of an agent that is gone (crashed, killed): what it
+    /// was doing is over, whatever its file says, so the closed island never
+    /// shows a backup that no longer runs. The rest (proofs, chain, next
+    /// run) stays as written.
+    func settled(agentAlive: Bool) -> ForkMacBackupPresentation {
+        guard !agentAlive, phase.isBackingUp || phase == .verifying || phase == .maintaining else { return self }
+        var settled = self
+        settled.phase = .ready(next: nextRun)
+        settled.progress = nil
+        return settled
+    }
+
     // MARK: Derived
 
     /// 0…1, nil whenever a percentage would be a guess: while scanning,

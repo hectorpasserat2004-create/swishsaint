@@ -37,6 +37,9 @@ enum ForkMacBackupAgentTests {
         cost(suite)
         proofStore(suite)
         journal(suite)
+        priorities(suite)
+        prescanPlan(suite)
+        materialize(suite)
         strings(suite)
     }
 
@@ -929,8 +932,9 @@ enum ForkMacBackupAgentTests {
                         && keepAlive?["SuccessfulExit"] as? Bool == false && release["RunAtLoad"] as? Bool == true
                         && release["ProcessType"] as? String == "Background"
                         && release["LowPriorityBackgroundIO"] as? Bool == true && release["Program"] == nil
-                        && release["AssociatedBundleIdentifiers"] as? [String] == [bundle],
-                     "the release plist: BundleProgram, the flag, KeepAlive on failure only, Background, low-priority I/O")
+                        && release["AssociatedBundleIdentifiers"] as? [String] == [bundle]
+                        && release["ExitTimeOut"] as? Int == 60,
+                     "the release plist: BundleProgram, the flag, KeepAlive on failure only, Background, low-priority I/O, 60 s to stop")
         let legacy = ForkMacBackupAgentPlist.legacy(bundleID: bundle, executablePath: "/tmp/App.app/Contents/MacOS/App")
         suite.expect(legacy["Program"] as? String == "/tmp/App.app/Contents/MacOS/App" && legacy["BundleProgram"] == nil
                         && legacy["ProgramArguments"] as? [String] == ["/tmp/App.app/Contents/MacOS/App", "--fork-backup-agent"]
@@ -1156,6 +1160,150 @@ enum ForkMacBackupAgentTests {
                                              from: ForkMacBackupJournal.trimmed(data, as: ForkMacBackupSlotRecord.self, now: t0,
                                                                                 maxLines: 10) { $0.due })
         suite.expect(capped.count == 10 && capped.last?.due == t0, "and at most their line count, the newest")
+
+        // The window appends a restore while the agent trims: no line is lost.
+        let folder = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("fork-macbackup-journal-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let url = folder.appendingPathComponent("runs.jsonl", isDirectory: false)
+        let appends = 300
+        let group = DispatchGroup()
+        DispatchQueue.global().async(group: group) {
+            for index in 0..<appends {
+                ForkMacBackupJSON.append(ForkMacBackupSlotRecord(due: t0.addingTimeInterval(Double(index)), outcome: .done),
+                                         to: url)
+            }
+        }
+        DispatchQueue.global().async(group: group) {
+            for _ in 0..<150 {
+                ForkMacBackupJSON.rewrite(url) {
+                    ForkMacBackupJournal.trimmed($0, as: ForkMacBackupSlotRecord.self, now: t0.addingTimeInterval(1_000)) { $0.due }
+                }
+            }
+        }
+        group.wait()
+        let survived = (try? Data(contentsOf: url)).map { ForkMacBackupJSON.lines(ForkMacBackupSlotRecord.self, from: $0) } ?? []
+        suite.expect(survived.count == appends && Set(survived.map(\.due)).count == appends,
+                     "a trim and appends from another process side by side keep every line (\(survived.count)/\(appends))")
+        let mode = (try? FileManager.default.attributesOfItem(atPath: url.path + ".lock"))?[.posixPermissions] as? Int
+        suite.expect(mode == 0o600, "the journal's lock file is private")
+    }
+
+    private static func priorities(_ suite: TestSuite) {
+        let low = settings([ForkDefaultsKey.macBackupPriority: "low"])
+        suite.expect(low.enginePriority(for: .scheduled) == .background && low.enginePriority(for: .catchUp) == .background,
+                     "the planner's runs follow « Priorité basse »")
+        suite.expect(low.enginePriority(for: .island) == .normal, "« Sauvegarder maintenant » runs at normal priority")
+        suite.expect(low.enginePriority(for: .scheduled, firstBackup: true) == .normal
+                        && low.enginePriority(for: .agent, firstBackup: true) == .normal,
+                     "the first backup after the setup runs at normal priority, even started by the planner")
+    }
+
+    private static func prescanPlan(_ suite: TestSuite) {
+        let source = ForkMacBackupSource(path: home)
+        let localPrint = ForkMacBackupPrescanPlan.fingerprint(source: source, iCloud: .local)
+        var usage = ForkMacBackupDiskUsage()
+        usage.allocatedBytes = 40_000_000_000
+        usage.sparseImages = [.init(relativePath: "vm/old.img", logicalBytes: 64_000_000_000, allocatedBytes: 2_000_000_000)]
+        usage.dataless = ["Library/Mobile Documents/com~apple~CloudDocs/a.pdf", "Library/Mobile Documents/x/"]
+        usage.datalessBytes = 3_000_000
+        let walked = ForkMacBackupPrescanCache.Entry(date: t0, fingerprint: localPrint, usage: usage)
+        func choice(_ cached: ForkMacBackupPrescanCache.Entry?, after: TimeInterval, onAC: Bool = true, known: Bool = true,
+                    fingerprint: String? = nil) -> ForkMacBackupPrescanPlan.Choice {
+            ForkMacBackupPrescanPlan.choose(cached: cached, fingerprint: fingerprint ?? localPrint, now: t0.addingTimeInterval(after),
+                                            onAC: onAC, changesKnown: known)
+        }
+        suite.expect(choice(nil, after: 0) == .walk, "no walk yet: walk")
+        suite.expect(choice(walked, after: 6 * hour) == .reuse && choice(walked, after: 23 * hour) == .reuse,
+                     "a walk is reused a day, refreshed with the changes FSEvents saw")
+        suite.expect(choice(walked, after: 25 * hour, onAC: true) == .walk, "past a day on mains power: walk again")
+        suite.expect(choice(walked, after: 3 * 24 * hour, onAC: false) == .reuse
+                        && choice(walked, after: 8 * 24 * hour, onAC: false) == .walk,
+                     "on battery the walk waits, a week at most")
+        suite.expect(choice(walked, after: hour, known: false) == .walk, "changes not known (events dropped): walk")
+        suite.expect(choice(walked, after: -hour) == .walk, "a clock set back: walk")
+        let excluding = ForkMacBackupSource(path: home, presets: ForkMacBackupPreset.defaultApplied.filter { $0 != .sparseDiskImages })
+        suite.expect(choice(walked, after: hour, fingerprint: ForkMacBackupPrescanPlan.fingerprint(source: excluding, iCloud: .local)) == .walk
+                        && choice(walked, after: hour, fingerprint: ForkMacBackupPrescanPlan.fingerprint(source: source, iCloud: .materialize)) == .walk,
+                     "other rules or another iCloud mode: walk")
+
+        suite.expect(ForkMacBackupPrescanPlan.relativeChanges(["/Users/test/vm/new.img", "/Users/testing/x", "/Users/test",
+                                                               "/Users/test/Documents/a b.txt"], source: home)
+                        == ["vm/new.img", "Documents/a b.txt"],
+                     "the changes are taken relative to the source, never a neighbour's")
+
+        typealias Change = ForkMacBackupPrescanPlan.Change
+        let changes = [
+            Change(relativePath: "vm/old.img", exists: true, isRegularFile: true, logicalBytes: 64_000_000_000,
+                   allocatedBytes: 60_000_000_000, isDataless: false),
+            Change(relativePath: "vm/new.img", exists: true, isRegularFile: true, logicalBytes: 20_000_000_000,
+                   allocatedBytes: 1_000_000_000, isDataless: false),
+            Change(relativePath: "Library/Caches/huge.img", exists: true, isRegularFile: true, logicalBytes: 20_000_000_000,
+                   allocatedBytes: 1, isDataless: false),
+            Change(relativePath: "Library/Mobile Documents/com~apple~CloudDocs/a.pdf", exists: true, isRegularFile: true,
+                   logicalBytes: 1_000_000, allocatedBytes: 1_000_000, isDataless: false),
+            Change(relativePath: "Library/Mobile Documents/com~apple~CloudDocs/b.mov", exists: true, isRegularFile: true,
+                   logicalBytes: 5_000_000, allocatedBytes: 0, isDataless: true),
+        ]
+        let refreshed = ForkMacBackupPrescanPlan.refreshed(walked, changes: changes, matcher: ForkMacBackupRunRules.matcher(for: source),
+                                                           collectDataless: true)
+        suite.expect(refreshed.sparseImages.map(\.relativePath) == ["vm/new.img"],
+                     "a refresh drops an image now written, adds a new one, ignores what the rules leave out")
+        suite.expect(refreshed.dataless == ["Library/Mobile Documents/com~apple~CloudDocs/b.mov", "Library/Mobile Documents/x/"]
+                        && refreshed.datalessBytes == 7_000_000 && refreshed.date == t0 && refreshed.realBytes == usage.allocatedBytes,
+                     "and follows the files downloaded or evicted meanwhile, the walk's date and real size kept")
+        let gone = ForkMacBackupPrescanPlan.refreshed(walked, changes: [Change(relativePath: "vm/old.img", exists: false,
+                                                                               isRegularFile: false, logicalBytes: 0,
+                                                                               allocatedBytes: 0, isDataless: false)],
+                                                      matcher: ForkMacBackupRunRules.matcher(for: source), collectDataless: true)
+        suite.expect(gone.sparseImages.isEmpty && gone.dataless == walked.dataless, "a deleted image leaves the list")
+        let rules = ForkMacBackupRunRules.extra(for: source, sparseImages: refreshed.sparseImages, dataless: refreshed.dataless,
+                                                iCloud: .local, home: home)
+        suite.expect(rules.contains("/vm/new.img") && rules.contains("/Library/Mobile Documents/x/"),
+                     "the refreshed walk gives the run's rules")
+        let cache = ForkMacBackupPrescanCache(entries: [home: refreshed])
+        suite.expect(cache.encoded().flatMap(ForkMacBackupPrescanCache.decode) == cache, "prescan.json reads back what it wrote")
+
+        let folder = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("fork-macbackup-probe-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let sparse = folder.appendingPathComponent("disk image.img")
+        FileManager.default.createFile(atPath: sparse.path, contents: nil)
+        if let handle = try? FileHandle(forWritingTo: sparse) {
+            try? handle.truncate(atOffset: 11_000_000_000)
+            try? handle.close()
+        }
+        let probed = ForkMacBackupPrescanPlan.probe("disk image.img", root: folder.path)
+        let missing = ForkMacBackupPrescanPlan.probe("nothing.txt", root: folder.path)
+        suite.expect(probed.exists && probed.isRegularFile && probed.logicalBytes == 11_000_000_000
+                        && probed.allocatedBytes < 1_000_000 && !probed.isDataless && !missing.exists,
+                     "a changed file is looked at with lstat: a new sparse image is seen at its real size")
+    }
+
+    private static func materialize(_ suite: TestSuite) {
+        let gb: Int64 = 1_000_000_000
+        suite.expect(ForkMacBackupMaterializeCheck.refusal(datalessBytes: 0, datalessFolders: 0, freeBytes: nil) == nil,
+                     "nothing in the cloud only: nothing to check")
+        suite.expect(ForkMacBackupMaterializeCheck.refusal(datalessBytes: 10 * gb, datalessFolders: 0, freeBytes: 16 * gb) == nil,
+                     "10 GB to download with 16 GB free: allowed (5 GB kept free)")
+        let refused = ForkMacBackupMaterializeCheck.refusal(datalessBytes: 10 * gb, datalessFolders: 2, freeBytes: 14 * gb)
+        suite.expect(refused?.contains("10000000000 bytes to download") == true && refused?.contains("2 cloud-only folder") == true,
+                     "10 GB with 14 GB free: refused, the sizes said")
+        suite.expect(ForkMacBackupMaterializeCheck.margin(datalessBytes: 200 * gb) == 20 * gb
+                        && ForkMacBackupMaterializeCheck.refusal(datalessBytes: 200 * gb, datalessFolders: 0, freeBytes: 215 * gb) != nil,
+                     "a big download keeps a tenth of it free")
+        suite.expect(ForkMacBackupMaterializeCheck.refusal(datalessBytes: gb, datalessFolders: 0, freeBytes: nil) != nil,
+                     "free space unknown: refused")
+
+        var (machine, _) = startedMachine()
+        let source = ForkMacBackupSource(path: "/Users/test")
+        _ = machine.handle(.chainChecked(nil, nodeID: nil), now: t0)
+        let actions = machine.handle(.policyApplied(source, .refused(.localSpace, "iCloud download refused")), now: t0)
+        suite.expect(runEnded(actions)?.result == .failed(.localSpace) && !actions.contains(.triggerSnapshot(source))
+                        && machine.lastError?.cause == .localSpace && machine.lastError?.message == "iCloud download refused",
+                     "a refused download fails the run « Mac presque plein » before any snapshot, the reason kept")
     }
 
     private static func strings(_ suite: TestSuite) {

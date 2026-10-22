@@ -97,6 +97,8 @@ final class ForkMacBackupWindowModel: ObservableObject {
     let now: () -> Date
     let calendar: Calendar
     private let localQueue = DispatchQueue(label: "fork.macbackup.window.local", qos: .userInitiated)
+    /// The restore behind the Quick Look shown: a new preview or closing it stops it.
+    private var previewHandle: ForkMacBackupCancellable?
 
     // MARK: Published
 
@@ -195,6 +197,8 @@ final class ForkMacBackupWindowModel: ObservableObject {
         searchTask?.cancel()
         searchTask = nil
         transfer?.handle?.cancel()
+        previewHandle?.cancel()
+        previewHandle = nil
         quickLook.close()
         restoreFlow?.cancelIfRunning()
         clearPreviewFolder()
@@ -267,8 +271,7 @@ final class ForkMacBackupWindowModel: ObservableObject {
         }
         let known = Set(ledger.sources.map(\.path) + status.presentation.sources.map(\.path))
         if known.contains(key.path) { return true }
-        let host = ProcessInfo.processInfo.hostName.split(separator: ".").first.map(String.init) ?? ""
-        return key.host.caseInsensitiveCompare(host) == .orderedSame && key.userName == NSUserName()
+        return key.host.caseInsensitiveCompare(ForkMacBackupFormat.localHostName) == .orderedSame && key.userName == NSUserName()
     }
 
     var localSources: [ForkMacBackupSourceKey] {
@@ -759,6 +762,8 @@ final class ForkMacBackupWindowModel: ObservableObject {
 
     func toggleQuickLook() {
         if quickLook.isVisible {
+            previewHandle?.cancel()
+            previewHandle = nil
             quickLook.close()
             return
         }
@@ -768,12 +773,16 @@ final class ForkMacBackupWindowModel: ObservableObject {
 
     func previewFile(_ entry: ForkMacBackupBrowseEntry, in manifestID: String? = nil) {
         quickLook.prepare(title: entry.name, text: text)
+        previewHandle?.cancel()
+        previewHandle = nil
         let start = { [weak self] in
             guard let self else { return }
-            _ = self.restoreForPreview(entry) { [weak self] result in
+            self.previewHandle = self.restoreForPreview(entry) { [weak self] result in
                 guard let self else { return }
                 switch result {
                 case .success(let url): self.quickLook.show(url)
+                case .failure(.canceled):
+                    break
                 case .failure(let error):
                     self.quickLook.close()
                     self.show(String(format: self.text.previewFailed, Self.describe(error, shared: self.shared)), isError: true)
@@ -796,10 +805,11 @@ final class ForkMacBackupWindowModel: ObservableObject {
             manifestID: manifestID, sourcePath: key.path,
             items: [.init(objectID: entry.objectID, relativePath: entry.relativePath, isDirectory: false)],
             destination: .folder(path: folder.path), skipOwners: true, ignorePermissionErrors: true)
-        engine.restore(request, progress: { _ in }, completion: { [weak self] result in
+        previewHandle = engine.restore(request, progress: { _ in }, completion: { [weak self] result in
             guard let self else { return }
             switch result {
             case .success(let report): self.quickLook.show(Self.restoredItem(named: entry.name, report: report, folder: folder))
+            case .failure(.canceled): break
             case .failure(let error):
                 self.quickLook.close()
                 self.show(String(format: self.text.previewFailed, Self.describe(error, shared: self.shared)), isError: true)
@@ -818,16 +828,19 @@ final class ForkMacBackupWindowModel: ObservableObject {
             case .success(let restored):
                 let folder = url.deletingLastPathComponent()
                 let word = ForkMacBackupEngineStrings.strings(self?.language ?? .enUS).restoredSuffix
-                let name = ForkMacBackupRestoreNaming.keepBothName(url.lastPathComponent, isDirectory: entry.isDirectory,
-                                                                   word: word) {
-                    FileManager.default.fileExists(atPath: folder.appendingPathComponent($0).path)
-                }
-                do {
-                    try FileManager.default.moveItem(at: restored, to: folder.appendingPathComponent(name))
-                    try? FileManager.default.removeItem(at: restored.deletingLastPathComponent())
-                    completion(nil)
-                } catch {
-                    completion(error)
+                // Off the main thread: onto another volume, the move is a full copy.
+                (self?.localQueue ?? DispatchQueue.global(qos: .userInitiated)).async {
+                    let name = ForkMacBackupRestoreNaming.keepBothName(url.lastPathComponent, isDirectory: entry.isDirectory,
+                                                                       word: word) {
+                        FileManager.default.fileExists(atPath: folder.appendingPathComponent($0).path)
+                    }
+                    do {
+                        try FileManager.default.moveItem(at: restored, to: folder.appendingPathComponent(name))
+                        try? FileManager.default.removeItem(at: restored.deletingLastPathComponent())
+                        completion(nil)
+                    } catch {
+                        completion(error)
+                    }
                 }
             }
         }

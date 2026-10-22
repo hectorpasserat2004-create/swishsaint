@@ -120,7 +120,10 @@ final class ForkMacBackupKopiaProcess: ForkMacBackupCancellable {
                 return finish(launchFailed: false)
             }
             do {
-                try process.run()
+                // The cloud-only files: downloaded only when the invocation says so.
+                try ForkMacBackupDatalessPolicy.spawning(materialize: invocation.materializeDataless) {
+                    try process.run()
+                }
             } catch {
                 stdoutPipe.fileHandleForReading.readabilityHandler = nil
                 stderrPipe.fileHandleForReading.readabilityHandler = nil
@@ -218,10 +221,12 @@ final class ForkMacBackupKopiaProcess: ForkMacBackupCancellable {
         exitGrace?.cancel()
         timer?.cancel()
         timer = nil
+        // The read ends are NOT closed here: a readability handler may be
+        // inside `availableData` on another thread, which raises on a closed
+        // descriptor (or reads a reused one). Their handlers stop now; the
+        // pipes close when this process object goes.
         stdoutPipe.fileHandleForReading.readabilityHandler = nil
         stderrPipe.fileHandleForReading.readabilityHandler = nil
-        try? stdoutPipe.fileHandleForReading.close()
-        try? stderrPipe.fileHandleForReading.close()
         try? stdinPipe?.fileHandleForWriting.close()
         flushStderrLine()
         let status: Int32 = launchFailed || !exited ? -1 : process.terminationStatus

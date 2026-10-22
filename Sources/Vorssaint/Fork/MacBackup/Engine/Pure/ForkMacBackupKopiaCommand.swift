@@ -20,14 +20,19 @@ struct ForkMacBackupKopiaInvocation: Equatable {
     /// Killed after this long with nothing printed; nil: never.
     var silenceTimeout: TimeInterval?
     var priority: Priority
+    /// May the child download cloud-only iCloud files it reads
+    /// (`ForkMacBackupDatalessPolicy`)? Only the server of the
+    /// « Tout télécharger avant » mode does; never a CLI call.
+    var materializeDataless: Bool
 
     init(arguments: [String], environment: [String: String], timeout: TimeInterval,
-         silenceTimeout: TimeInterval? = nil, priority: Priority = .utility) {
+         silenceTimeout: TimeInterval? = nil, priority: Priority = .utility, materializeDataless: Bool = false) {
         self.arguments = arguments
         self.environment = environment
         self.timeout = timeout
         self.silenceTimeout = silenceTimeout
         self.priority = priority
+        self.materializeDataless = materializeDataless
     }
 
     /// The command line as a log may show it: it never holds a secret
@@ -45,6 +50,9 @@ struct ForkMacBackupKopiaInvocation: Equatable {
 /// `KOPIA_CACHE_DIRECTORY` (which overrides every repository's cache, §0.2)
 /// or a stray `AWS_SESSION_TOKEN` can never leak in.
 enum ForkMacBackupKopiaCommand {
+    /// The format blob's copies at the root of a repository's cache folder.
+    static let cachedFormatBlobs = ["kopia.repository", "kopia.blobcfg"]
+
     /// Soft cache limits (plan §3.10).
     static let contentCacheMB = 2048
     static let metadataCacheMB = 1024

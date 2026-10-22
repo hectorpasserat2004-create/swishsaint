@@ -25,6 +25,8 @@ final class ForkMacBackupKopiaServer {
     let files: ForkMacBackupPaths.RepositoryFiles
     let queue: DispatchQueue
     var priority: ForkMacBackupKopiaInvocation.Priority = .utility
+    /// The « Tout télécharger avant » mode (`ForkMacBackupDatalessPolicy`).
+    var materializeDataless = false
     /// Called on `queue` after every start and every exit.
     var onChange: (() -> Void)?
 
@@ -55,6 +57,9 @@ final class ForkMacBackupKopiaServer {
     }
 
     var isRunning: Bool { info != nil }
+    /// Crashed, its supervised restart waiting for its delay.
+    var isRestartScheduled: Bool { restart != nil && process == nil }
+    var isStopping: Bool { stopping }
     var processIdentifier: Int32? { info?.pid }
 
     /// Starts (or restarts) the server with `credentials`; `completion` on
@@ -104,7 +109,7 @@ final class ForkMacBackupKopiaServer {
         let invocation = ForkMacBackupKopiaInvocation(
             arguments: ForkMacBackupKopiaCommand.global(files) + ForkMacBackupKopiaCommand.serverStart(socketPath: socket.path),
             environment: ForkMacBackupKopiaCommand.environment(credentials: credentials, files: files, extra: extra),
-            timeout: .infinity, silenceTimeout: nil, priority: priority)
+            timeout: .infinity, silenceTimeout: nil, priority: priority, materializeDataless: materializeDataless)
 
         generation += 1
         let current = generation
@@ -174,7 +179,9 @@ final class ForkMacBackupKopiaServer {
         let line = ForkMacBackupKopiaText.errorLine(outcome.stderr)
         Self.log.error("server exited (\(outcome.status, privacy: .public)): \(line, privacy: .public); restart in \(delay, privacy: .public) s")
         let item = DispatchWorkItem { [weak self] in
-            guard let self, !self.stopping, self.process == nil else { return }
+            guard let self else { return }
+            self.restart = nil
+            guard !self.stopping, self.process == nil else { return }
             self.launch { _ in }
         }
         restart = item

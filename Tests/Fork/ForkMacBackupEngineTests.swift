@@ -27,7 +27,24 @@ enum ForkMacBackupEngineTests {
         contentScan(suite)
         serverPlan(suite)
         extras(suite)
+        datalessPolicy(suite)
         strings(suite)
+    }
+
+    /// The spawn policy of the cloud-only files: compiled, linked and
+    /// toggled for real on this process (no file is read, nothing spawned).
+    private static func datalessPolicy(_ suite: TestSuite) {
+        let before = ForkMacBackupDatalessPolicy.current
+        let off = ForkMacBackupDatalessPolicy.spawning(materialize: false) { ForkMacBackupDatalessPolicy.current }
+        let on = ForkMacBackupDatalessPolicy.spawning(materialize: true) { ForkMacBackupDatalessPolicy.current }
+        suite.expect(before >= 0 && off == ForkMacBackupDatalessPolicy.value(materialize: false)
+                        && on == ForkMacBackupDatalessPolicy.value(materialize: true),
+                     "a Kopia child is spawned with the iCloud policy asked, OFF unless « Tout télécharger avant »")
+        suite.expect(ForkMacBackupDatalessPolicy.current == before, "and the process gets its own policy back")
+        let invocation = ForkMacBackupKopiaInvocation(arguments: [], environment: [:], timeout: 1)
+        suite.expect(!invocation.materializeDataless, "a CLI call never downloads cloud-only files")
+        suite.expect(ForkMacBackupHTTP.percentEncoded("/Users/x y/Résumé ü.txt") == "%2FUsers%2Fx%20y%2FR%C3%A9sum%C3%A9%20%C3%BC.txt",
+                     "a path is percent-encoded to ASCII, accents included")
     }
 
     // MARK: Helpers

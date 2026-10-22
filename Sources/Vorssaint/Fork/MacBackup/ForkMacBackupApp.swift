@@ -26,5 +26,7 @@ enum ForkMacBackupApp {
         // Off: an engine download stops too. The window closes itself on
         // the `.off` state the status model publishes.
         if !isEnabled, ForkMacBackupEngineStore.shared.isBusy { ForkMacBackupEngineStore.shared.cancel() }
+        // Off: the « Aperçu » walk of the disk stops too.
+        if !isEnabled { ForkMacBackupSettingsContext.cancelRunningScan() }
     }
 }

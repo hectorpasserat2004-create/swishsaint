@@ -19,6 +19,12 @@ protocol ForkMacBackupEngineExtras: ForkMacBackupEngineDriving {
     /// Takes effect at the next server start and the next CLI call.
     var priority: ForkMacBackupKopiaInvocation.Priority { get set }
 
+    /// « Tout télécharger avant »: the server may download the cloud-only
+    /// iCloud files it reads (`ForkMacBackupDatalessPolicy`). Inherited at
+    /// spawn, so it takes effect at the next server start; false otherwise,
+    /// and for every CLI call.
+    var materializeDataless: Bool { get set }
+
     /// Starts the private server on the repository's EXISTING config, no
     /// network needed (the server connects in the background): for an
     /// agent that starts while the storage is out of reach. `connect`

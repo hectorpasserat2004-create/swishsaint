@@ -85,8 +85,9 @@ final class ForkMacBackupRunner {
     private var verifyHandle: ForkMacBackupCancellable?
     private var runStartEvent: UInt64?
     private var runCostStart: (reading: ForkMacBackupCostMeter.Reading?, percent: Double?, onAC: Bool)?
-    /// Each source's pre-scan: the run's extra rules and its real size.
-    private var prescans: [String: Prescan] = [:]
+    /// Each source's last full pre-scan walk, kept up to date with FSEvents
+    /// (`prescan.json`).
+    private var prescanCache = ForkMacBackupPrescanCache()
     private var prescanCancel: ForkMacBackupFlag?
     private var maintenanceCheckedAt: Date?
     private var reconciledAt: Date?
@@ -112,13 +113,6 @@ final class ForkMacBackupRunner {
     }
 
     private let dependencies: Dependencies
-
-    struct Prescan {
-        var date: Date
-        var rules: [String]
-        /// Allocated bytes of what the source keeps.
-        var realBytes: Int64
-    }
 
     init(host: Host, paths: ForkMacBackupPaths, bundleID: String, defaults: UserDefaults = .standard,
          dependencies: Dependencies = .live) {
@@ -291,6 +285,9 @@ final class ForkMacBackupRunner {
         if let data = try? Data(contentsOf: paths.proofs), let store = ForkMacBackupProofStore.decode(data) {
             proofs = store
         }
+        if let data = try? Data(contentsOf: paths.prescan), let cache = ForkMacBackupPrescanCache.decode(data) {
+            prescanCache = cache
+        }
         rotate(paths.runs, as: ForkMacBackupRunRecord.self, now: now) { $0.end ?? $0.start }
         rotate(paths.slots, as: ForkMacBackupSlotRecord.self, now: now) { $0.due }
         if let data = try? Data(contentsOf: paths.runs) {
@@ -326,8 +323,9 @@ final class ForkMacBackupRunner {
 
     private func rotate<Value: Codable>(_ url: URL, as type: Value.Type, now: Date, date: (Value) -> Date) {
         guard let size = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int,
-              size > ForkMacBackupAgentTuning.journalRotateBytes, let data = try? Data(contentsOf: url) else { return }
-        PrivateFileStore.write(ForkMacBackupJournal.trimmed(data, as: type, now: now, date: date), to: url)
+              size > ForkMacBackupAgentTuning.journalRotateBytes else { return }
+        // Under the journal's lock: a restore the window appends meanwhile is kept.
+        ForkMacBackupJSON.rewrite(url) { ForkMacBackupJournal.trimmed($0, as: type, now: now, date: date) }
     }
 
     private func saveProofs() {
@@ -343,6 +341,7 @@ final class ForkMacBackupRunner {
         guard let made = dependencies.makeEngine(paths, queue) else { return }
         engine = made.engine
         secretsStore = made.secrets
+        extras?.materializeDataless = settings.iCloud == .materialize
     }
 
     private var secretsStore: ForkMacBackupSecrets?
@@ -511,10 +510,11 @@ final class ForkMacBackupRunner {
                                                    wokeAt: wokeAt, manual: manualRequest)
             if machine.isPaused { input.manual = nil }
             let planned = ForkMacBackupPlanner.decide(input)
-            manualRequest = nil
             decision = planned
             note(planned, now: now)
-            // A Tailscale peer is asked again right before a run.
+            // A Tailscale peer is asked again right before a run. The run
+            // waits for the answer; a « Sauvegarder maintenant » waits with
+            // it instead of being dropped.
             if case .run = planned, let peer = settings.repository?.peer,
                peerCheckedAt.map({ now.timeIntervalSince($0) > 60 }) ?? true {
                 if !peerProbeInFlight { probePeer(peer) }
@@ -524,6 +524,7 @@ final class ForkMacBackupRunner {
                     return
                 }
             }
+            manualRequest = nil
             perform(machine.handle(.decision(planned), now: now))
         }
         scheduleWake(now: now, decision: decision)
@@ -715,8 +716,18 @@ final class ForkMacBackupRunner {
             engineTriedAt = nil
         }
         if new.sources != old.sources || new.iCloud != old.iCloud {
-            prescans = [:]
+            // A source's cached walk stays only while its rules and the iCloud
+            // mode match (`ForkMacBackupPrescanPlan.fingerprint`); a removed
+            // source's is forgotten.
+            let kept = Set(new.sources.map(\.path))
+            prescanCache.entries = prescanCache.entries.filter { kept.contains($0.key) }
+            savePrescans()
             restartFSEvents()
+        }
+        if new.iCloud != old.iCloud, extras != nil {
+            // Inherited at spawn: the server starts again before the next run.
+            extras?.materializeDataless = new.iCloud == .materialize
+            connectedKey = nil
         }
         engineTriedAt = engine == nil ? nil : engineTriedAt
         perform(machine.handle(.configure(new), now: Date()))
@@ -880,8 +891,10 @@ final class ForkMacBackupRunner {
                 ?? .systemDefault
             keepAwake.set(on, reason: ForkMacBackupAgentStrings.strings(language).keepAwakeReason)
         case .runStarted(let id, let trigger, _):
-            // « Sauvegarder maintenant » at normal priority, the planner's runs as chosen.
-            extras?.priority = settings.enginePriority(for: trigger)
+            // « Sauvegarder maintenant » and the first backup after the setup
+            // at normal priority, the planner's other runs as chosen.
+            let firstBackup = proofs.lastBackup(paths: settings.sources.map(\.path)) == nil
+            extras?.priority = settings.enginePriority(for: trigger, firstBackup: firstBackup)
             runStarted(id: id)
         case .runEnded(let summary):
             runEnded(summary)
@@ -973,8 +986,13 @@ final class ForkMacBackupRunner {
             feed(.policyApplied(source, .failed(.engineMissing)))
             return
         }
-        prescan(source) { [weak self] extra in
+        prescan(source) { [weak self] extra, refusal in
             guard let self else { return }
+            if let refusal {
+                // « Tout télécharger avant » would fill the Mac: nothing is downloaded.
+                self.feed(.policyApplied(source, .refused(.localSpace, refusal)))
+                return
+            }
             let rules = ForkMacBackupPolicyRules(source: source, extraRules: extra, retention: self.settings.retention)
             engine.readPolicy(of: source) { [weak self] current in
                 guard let self else { return }
@@ -995,32 +1013,60 @@ final class ForkMacBackupRunner {
     /// The source's pre-scan (decision 1 of 22/10, plan §4.4), with the
     /// Engine's walker: its sparse disk images and cloud-only files become
     /// the run's extra rules, and what it keeps is measured at its REAL size
-    /// (allocated bytes). Trusted 6 h; stopped with the run.
-    private func prescan(_ source: ForkMacBackupSource, completion: @escaping ([String]) -> Void) {
-        if let cached = prescans[source.path],
-           Date().timeIntervalSince(cached.date) < ForkMacBackupAgentTuning.prescanLifetime {
-            completion(cached.rules)
-            return
-        }
+    /// (allocated bytes). A full walk is heavy (minutes on a big home
+    /// folder): it is reused a day (a week on battery), refreshed before
+    /// each run with the files FSEvents saw change (`ForkMacBackupPrescanPlan`).
+    /// In « Tout télécharger avant » mode, also checks that the download
+    /// fits (`refusal`). Stopped with the run.
+    private func prescan(_ source: ForkMacBackupSource, completion: @escaping (_ rules: [String], _ refusal: String?) -> Void) {
         let queue = self.queue
         let iCloud = settings.iCloud
         let home = NSHomeDirectory()
+        let fingerprint = ForkMacBackupPrescanPlan.fingerprint(source: source, iCloud: iCloud)
+        let changed = fsevents.changedPaths()
+        let cached = prescanCache.entries[source.path]
+        let choice = ForkMacBackupPrescanPlan.choose(cached: cached, fingerprint: fingerprint, now: Date(),
+                                                     onAC: watch.onAC, changesKnown: changed != nil)
         let cancel = ForkMacBackupFlag()
         prescanCancel = cancel
-        DispatchQueue.global(qos: .utility).async {
-            let usage = ForkMacBackupContentScan.scan(root: URL(fileURLWithPath: source.path, isDirectory: true),
-                                                      matcher: ForkMacBackupRunRules.matcher(for: source),
-                                                      collectDataless: iCloud == .local, topFolders: 0,
-                                                      isCanceled: { cancel.isSet })
-            let rules = ForkMacBackupRunRules.extra(for: source, usage: usage, iCloud: iCloud, home: home)
+        // Background: the walk's reads are throttled by macOS while the Mac is in use.
+        DispatchQueue.global(qos: .background).async {
+            let matcher = ForkMacBackupRunRules.matcher(for: source)
+            let collectDataless = iCloud != .exclude
+            var entry: ForkMacBackupPrescanCache.Entry?
+            if choice == .reuse, let cached, let changed {
+                let changes = ForkMacBackupPrescanPlan.relativeChanges(changed, source: source.path)
+                    .map { ForkMacBackupPrescanPlan.probe($0, root: source.path) }
+                entry = ForkMacBackupPrescanPlan.refreshed(cached, changes: changes, matcher: matcher,
+                                                           collectDataless: collectDataless)
+            } else {
+                let usage = ForkMacBackupContentScan.scan(root: URL(fileURLWithPath: source.path, isDirectory: true),
+                                                          matcher: matcher, collectDataless: collectDataless,
+                                                          topFolders: 0, isCanceled: { cancel.isSet })
+                if !usage.canceled { entry = ForkMacBackupPrescanCache.Entry(date: Date(), fingerprint: fingerprint, usage: usage) }
+            }
+            let rules = entry.map { ForkMacBackupRunRules.extra(for: source, sparseImages: $0.sparseImages,
+                                                                dataless: $0.dataless, iCloud: iCloud, home: home) }
+                ?? ForkMacBackupRunRules.extra(for: source, sparseImages: [], dataless: [], iCloud: iCloud, home: home)
+            var refusal: String?
+            if iCloud == .materialize {
+                let free = ForkMacBackupSystemWatch.freeBytes(at: URL(fileURLWithPath: source.path, isDirectory: true))
+                refusal = ForkMacBackupMaterializeCheck.refusal(datalessBytes: entry?.datalessBytes ?? 0,
+                                                                datalessFolders: entry?.datalessFolders ?? 0, freeBytes: free)
+            }
             queue.async { [weak self] in
                 guard let self else { return }
-                if !usage.canceled {
-                    self.prescans[source.path] = Prescan(date: Date(), rules: rules, realBytes: usage.allocatedBytes)
+                if let entry {
+                    self.prescanCache.entries[source.path] = entry
+                    self.savePrescans()
                 }
-                completion(rules)
+                completion(rules, refusal)
             }
         }
+    }
+
+    private func savePrescans() {
+        if let data = prescanCache.encoded() { PrivateFileStore.write(data, to: paths.prescan) }
     }
 
     /// The server's process: the engine's own word, else `server.json`.
@@ -1068,7 +1114,7 @@ final class ForkMacBackupRunner {
             // What the pre-scan measured is the run's real size on disk.
             let measured = summary.proofs.map { proof -> ForkMacBackupSnapshotProof in
                 var proof = proof
-                if proof.incomplete == nil, let real = prescans[proof.sourcePath]?.realBytes { proof.realBytes = real }
+                if proof.incomplete == nil, let real = prescanCache.entries[proof.sourcePath]?.realBytes { proof.realBytes = real }
                 return proof
             }
             proofs.record(measured, now: now)

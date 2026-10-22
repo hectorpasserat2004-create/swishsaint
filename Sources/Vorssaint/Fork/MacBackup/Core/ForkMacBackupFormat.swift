@@ -123,4 +123,14 @@ enum ForkMacBackupFormat {
         formatter.unitsStyle = .short
         return formatter
     }
+
+    /// This Mac's host name as Kopia names it (`gethostname`, before the
+    /// first dot), read once: `ProcessInfo.hostName` goes through DNS and
+    /// may block for seconds on the main thread.
+    static let localHostName: String = {
+        var buffer = [CChar](repeating: 0, count: 256)
+        guard gethostname(&buffer, buffer.count) == 0 else { return "" }
+        let name = String(decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
+        return name.split(separator: ".").first.map(String.init) ?? ""
+    }()
 }

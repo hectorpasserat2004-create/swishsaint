@@ -248,9 +248,15 @@ final class ForkMacBackupSystemWatch {
 
     /// Kopia's cache could fill the Mac: below the floor, wait.
     static func localSpaceLow(at url: URL) -> Bool {
-        guard let values = try? url.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]),
-              let free = values.volumeAvailableCapacityForImportantUsage else { return false }
+        guard let free = freeBytes(at: url) else { return false }
         return free < ForkMacBackupAgentTuning.minimumLocalFreeBytes
+    }
+
+    /// The room left for files the person keeps (purgeable space counted),
+    /// on `url`'s volume; nil when macOS does not say.
+    static func freeBytes(at url: URL) -> Int64? {
+        guard let values = try? url.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]) else { return nil }
+        return values.volumeAvailableCapacityForImportantUsage
     }
 
     /// Runs `tailscale status --json` (5 s at most) off the queue and hands

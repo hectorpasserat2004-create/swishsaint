@@ -40,6 +40,7 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
     private let binaryProvider: () -> URL?
     private let lock = NSLock()
     private var priorityValue: ForkMacBackupKopiaInvocation.Priority = .utility
+    private var materializeValue = false
     private var ownerServerPID: Int32?
 
     // Owned by `work`.
@@ -48,6 +49,10 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
     var identity: ForkMacBackupRepository.Identity?
     private var server: ForkMacBackupKopiaServer?
     private var api: ForkMacBackupKopiaAPI?
+    /// The calls waiting for a server that an API call is starting: a second
+    /// call joins them instead of starting it again (which killed the first
+    /// start, answered `.canceled`).
+    private var serverWaiters: [(Result<ForkMacBackupServerInfo, ForkMacBackupEngineError>) -> Void]?
 
     /// `binary`: the installed engine, read at each use (an install while
     /// running is picked up).
@@ -72,6 +77,15 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
                 _ = setpriority(PRIO_DARWIN_PROCESS, id_t(pid), newValue == .background ? PRIO_DARWIN_BG : 0)
             }
             work.async { [weak self] in self?.server?.priority = newValue }
+        }
+    }
+
+    /// Read by the next server start (the policy is inherited at spawn).
+    var materializeDataless: Bool {
+        get { lock.withLock { materializeValue } }
+        set {
+            lock.withLock { materializeValue = newValue }
+            work.async { [weak self] in self?.server?.materializeDataless = newValue }
         }
     }
 
@@ -113,13 +127,27 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
             body(api(for: info))
         case .owner:
             if let info = server?.info { return body(api(for: info)) }
+            // A crashed server waits for its supervised restart (its backoff
+            // stands); a stopping one is not started again.
+            if server?.isRestartScheduled == true || server?.isStopping == true { return failure(.serverUnavailable) }
             guard let repository, let credentials else { return failure(.notConnected) }
-            launchServer(repository: repository, credentials: credentials) { [weak self] result in
+            let answer: (Result<ForkMacBackupServerInfo, ForkMacBackupEngineError>) -> Void = { [weak self] result in
                 guard let self else { return }
                 switch result {
                 case .success(let info): body(self.api(for: info))
                 case .failure(let error): failure(error)
                 }
+            }
+            if serverWaiters != nil {
+                serverWaiters?.append(answer)
+                return
+            }
+            serverWaiters = [answer]
+            launchServer(repository: repository, credentials: credentials) { [weak self] result in
+                guard let self else { return }
+                let waiters = self.serverWaiters ?? []
+                self.serverWaiters = nil
+                for waiter in waiters { waiter(result) }
             }
         }
     }
@@ -232,17 +260,26 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
                               completion: @escaping (Result<ForkMacBackupServerInfo, ForkMacBackupEngineError>) -> Void) {
         guard let binary = binaryProvider() else { return completion(.failure(.engineMissing)) }
         let files = paths.repository(repository.key)
-        if server == nil || server?.files != files || server?.binary != binary {
-            server?.stop {}
-            let fresh = ForkMacBackupKopiaServer(binary: binary, paths: paths, files: files, queue: work)
-            fresh.onChange = { [weak self, weak fresh] in
-                let pid = fresh?.processIdentifier
-                self?.lock.withLock { self?.ownerServerPID = pid }
-            }
-            server = fresh
+        let start = { [weak self] in
+            guard let self, let server = self.server else { return completion(.failure(.canceled)) }
+            server.priority = self.priority
+            server.materializeDataless = self.materializeDataless
+            server.start(credentials: credentials, completion: completion)
         }
-        server?.priority = priority
-        server?.start(credentials: credentials, completion: completion)
+        guard server == nil || server?.files != files || server?.binary != binary else { return start() }
+        let fresh = ForkMacBackupKopiaServer(binary: binary, paths: paths, files: files, queue: work)
+        fresh.onChange = { [weak self, weak fresh] in
+            let pid = fresh?.processIdentifier
+            self?.lock.withLock { self?.ownerServerPID = pid }
+        }
+        guard let old = server else {
+            server = fresh
+            return start()
+        }
+        server = fresh
+        // The old server gone FIRST: on its way out it removes the socket,
+        // which would be the new server's.
+        old.stop(completion: start)
     }
 
     private func ensureFolders(_ files: ForkMacBackupPaths.RepositoryFiles) -> Bool {
@@ -273,6 +310,13 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
                 }
                 stop {
                     self.api = nil
+                    // The cache keeps a copy of the format blob for 15 min, and the
+                    // folder survives an endpoint change (same bucket and prefix):
+                    // read from the storage, never from that copy, or the unique ID
+                    // check would read an older repository's (SPIKES §0.2).
+                    for name in ForkMacBackupKopiaCommand.cachedFormatBlobs {
+                        try? FileManager.default.removeItem(at: files.cache.appendingPathComponent(name, isDirectory: false))
+                    }
                     self.connectInto(files, repository: repository, credentials: credentials, readOnly: readOnly,
                                      task: task) { status in
                         self.repository = repository
@@ -316,15 +360,24 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
             try? FileManager.default.removeItem(at: files.cache)
             cleanup()
         }
+        // Only another repository, or one that does not say who it is, is
+        // forgotten; a storage out of reach or slow keeps the config and its
+        // cache (gigabytes) for the next try.
+        let forgetIfWrong = { (error: ForkMacBackupEngineError) in
+            switch error {
+            case .wrongRepository, .decoding: forget()
+            default: cleanup()
+            }
+        }
         let status = {
             _ = self.runCLI(ForkMacBackupKopiaCommand.status, timeout: 120, files: files, credentials: credentials) { result in
                 switch result {
                 case .failure(let error):
-                    forget()
+                    forgetIfWrong(error)
                     task.finish(.failure(error))
                 case .success(let outcome):
                     if let error = Self.failure(of: outcome) {
-                        forget()
+                        forgetIfWrong(error)
                         return task.finish(.failure(error))
                     }
                     guard let status = ForkMacBackupKopia.decode(ForkMacBackupKopia.RepositoryStatus.self, from: outcome.stdout),
@@ -396,9 +449,11 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
 
     func shutdown(completion: @escaping () -> Void) {
         work.async { [self] in
+            // Forgotten at once: a call arriving during the stop cannot start
+            // the server again.
+            self.credentials = nil
             let done = {
                 self.api = nil
-                self.credentials = nil
                 self.callbackQueue.async(execute: completion)
             }
             guard let server else { return done() }
@@ -860,7 +915,9 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
     }
 
     /// Polls `/api/v1/tasks/{id}` every half second until it ends; a
-    /// cancel of `task` cancels the server's task.
+    /// cancel of `task` cancels the server's task. A poll that fails is
+    /// tried again twice; then the server's task is cancelled too, so no
+    /// file keeps landing after the caller was told it failed.
     func followTask<Value>(_ id: String, task: ForkMacBackupEngineTask<Value>,
                            progress: @escaping (ForkMacBackupKopia.TaskInfo) -> Void,
                            then: @escaping (ForkMacBackupKopia.TaskInfo) -> Void) {
@@ -868,20 +925,25 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
         task.attach(ForkMacBackupEngineCallback { [weak self] in
             self?.work.async { self?.request("POST", path + "/cancel", auth: .ui) { _ in } }
         })
-        func poll() {
+        func poll(failed failedPolls: Int) {
             guard !task.isFinished else { return }
             requestDecoding(ForkMacBackupKopia.TaskInfo.self, "GET", path, auth: .ui) { [weak self] result in
                 guard let self, !task.isFinished else { return }
                 switch result {
-                case .failure(let error): task.finish(.failure(error))
+                case .failure(let error):
+                    if failedPolls < 2, error != .canceled {
+                        return self.work.asyncAfter(deadline: .now() + 1) { poll(failed: failedPolls + 1) }
+                    }
+                    self.request("POST", path + "/cancel", auth: .ui) { _ in }
+                    task.finish(.failure(error))
                 case .success(let info):
                     if info.isFinished { return then(info) }
                     progress(info)
-                    self.work.asyncAfter(deadline: .now() + 0.5) { poll() }
+                    self.work.asyncAfter(deadline: .now() + 0.5) { poll(failed: 0) }
                 }
             }
         }
-        poll()
+        poll(failed: 0)
     }
 }
 

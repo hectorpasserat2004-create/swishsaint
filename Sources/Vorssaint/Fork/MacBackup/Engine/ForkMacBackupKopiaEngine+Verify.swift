@@ -52,6 +52,10 @@ extension ForkMacBackupKopiaEngine {
                                                 count: count - errors.count)
                             }
                             if count == 0 { errors = [] }
+                            // Kopia failed without naming an error: never a success.
+                            if outcome.status != 0, errors.isEmpty {
+                                return task.finish(.failure(Self.failure(of: outcome) ?? .other("verify")))
+                            }
                             let checked = verified.stats?.processedObjectCount ?? 0
                             task.finish(.success(report(ids, checked, errors)))
                         }
@@ -75,6 +79,11 @@ extension ForkMacBackupKopiaEngine {
                     task.attach(handle)
                 case .restoreTest(let count):
                     self.restoreTest(count: count, manifests: manifests, task: task, progress: progress) { ids, checked, errors in
+                        // Nothing compared (no snapshot, every file changed since,
+                        // the server unreachable during the walk): not a proof.
+                        if checked == 0, errors.isEmpty {
+                            return task.finish(.failure(.other("restore test: no file could be compared")))
+                        }
                         task.finish(.success(report(ids, checked, errors)))
                     }
                 }

@@ -2066,7 +2066,7 @@ enum NotchSupport {
         case .track: return modules(in: defaults).contains(.music)
         // A layout notice needs no feature of its own, only its own toggle.
         case .inputSource: return true
-        case .backup: return NotchEvent.backupHooks.routes(defaults) // FORK(notch-macbackup-event2)
+        case .backup: return NotchEvent.backupHooks.routes(defaults) // FORK(notch-macbackup-event3)
         }
     }
 

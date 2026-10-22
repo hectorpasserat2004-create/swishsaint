@@ -57,10 +57,17 @@ Une complétion par appel, sur la file de rappel (principale pour le client, cel
 | `versions(of:in:owner:)` | fenêtre | versions d'un fichier d'**un** Mac et d'**un** compte (le protocole gelé : ce Mac) |
 | `shutdown` | runner | arrêt du serveur avant de rendre le verrou ; un moteur relâché arrête aussi son enfant |
 
-Avant chaque run (6 h de cache), le runner pré-scanne la source avec `ForkMacBackupContentScan.scan` (le **seul**
+Avant chaque run, le runner pré-scanne la source avec `ForkMacBackupContentScan.scan` (le **seul**
 parcours de la feature, aussi celui de l'« Aperçu » des Réglages) et `ForkMacBackupIgnoreMatcher` (la **seule** lecture des
 règles Kopia, aussi celle de « Ce fichier est-il sauvegardé ? ») : images creuses et fichiers iCloud absents du Mac
 deviennent des règles du run (`ForkMacBackupRunRules`), et la taille réelle va dans la preuve (`realBytes`, `diskBytes`).
+Un parcours complet coûte cher (mesuré le 22/10 : 2,4 M fichiers, 2,5 à 3,5 min, 2 min de CPU) : il est gardé dans
+`prescan.json` un jour (une semaine sur batterie) et rafraîchi avant chaque run par un `lstat` des seuls fichiers que
+FSEvents a vus changer (`ForkMacBackupPrescanPlan`) ; sans liste complète (événements perdus), on reparcourt.
+iCloud : chaque enfant Kopia naît avec la politique `IOPOL_TYPE_VFS_MATERIALIZE_DATALESS_FILES` voulue
+(`ForkMacBackupDatalessPolicy`) : OFF partout (un fichier absent du Mac échoue en EDEADLK, classé « iCloud seulement »),
+ON pour le seul serveur du mode « Tout télécharger avant », refusé (`localSpace`) si l'espace libre ne couvre pas le
+téléchargement + max(5 Go, 10 %) (`ForkMacBackupMaterializeCheck`).
 Rétention : `ForkMacBackupRetentionReplay` (portage vérifié de Kopia), par source. Noms d'une restauration :
 `ForkMacBackupRestoreNaming` (« garder les deux »).
 
@@ -75,11 +82,12 @@ Rétention : `ForkMacBackupRetentionReplay` (portage vérifié de Kopia), par so
 | notify `.settings` | modèle d'état (tout changement `fork.macbackup.*`) | runner (`reloadSettings`) | — |
 | `run/viewer.lease` | modèle d'état (vue en direct) | runner : 1 Hz sinon 10 s | date du fichier |
 | `run/server.json`, `run/kopia.sock` | moteur propriétaire | client, coût | `ForkMacBackupServerInfo` |
-| `runs.jsonl` | runner (sauvegardes, vérifs, maintenances) **et** fenêtre (restaurations) | fenêtre, réglages | `ForkMacBackupRunRecord`, une ligne par `write` `O_APPEND` (`ForkMacBackupJSON.append`) |
+| `runs.jsonl` | runner (sauvegardes, vérifs, maintenances) **et** fenêtre (restaurations) | fenêtre, réglages | `ForkMacBackupRunRecord`, une ligne par `write` `O_APPEND` (`ForkMacBackupJSON.append`), sous `flock` de `runs.jsonl.lock`, comme la purge du runner (`rewrite`) |
 | `slots.jsonl`, `capacity.jsonl` | runner | fenêtre | idem |
 | `proofs.json` | runner | fenêtre | `ForkMacBackupProofStore` |
 | `errors/<manifest>.json` | runner | fenêtre | `[ForkMacBackupFailure]` |
 | `pending.json` | runner (FSEvents) | runner | — |
+| `prescan.json` | runner (pré-scan) | runner | `ForkMacBackupPrescanCache` |
 | `repo/<key>/{repository.config,cache,logs,connected}` | moteur | moteur | Kopia, cache propre à chaque dépôt |
 | `engine/kopia-<v>/kopia` | `ForkMacBackupEngineStore` | moteur | binaire épinglé, signé Kopia LLC |
 

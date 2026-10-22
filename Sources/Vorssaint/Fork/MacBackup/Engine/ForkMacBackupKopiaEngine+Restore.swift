@@ -182,6 +182,8 @@ extension ForkMacBackupKopiaEngine {
         var bytesDone: Int64 = 0
         var filesDone: Int64 = 0
         var failures: [ForkMacBackupFailure] = []
+        /// Where the single item really landed (« garder les deux » renames it).
+        var landedPath: String?
 
         init(request: ForkMacBackupRestoreRequest, manifest: ForkMacBackupKopia.SnapshotManifest,
              steps: [(step: ForkMacBackupRestorePlan.Step, entry: ForkMacBackupKopia.DirEntry)], staging: URL,
@@ -232,7 +234,7 @@ extension ForkMacBackupKopiaEngine {
             try? FileManager.default.removeItem(at: run.staging)
             let destination: String
             if run.steps.count == 1, let only = run.steps.first {
-                destination = only.step.target
+                destination = run.landedPath ?? only.step.target
             } else if case .folder(let folder) = run.request.destination {
                 destination = folder
             } else {
@@ -266,10 +268,12 @@ extension ForkMacBackupKopiaEngine {
             case .success(let counts):
                 if case .staged(let rule) = step.kind {
                     var failures: [ForkMacBackupFailure] = []
+                    var placed: String?
                     let merged = Self.merge(landing, into: URL(fileURLWithPath: step.target), rule: rule,
                                             suffix: self.restoredSuffix, sourceRoot: run.request.sourcePath,
-                                            failures: &failures)
+                                            failures: &failures, placed: &placed)
                     run.failures += failures
+                    if run.steps.count == 1 { run.landedPath = placed }
                     run.filesDone += merged.files
                     run.bytesDone += merged.bytes
                 } else {
@@ -299,7 +303,7 @@ extension ForkMacBackupKopiaEngine {
         if !overwrite, FileManager.default.fileExists(atPath: target.path) {
             return completion(.failure(.other("exists: \(target.path)")))
         }
-        let partial = target.deletingLastPathComponent().appendingPathComponent("." + target.lastPathComponent + ".partial")
+        let partial = target.deletingLastPathComponent().appendingPathComponent(Self.partialName(for: target.lastPathComponent))
         try? FileManager.default.removeItem(at: partial)
         guard FileManager.default.createFile(atPath: partial.path, contents: nil, attributes: [.posixPermissions: 0o600]),
               let handle = try? FileHandle(forWritingTo: partial) else {
@@ -327,11 +331,40 @@ extension ForkMacBackupKopiaEngine {
                     completion(.failure(failure.engineError))
                 case .success(let bytes):
                     let manager = FileManager.default
-                    if overwrite { try? manager.removeItem(at: target) }
-                    guard (try? manager.moveItem(at: partial, to: target)) != nil else {
+                    // A link's object holds its destination: it comes back as a link.
+                    let landed: URL
+                    if entry.type == "s" {
+                        let destination = (try? Data(contentsOf: partial)).map { String(decoding: $0, as: UTF8.self) }
                         try? manager.removeItem(at: partial)
+                        let link = target.deletingLastPathComponent()
+                            .appendingPathComponent("." + UUID().uuidString + ".link", isDirectory: false)
+                        guard let destination, !destination.isEmpty,
+                              (try? manager.createSymbolicLink(atPath: link.path, withDestinationPath: destination)) != nil else {
+                            return completion(.failure(.other("cannot write \(target.path)")))
+                        }
+                        landed = link
+                    } else {
+                        landed = partial
+                    }
+                    var existing = stat()
+                    let exists = lstat(target.path, &existing) == 0
+                    // Never a folder replaced by a file; never the old file lost
+                    // when the new one cannot take its place.
+                    if exists, (existing.st_mode & S_IFMT) == S_IFDIR {
+                        try? manager.removeItem(at: landed)
+                        return completion(.failure(.other("a folder is in the way: \(target.path)")))
+                    }
+                    let placed: Bool
+                    if exists && overwrite {
+                        placed = (try? Self.replace(target, with: landed)) != nil
+                    } else {
+                        placed = (try? manager.moveItem(at: landed, to: target)) != nil
+                    }
+                    guard placed else {
+                        try? manager.removeItem(at: landed)
                         return completion(.failure(.other("cannot write \(target.path)")))
                     }
+                    if entry.type == "s" { return completion(.success((1, 0))) }
                     var attributes: [FileAttributeKey: Any] = [:]
                     if let modified = entry.modified { attributes[.modificationDate] = modified }
                     if let mode = entry.mode.flatMap({ Int($0, radix: 8) }) { attributes[.posixPermissions] = mode & 0o7777 }
@@ -412,6 +445,17 @@ extension ForkMacBackupKopiaEngine {
     /// that landed; a file that cannot be moved is named in `failures`.
     static func merge(_ staged: URL, into target: URL, rule: ForkMacBackupRestoreRequest.Overwrite, suffix: String,
                       sourceRoot: String, failures: inout [ForkMacBackupFailure]) -> (files: Int64, bytes: Int64) {
+        var placed: String?
+        return merge(staged, into: target, rule: rule, suffix: suffix, sourceRoot: sourceRoot, failures: &failures,
+                     placed: &placed)
+    }
+
+    /// `placed`: where `staged` itself landed (renamed by « garder les
+    /// deux »), nil when it was kept out or merged into an existing folder
+    /// (then `target`).
+    static func merge(_ staged: URL, into target: URL, rule: ForkMacBackupRestoreRequest.Overwrite, suffix: String,
+                      sourceRoot: String, failures: inout [ForkMacBackupFailure],
+                      placed: inout String?) -> (files: Int64, bytes: Int64) {
         let manager = FileManager.default
         var info = stat()
         guard lstat(staged.path, &info) == 0 else { return (0, 0) }
@@ -425,6 +469,7 @@ extension ForkMacBackupKopiaEngine {
         }
 
         if stagedIsDirectory && targetIsDirectory {
+            placed = target.path
             var total: (files: Int64, bytes: Int64) = (0, 0)
             for child in (try? manager.contentsOfDirectory(atPath: staged.path)) ?? [] {
                 let part = merge(staged.appendingPathComponent(child), into: target.appendingPathComponent(child),
@@ -453,17 +498,45 @@ extension ForkMacBackupKopiaEngine {
             case .move:
                 try manager.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
                 try manager.moveItem(at: staged, to: target)
+                placed = target.path
             case .replace:
-                try manager.removeItem(at: target)
-                try manager.moveItem(at: staged, to: target)
+                try replace(target, with: staged)
+                placed = target.path
             case .moveRenamed(let name):
-                try manager.moveItem(at: staged, to: target.deletingLastPathComponent().appendingPathComponent(name))
+                let renamed = target.deletingLastPathComponent().appendingPathComponent(name)
+                try manager.moveItem(at: staged, to: renamed)
+                placed = renamed.path
             }
             return counts
         } catch {
             fail(error.localizedDescription)
             return (0, 0)
         }
+    }
+
+    /// Puts `source` in place of `target` without ever losing both: the
+    /// existing item steps aside first (a rename in its own folder) and
+    /// comes back when `source` cannot take its place (another volume full,
+    /// a locked file).
+    static func replace(_ target: URL, with source: URL) throws {
+        let manager = FileManager.default
+        let aside = target.deletingLastPathComponent()
+            .appendingPathComponent("." + UUID().uuidString + ".replaced", isDirectory: false)
+        try manager.moveItem(at: target, to: aside)
+        do {
+            try manager.moveItem(at: source, to: target)
+        } catch {
+            try? manager.moveItem(at: aside, to: target)
+            throw error
+        }
+        try? manager.removeItem(at: aside)
+    }
+
+    /// `.<name>.partial`, or a short random name when that would pass the
+    /// 255-byte limit of a file name.
+    static func partialName(for name: String) -> String {
+        let partial = "." + name + ".partial"
+        return partial.utf8.count <= 255 ? partial : "." + UUID().uuidString + ".partial"
     }
 
     private static func modified(_ info: stat) -> Date {

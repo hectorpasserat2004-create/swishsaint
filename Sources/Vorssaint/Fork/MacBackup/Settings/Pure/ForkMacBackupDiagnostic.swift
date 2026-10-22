@@ -73,8 +73,9 @@ enum ForkMacBackupDiagnostic {
         }
         lines.append("")
         lines.append("## Settings")
+        // A free rule may name a path of the home folder: read as ~.
         for key in input.settings.keys.sorted() {
-            add(key, input.settings[key])
+            add(key, input.settings[key].map(scrub))
         }
         return lines.joined(separator: "\n") + "\n"
     }

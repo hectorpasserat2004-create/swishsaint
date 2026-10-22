@@ -97,6 +97,8 @@ struct ForkMacBackupPaths: Equatable {
     var capacity: URL { root.appendingPathComponent("capacity.jsonl", isDirectory: false) }
     /// Changes not protected yet (owned by the Agent).
     var pending: URL { root.appendingPathComponent("pending.json", isDirectory: false) }
+    /// The sources' last full pre-scan walk (`ForkMacBackupPrescanCache`, owned by the Agent).
+    var prescan: URL { root.appendingPathComponent("prescan.json", isDirectory: false) }
     /// Single files restored for Quick Look, emptied when the window closes.
     var preview: URL { root.appendingPathComponent("preview", isDirectory: true) }
 
