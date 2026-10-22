@@ -310,6 +310,13 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
                 }
                 stop {
                     self.api = nil
+                    // The cache keeps a copy of the format blob for 15 min, and the
+                    // folder survives an endpoint change (same bucket and prefix):
+                    // read from the storage, never from that copy, or the unique ID
+                    // check would read an older repository's (SPIKES §0.2).
+                    for name in ForkMacBackupKopiaCommand.cachedFormatBlobs {
+                        try? FileManager.default.removeItem(at: files.cache.appendingPathComponent(name, isDirectory: false))
+                    }
                     self.connectInto(files, repository: repository, credentials: credentials, readOnly: readOnly,
                                      task: task) { status in
                         self.repository = repository
@@ -353,15 +360,24 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
             try? FileManager.default.removeItem(at: files.cache)
             cleanup()
         }
+        // Only another repository, or one that does not say who it is, is
+        // forgotten; a storage out of reach or slow keeps the config and its
+        // cache (gigabytes) for the next try.
+        let forgetIfWrong = { (error: ForkMacBackupEngineError) in
+            switch error {
+            case .wrongRepository, .decoding: forget()
+            default: cleanup()
+            }
+        }
         let status = {
             _ = self.runCLI(ForkMacBackupKopiaCommand.status, timeout: 120, files: files, credentials: credentials) { result in
                 switch result {
                 case .failure(let error):
-                    forget()
+                    forgetIfWrong(error)
                     task.finish(.failure(error))
                 case .success(let outcome):
                     if let error = Self.failure(of: outcome) {
-                        forget()
+                        forgetIfWrong(error)
                         return task.finish(.failure(error))
                     }
                     guard let status = ForkMacBackupKopia.decode(ForkMacBackupKopia.RepositoryStatus.self, from: outcome.stdout),

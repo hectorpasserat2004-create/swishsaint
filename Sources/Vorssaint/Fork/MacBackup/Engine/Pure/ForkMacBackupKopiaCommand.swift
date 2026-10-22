@@ -50,6 +50,9 @@ struct ForkMacBackupKopiaInvocation: Equatable {
 /// `KOPIA_CACHE_DIRECTORY` (which overrides every repository's cache, §0.2)
 /// or a stray `AWS_SESSION_TOKEN` can never leak in.
 enum ForkMacBackupKopiaCommand {
+    /// The format blob's copies at the root of a repository's cache folder.
+    static let cachedFormatBlobs = ["kopia.repository", "kopia.blobcfg"]
+
     /// Soft cache limits (plan §3.10).
     static let contentCacheMB = 2048
     static let metadataCacheMB = 1024
