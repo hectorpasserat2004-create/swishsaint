@@ -4,31 +4,48 @@
 import Foundation
 
 /// Where the other packages get their engine, their Keychain and the
-/// engine's installer. Stubs until WP Engine fills them: `nil` means « not
-/// available yet », and every caller must already handle it (engine not
-/// installed, agent not running).
+/// engine's installer. `nil` means « not available yet », and every caller
+/// handles it (engine not installed, agent not running).
+///
+/// Both engines also conform to `ForkMacBackupEngineExtras`
+/// (`engine as? ForkMacBackupEngineExtras`): conclusion of a run, real bytes
+/// sent, retention preview, maintenance schedule, estimate, server PID,
+/// shutdown.
 enum ForkMacBackupEngineFactory {
     /// The app's client of the agent's `kopia server` (`run/server.json`):
-    /// browse, versions, restore. Callbacks on the main queue.
-    static func makeClient(paths: ForkMacBackupPaths) -> ForkMacBackupEngineDriving? { nil }
+    /// progress, browse, versions, restore, and the wizard's probe
+    /// (`connect` into a throw-away config). Callbacks on the main queue.
+    /// Never nil: without a running agent, its calls fail with
+    /// `.serverUnavailable` until the agent writes `server.json`.
+    static func makeClient(paths: ForkMacBackupPaths) -> ForkMacBackupEngineDriving? {
+        let engine = ForkMacBackupKopiaEngine(role: .client, paths: paths, callbackQueue: .main,
+                                              binary: { installedBinary(paths) })
+        engine.restoredSuffix = ForkMacBackupEngineStrings.strings(L10n.shared.language).restoredSuffix
+        return engine
+    }
 
     /// The agent's engine: owns `kopia server` and the repository's own
-    /// config. Callbacks on `callbackQueue`.
+    /// config. Callbacks on `callbackQueue`. Nil while the engine is not
+    /// installed (or not signed by Kopia). The credentials travel with each
+    /// `connect` / `startServer`; `secrets` is the Keychain the agent reads
+    /// them from.
     static func makeOwner(paths: ForkMacBackupPaths, secrets: ForkMacBackupSecrets,
-                          callbackQueue: DispatchQueue) -> ForkMacBackupEngineDriving? { nil }
+                          callbackQueue: DispatchQueue) -> ForkMacBackupEngineDriving? {
+        guard installedBinary(paths) != nil else { return nil }
+        return ForkMacBackupKopiaEngine(role: .owner, paths: paths, callbackQueue: callbackQueue,
+                                        binary: { installedBinary(paths) })
+    }
 
     /// The Keychain (`<bundle id>.macbackup`, AfterFirstUnlockThisDeviceOnly).
-    static func makeSecrets() -> ForkMacBackupSecrets? { nil }
-}
+    static func makeSecrets() -> ForkMacBackupSecrets? {
+        ForkMacBackupKeychain.forCurrentBundle()
+    }
 
-/// The pinned Kopia binary on this Mac: download, SHA-256 check, install
-/// (modelled on `ForkParakeetModelStore`). Stub until WP Engine fills it.
-final class ForkMacBackupEngineStore: ObservableObject {
-    static let shared = ForkMacBackupEngineStore()
-
-    @Published private(set) var state: ForkMacBackupEngineInstallState = .notInstalled
-
-    func install() {}
-
-    func cancel() {}
+    /// `engine/kopia-<version>/kopia` when present and signed by Kopia LLC.
+    private static func installedBinary(_ paths: ForkMacBackupPaths) -> URL? {
+        let binary = paths.engineBinary(version: ForkMacBackupEngineManifest.version)
+        guard FileManager.default.isExecutableFile(atPath: binary.path),
+              ForkMacBackupEngineBinary.isTrusted(binary) else { return nil }
+        return binary
+    }
 }
