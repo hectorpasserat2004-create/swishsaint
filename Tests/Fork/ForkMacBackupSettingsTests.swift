@@ -255,6 +255,11 @@ enum ForkMacBackupSettingsTests {
                         && commands[3].hasPrefix("./kopia restore <SNAPSHOT_ID>"),
                      "the four rescue commands: download and check, connect read only, list, restore")
         suite.expect(ForkMacBackupKit.kopiaArchiveSHA256.count == 64, "the archive's full SHA-256 is printed")
+        let turkish = ForkMacBackupKit.rescueCommands(repository, restoreFolder: "~/Geri Yüklenenler")
+        suite.expect(turkish[3] == "./kopia restore <SNAPSHOT_ID> ~/'Geri Yüklenenler'"
+                        && ForkMacBackupKit.shellPath("~/Restored") == "~/Restored"
+                        && ForkMacBackupKit.shellPath("/Volumes/My Disk/l'été") == "'/Volumes/My Disk/l'\\''été'",
+                     "a restore folder with a space or a quote stays one argument, its ~ still expanded")
     }
 
     // MARK: Retention
@@ -606,6 +611,10 @@ enum ForkMacBackupSettingsTests {
                      "the diagnostic hides credentials in URLs and the full repository ID")
         suite.expect(ForkMacBackupDiagnostic.scrubHome("/Users/tester/Documents", home: "/Users/tester") == "~/Documents",
                      "the home folder reads as ~")
+        var withRules = input
+        withRules.settings = ["fork.macbackup.rules": NSHomeDirectory() + "/Clients/secret.pdf"]
+        suite.expect(ForkMacBackupDiagnostic.text(withRules).contains("fork.macbackup.rules: ~/Clients/secret.pdf"),
+                     "a free rule's path of the home folder is exported as ~")
 
         let script = ForkMacBackupTerminalScript.text(engineBinary: "/A B/engine/kopia-0.23.1/kopia", config: "/c/repository.config",
                                                       cache: "/c/cache", logs: "/c/logs", accessKeyID: "kopia-test",

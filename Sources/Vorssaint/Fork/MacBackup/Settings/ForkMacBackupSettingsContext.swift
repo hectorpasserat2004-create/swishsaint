@@ -6,6 +6,7 @@ import Combine
 import Darwin
 import Network
 import SwiftUI
+import SystemConfiguration
 
 /// What the Settings screens need from outside the package, behind closures
 /// so the offscreen renders and the previews run on fakes: nothing here is
@@ -105,6 +106,9 @@ final class ForkMacBackupSettingsContext: ObservableObject {
 
     private let queue = DispatchQueue(label: "fork.macbackup.settings", qos: .utility)
     private var scanCancelled = ForkMacBackupFlag()
+    /// The walk « Aperçu » runs, whichever context started it: the switch
+    /// turned off stops it (`cancelRunningScan`) without creating a context.
+    private static var runningScan: ForkMacBackupFlag?
     private var permissionObservers: Set<AnyCancellable> = []
 
     private init() {
@@ -372,6 +376,7 @@ final class ForkMacBackupSettingsContext: ObservableObject {
         guard !isPreview, scanProgress == nil else { return }
         let flag = ForkMacBackupFlag()
         scanCancelled = flag
+        Self.runningScan = flag
         let settings = ForkMacBackupContentScanner.Settings(presets: presets, customRules: customRules, iCloud: iCloudMode)
         let roots = effectiveSources.map(\.path)
         let home = home
@@ -388,11 +393,19 @@ final class ForkMacBackupSettingsContext: ObservableObject {
                 PrivateFileStore.write(data, to: url)
             }
             DispatchQueue.main.async {
-                guard let self else { return }
+                if Self.runningScan === flag { Self.runningScan = nil }
+                // A newer scan's progress is not this one's to clear.
+                guard let self, self.scanCancelled === flag else { return }
                 self.scanProgress = nil
                 if result.complete { self.preview = result }
             }
         }
+    }
+
+    /// Main thread: the feature was switched off.
+    static func cancelRunningScan() {
+        runningScan?.set()
+        runningScan = nil
     }
 
     func cancelScan() {
@@ -465,7 +478,9 @@ extension ForkMacBackupSettingsServices {
             probeServer: ForkMacBackupLiveServices.probe,
             readBran: ForkMacBackupLiveServices.readBran,
             stopBran: ForkMacBackupLiveServices.stopBran,
-            localHostName: { Host.current().localizedName ?? ProcessInfo.processInfo.hostName },
+            // The Computer Name from the local store: `Host.current()` resolves
+            // names over DNS and can block the main thread for seconds.
+            localHostName: { (SCDynamicStoreCopyComputerName(nil, nil) as String?) ?? ForkMacBackupFormat.localHostName },
             localUserName: { NSUserName() },
             now: { Date() })
     }

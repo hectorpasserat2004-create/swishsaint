@@ -199,8 +199,15 @@ enum ForkMacBackupKit {
             "curl -LO \(kopiaDownloadURL) && shasum -a 256 \(kopiaArchive) && tar xzf \(kopiaArchive) --strip-components=1",
             connect.joined(separator: " "),
             "./kopia snapshot list --all",
-            "./kopia restore <SNAPSHOT_ID> \(restoreFolder)",
+            "./kopia restore <SNAPSHOT_ID> \(shellPath(restoreFolder))",
         ]
+    }
+
+    /// A path for the shell: quoted (« Geri Yüklenenler » is one argument),
+    /// a leading `~/` left outside the quotes so the shell still expands it.
+    static func shellPath(_ path: String) -> String {
+        guard path.hasPrefix("~/") else { return shellQuoted(path) }
+        return "~/" + shellQuoted(String(path.dropFirst(2)))
     }
 
     private static func shellQuoted(_ text: String) -> String {

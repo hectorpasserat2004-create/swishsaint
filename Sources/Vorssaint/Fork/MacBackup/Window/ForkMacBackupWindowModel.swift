@@ -267,8 +267,7 @@ final class ForkMacBackupWindowModel: ObservableObject {
         }
         let known = Set(ledger.sources.map(\.path) + status.presentation.sources.map(\.path))
         if known.contains(key.path) { return true }
-        let host = ProcessInfo.processInfo.hostName.split(separator: ".").first.map(String.init) ?? ""
-        return key.host.caseInsensitiveCompare(host) == .orderedSame && key.userName == NSUserName()
+        return key.host.caseInsensitiveCompare(ForkMacBackupFormat.localHostName) == .orderedSame && key.userName == NSUserName()
     }
 
     var localSources: [ForkMacBackupSourceKey] {
