@@ -157,6 +157,8 @@ struct ForkMacBackupMachine {
         case stop(ForkMacBackupStopReason)
         case verifyProgress(ForkMacBackupVerifyProgress)
         case verifyFinished(ForkMacBackupEngineResult<ForkMacBackupVerifyReport>)
+        /// The Mac woke: the time asleep is no stall (the watchdog starts again).
+        case woke
         case tick
     }
 
@@ -321,6 +323,10 @@ struct ForkMacBackupMachine {
             verify?.progress = progress
             return []
         case .verifyFinished(let result): return verifyFinished(result, now: now)
+        case .woke:
+            run?.lastProgressAt = now
+            if run?.stopRequestedAt != nil { run?.stopRequestedAt = now }
+            return []
         case .tick: return tick(now: now)
         }
     }

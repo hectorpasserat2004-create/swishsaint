@@ -160,3 +160,25 @@ enum ForkMacBackupOtherEngine {
         prefix.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
     }
 }
+
+/// Sparse disk images (decision 1 of 22/10): ≥ 10 GB announced, less than
+/// half written. Pure.
+enum ForkMacBackupSparseImages {
+    static func isSparse(logical: Int64, allocated: Int64) -> Bool {
+        logical >= ForkMacBackupAgentTuning.sparseMinimumBytes && allocated * 2 < logical
+    }
+
+    /// The anchored ignore rule of `path` in `source`; nil outside it. The
+    /// pattern characters of the name are escaped.
+    static func rule(for path: String, in source: String) -> String? {
+        let root = source.hasSuffix("/") ? String(source.dropLast()) : source
+        guard path.hasPrefix(root + "/") else { return nil }
+        let relative = String(path.dropFirst(root.count))
+        var escaped = ""
+        for character in relative {
+            if "*?[]\\".contains(character) { escaped.append("\\") }
+            escaped.append(character)
+        }
+        return escaped
+    }
+}
