@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Sauvegarde du Mac : l'agent en arrière-plan (le même binaire, sans interface, lancé avec
+  --fork-backup-agent). fork/build-release.sh remplace __LABEL__, __BUNDLE_ID__ et __EXECUTABLE__,
+  puis le pose dans Contents/Library/LaunchAgents/<bundle id>.backup-agent.plist, où
+  SMAppService.agent(plistName:) le trouve. Doit rester identique à ForkMacBackupAgentPlist.release
+  (vérifié par la suite fork-macbackup-agent).
+-->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>__LABEL__</string>
+	<key>BundleProgram</key>
+	<string>Contents/MacOS/__EXECUTABLE__</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>Contents/MacOS/__EXECUTABLE__</string>
+		<string>--fork-backup-agent</string>
+	</array>
+	<key>KeepAlive</key>
+	<dict>
+		<key>SuccessfulExit</key>
+		<false/>
+	</dict>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>ProcessType</key>
+	<string>Background</string>
+	<key>LowPriorityBackgroundIO</key>
+	<true/>
+	<key>ThrottleInterval</key>
+	<integer>30</integer>
+	<key>AssociatedBundleIdentifiers</key>
+	<array>
+		<string>__BUNDLE_ID__</string>
+	</array>
+</dict>
+</plist>

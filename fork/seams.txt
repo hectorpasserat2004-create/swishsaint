@@ -51,6 +51,7 @@ notch-calendar-crm3  Sources/Vorssaint/UI/Settings/NotchSettings.swift          
 #
 # Sauvegarde du Mac : chaque lot ajoute ses coutures sous SON titre (des fusions parallèles sans conflit).
 # macbackup · Agent (main.swift : macbackup-agent)
+macbackup-agent    Sources/Vorssaint/main.swift                                # sauvegarde du Mac : le mode sans interface --fork-backup-agent (l'agent lancé par launchd), après --uninstall
 
 #
 # macbackup · Island (notch-macbackups*, notch-macbackup*, notch-macbackup-tile*, notch-macbackup-event, command-bar-macbackup)
