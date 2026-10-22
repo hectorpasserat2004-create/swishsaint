@@ -69,7 +69,8 @@ struct ForkMacBackupInspector: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text(text.selected(entries.count, model.language))
                     .font(.headline)
-                facts([(text.realSize, ForkMacBackupFormat.bytes(size.bytes, locale: locale)),
+                // Kopia's logical sizes, summed: « Size », never « Real size ».
+                facts([(text.columnSize, ForkMacBackupFormat.bytes(size.bytes, locale: locale)),
                        (text.files, size.files.formatted(.number.locale(locale)))])
                 HStack {
                     Button(shared.restore) { model.beginRestore() }
@@ -143,7 +144,9 @@ struct ForkMacBackupInspector: View {
             }
             facts([
                 (text.files, proof.files.formatted(.number.locale(locale))),
-                (text.realSize, ForkMacBackupFormat.bytes(proof.diskBytes, locale: locale)),
+                // « Real size » only when it was measured; else Kopia's own, plainly « Size ».
+                (proof.realBytes == nil ? text.columnSize : text.realSize,
+                 ForkMacBackupFormat.bytes(proof.diskBytes, locale: locale)),
                 (text.sent, run.map { ForkMacBackupFormat.bytes($0.bytesSent, locale: locale) } ?? shared.unknown),
                 (text.duration, (run?.duration ?? proof.startTime.map { proof.endTime.timeIntervalSince($0) })
                     .map { ForkMacBackupFormat.duration($0, locale: locale) } ?? shared.unknown),
