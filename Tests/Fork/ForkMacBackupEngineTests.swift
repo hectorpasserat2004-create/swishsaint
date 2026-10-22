@@ -43,6 +43,8 @@ enum ForkMacBackupEngineTests {
         suite.expect(ForkMacBackupDatalessPolicy.current == before, "and the process gets its own policy back")
         let invocation = ForkMacBackupKopiaInvocation(arguments: [], environment: [:], timeout: 1)
         suite.expect(!invocation.materializeDataless, "a CLI call never downloads cloud-only files")
+        suite.expect(ForkMacBackupHTTP.percentEncoded("/Users/x y/Résumé ü.txt") == "%2FUsers%2Fx%20y%2FR%C3%A9sum%C3%A9%20%C3%BC.txt",
+                     "a path is percent-encoded to ASCII, accents included")
     }
 
     // MARK: Helpers

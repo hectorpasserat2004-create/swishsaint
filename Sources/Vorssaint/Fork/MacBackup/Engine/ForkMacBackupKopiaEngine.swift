@@ -915,7 +915,9 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
     }
 
     /// Polls `/api/v1/tasks/{id}` every half second until it ends; a
-    /// cancel of `task` cancels the server's task.
+    /// cancel of `task` cancels the server's task. A poll that fails is
+    /// tried again twice; then the server's task is cancelled too, so no
+    /// file keeps landing after the caller was told it failed.
     func followTask<Value>(_ id: String, task: ForkMacBackupEngineTask<Value>,
                            progress: @escaping (ForkMacBackupKopia.TaskInfo) -> Void,
                            then: @escaping (ForkMacBackupKopia.TaskInfo) -> Void) {
@@ -923,20 +925,25 @@ final class ForkMacBackupKopiaEngine: ForkMacBackupEngineExtras {
         task.attach(ForkMacBackupEngineCallback { [weak self] in
             self?.work.async { self?.request("POST", path + "/cancel", auth: .ui) { _ in } }
         })
-        func poll() {
+        func poll(failed failedPolls: Int) {
             guard !task.isFinished else { return }
             requestDecoding(ForkMacBackupKopia.TaskInfo.self, "GET", path, auth: .ui) { [weak self] result in
                 guard let self, !task.isFinished else { return }
                 switch result {
-                case .failure(let error): task.finish(.failure(error))
+                case .failure(let error):
+                    if failedPolls < 2, error != .canceled {
+                        return self.work.asyncAfter(deadline: .now() + 1) { poll(failed: failedPolls + 1) }
+                    }
+                    self.request("POST", path + "/cancel", auth: .ui) { _ in }
+                    task.finish(.failure(error))
                 case .success(let info):
                     if info.isFinished { return then(info) }
                     progress(info)
-                    self.work.asyncAfter(deadline: .now() + 0.5) { poll() }
+                    self.work.asyncAfter(deadline: .now() + 0.5) { poll(failed: 0) }
                 }
             }
         }
-        poll()
+        poll(failed: 0)
     }
 }
 

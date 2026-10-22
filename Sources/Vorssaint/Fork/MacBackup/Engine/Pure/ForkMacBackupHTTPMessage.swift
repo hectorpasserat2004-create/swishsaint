@@ -78,10 +78,13 @@ enum ForkMacBackupHTTP {
     /// RFC 3986 unreserved characters only: a path like `/Users/x y/ü` goes
     /// through any query or path segment intact.
     static func percentEncoded(_ text: String) -> String {
-        var allowed = CharacterSet.alphanumerics
-        allowed.insert(charactersIn: "-._~")
-        return text.addingPercentEncoding(withAllowedCharacters: allowed) ?? text
+        // ASCII only: `CharacterSet.alphanumerics` holds every Unicode letter,
+        // which would go raw into the request line.
+        text.addingPercentEncoding(withAllowedCharacters: unreserved) ?? text
     }
+
+    private static let unreserved = CharacterSet(
+        charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~")
 
     /// `/api/v1/x?a=1&b=2`, every query value encoded.
     static func path(_ path: String, query: [(String, String)] = []) -> String {
