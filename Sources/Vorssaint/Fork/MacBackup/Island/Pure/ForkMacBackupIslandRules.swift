@@ -85,7 +85,17 @@ enum ForkMacBackupIslandRules {
     /// Every byte is sent while the run concludes: the ring stays full
     /// rather than turning again between the last percent and the checkmark.
     static func ringProgress(_ state: ForkMacBackupPresentation, finishing: Bool) -> Double? {
-        finishing || state.phase == .concluding ? 1 : state.fraction
+        finishing || state.phase == .concluding ? 1 : share(state)
+    }
+
+    /// How far the operation is: its bytes, or for a verification (which
+    /// counts files, not bytes) the files checked.
+    static func share(_ state: ForkMacBackupPresentation) -> Double? {
+        if let fraction = state.fraction { return fraction }
+        guard state.phase == .verifying, let progress = state.progress, let total = progress.filesTotal, total > 0 else {
+            return nil
+        }
+        return min(1, max(0, Double(progress.files) / Double(total)))
     }
 
     /// The right wing: the percentage or the time left, as chosen
@@ -96,6 +106,7 @@ enum ForkMacBackupIslandRules {
                         reading: ForkMacBackupReading, finishing: Bool) -> String {
         if finishing || state.phase == .concluding { return ForkMacBackupFormat.percent(1, locale: locale) }
         if state.fraction != nil { return state.compactValue(text, locale: locale, reading: reading) }
+        if let share = share(state) { return ForkMacBackupFormat.percent(share, locale: locale) }
         if let bytes = state.progress?.bytesDone, bytes > 0 { return ForkMacBackupFormat.bytes(bytes, locale: locale) }
         return "…"
     }
@@ -150,6 +161,13 @@ enum ForkMacBackupIslandRules {
         case .slowed where state.fraction != nil: return bare(text.slowed)
         default: return nil
         }
+    }
+
+    /// « Partielle · 3 fichiers » after its word: « 3 fichiers », the
+    /// partial notice's detail, in the section's own words.
+    static func count(_ phrase: String) -> String {
+        guard let range = phrase.range(of: " · ") else { return phrase }
+        return String(phrase[range.upperBound...])
     }
 
     /// « Sauvegarde · %@ » without its figure: « Sauvegarde ».
@@ -242,8 +260,9 @@ enum ForkMacBackupIslandRules {
         }
     }
 
-    /// « aujourd’hui 10:04 », « hier 19:14 », else « 16 oct., 19:14 », in
-    /// the locale's own clock.
+    /// « aujourd’hui à 10:04 », « hier à 19:14 », else « 16 oct., 19:14 »,
+    /// in the locale's own clock: the one way every Mac Backup screen says
+    /// when (the island, the Settings page).
     static func when(_ date: Date, now: Date, locale: Locale, calendar: Calendar = .current) -> String {
         if calendar.isDate(date, inSameDayAs: now)
             || calendar.date(byAdding: .day, value: -1, to: now).map({ calendar.isDate(date, inSameDayAs: $0) }) == true {
@@ -253,9 +272,20 @@ enum ForkMacBackupIslandRules {
             formatter.dateStyle = .medium
             formatter.timeStyle = .short
             formatter.doesRelativeDateFormatting = true
+            // « Dernière : aujourd’hui à 10:04 », « Last: today at 10:04 ».
+            formatter.formattingContext = .middleOfSentence
             return formatter.string(from: date)
         }
         return ForkMacBackupFormat.dayAndTime(date, locale: locale, timeZone: calendar.timeZone)
+    }
+
+    /// « Prochaine vers 14:04 » for the Automatic rhythm, which only aims
+    /// at a time; « Prochaine à 14:00 » for set times or hours.
+    static func nextLine(_ next: Date, rhythm: ForkMacBackupPresentation.Rhythm, shared: ForkMacBackupStrings,
+                         around: String, locale: Locale) -> String {
+        let time = ForkMacBackupFormat.time(next, locale: locale)
+        if case .automatic = rhythm { return String(format: around, time) }
+        return String(format: shared.nextAt, time)
     }
 
     /// The section's height: compact (180 pt) unless « spacious » (264 pt).
@@ -455,7 +485,8 @@ enum ForkMacBackupIslandRules {
                              locale: Locale, now: Date) -> String {
         var parts = [state.headline(text, language: language, locale: locale, now: now)]
         if case .ready = state.phase, state.protectedSince != nil, let next = state.nextRun, next > now {
-            parts.append(String(format: text.nextAt, ForkMacBackupFormat.time(next, locale: locale)))
+            parts.append(nextLine(next, rhythm: state.rhythm, shared: text,
+                                  around: ForkMacBackupSettingsStrings.strings(language).nextAround, locale: locale))
         }
         return parts.joined(separator: " · ")
     }

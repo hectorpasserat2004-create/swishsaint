@@ -79,7 +79,8 @@ enum ForkMacBackupIsland {
             detail = sent.map { $0 > 0 ? String(format: text.sentSize, ForkMacBackupFormat.bytes($0, locale: locale)) : "" } ?? ""
         case .partial(let files):
             title = island.noticePartial
-            detail = island.errors(files, language: language)
+            // The files the section names, not « errors »: the same words there and here.
+            detail = ForkMacBackupIslandRules.count(text.partial(files, language: language))
         case .failed(let failure):
             title = text.failed
             detail = failure.title(text)

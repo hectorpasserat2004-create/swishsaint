@@ -143,7 +143,8 @@ struct ForkMacBackupIslandStrip: View {
             .animation(reduceMotion ? nil : .smooth(duration: 0.3), value: snapshot.glyph)
             .accessibilityHidden(true)
             if let fraction = snapshot.progress {
-                NotchMeter(value: fraction, height: layout.meterHeight, tint: .teal)
+                NotchMeter(value: fraction, height: layout.meterHeight,
+                           tint: ForkMacBackupIslandRules.readingIsSlowed(snapshot.state) ? .orange : .teal)
                     .frame(width: layout.downloadMeterWidth)
                     .animation(reduceMotion ? nil : .smooth(duration: 0.3), value: fraction)
                     .padding(.leading, layout.groupSpacing - layout.spacing)

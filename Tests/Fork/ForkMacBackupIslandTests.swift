@@ -203,6 +203,9 @@ enum ForkMacBackupIslandTests {
         suite.expect(bare.allSatisfy { !$0.isEmpty && !$0.contains("%") && !$0.hasSuffix("·") && !$0.hasSuffix(" ") }
                         && ForkMacBackupIslandRules.bare(ForkMacBackupStrings.fr.running) == "Sauvegarde",
                      "the card's title without its figure, in every language: \(bare)")
+        let counts = AppLanguage.allCases.map { ForkMacBackupIslandRules.count(ForkMacBackupStrings.strings($0).partial(3, language: $0)) }
+        suite.expect(counts.allSatisfy { $0.contains("3") && !$0.contains("·") } && counts[AppLanguage.allCases.firstIndex(of: .fr)!] == "3 fichiers",
+                     "the partial notice says how many files, as the section does: \(counts)")
         let frText = ForkMacBackupStrings.fr
         suite.expect(ForkMacBackupIslandRules.heroTitle(ForkMacBackupPresentation.preview(.protected, now: now), text: frText) == "Protégé"
                         && ForkMacBackupIslandRules.heroTitle(ForkMacBackupPresentation.preview(.running42, now: now), text: frText) == "Sauvegarde"
@@ -276,6 +279,10 @@ enum ForkMacBackupIslandTests {
         suite.expect(readings.dropFirst(3).allSatisfy { $0.hasSuffix("%") } && readings[2].contains("Mo")
                         && readings[0] == "…",
                      "an ellipsis, the bytes read while scanning, then only percentages to the end: \(readings)")
+        let verifying = ForkMacBackupPresentation.preview(.verifying, now: now)
+        let verifyReading = ForkMacBackupIslandRules.reading(verifying, text: text, locale: fr, reading: .percent, finishing: false)
+        suite.expect(ForkMacBackupIslandRules.ringProgress(verifying, finishing: false) != nil && verifyReading.hasSuffix("%"),
+                     "a verification counts files: its ring and reading say how far, never an ellipsis: \(verifyReading)")
         suite.expect(ForkMacBackupIslandRules.fillHold < ForkMacBackupIslandRules.finishHold
                         && ForkMacBackupIslandRules.fillHold >= 0.3,
                      "the ring fills (0.3 s) before it turns into the checkmark, within the hold")

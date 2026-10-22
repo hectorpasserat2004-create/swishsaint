@@ -337,17 +337,24 @@ struct ForkMacBackupIslandSection: View {
                 service.perform { ForkMacBackupWindow.open(.health) }
             }
             Spacer(minLength: 6)
-            Group {
-                if let id = hoveredNode, let node = state.chain.first(where: { $0.id == id }) {
-                    Text(ForkMacBackupIslandChain.label(node, text: text))
-                        .foregroundStyle(.white.opacity(0.85))
-                } else if let free = state.capacity.nasFreeBytes {
-                    Text(String(format: text.freeSpace, ForkMacBackupFormat.bytes(free, locale: locale)))
-                        .foregroundStyle(.white.opacity(0.5))
+            // The nodes keep their names first: the words beside them show
+            // only where they fit whole, never cut.
+            ViewThatFits(in: .horizontal) {
+                Group {
+                    if let id = hoveredNode, let node = state.chain.first(where: { $0.id == id }) {
+                        Text(ForkMacBackupIslandChain.label(node, text: text))
+                            .foregroundStyle(.white.opacity(0.85))
+                    } else if let free = state.capacity.nasFreeBytes {
+                        Text(String(format: text.freeSpace, ForkMacBackupFormat.bytes(free, locale: locale)))
+                            .foregroundStyle(.white.opacity(0.5))
+                    }
                 }
+                .fixedSize()
+                Color.clear.frame(width: 0, height: 0)
             }
             .font(.system(size: 10, weight: .medium)).monospacedDigit()
             .lineLimit(1)
+            .layoutPriority(-1)
             .transition(.opacity)
             .animation(reduceMotion ? nil : .smooth(duration: 0.18), value: hoveredNode)
         }
