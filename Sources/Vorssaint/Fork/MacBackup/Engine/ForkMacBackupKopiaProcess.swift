@@ -221,10 +221,12 @@ final class ForkMacBackupKopiaProcess: ForkMacBackupCancellable {
         exitGrace?.cancel()
         timer?.cancel()
         timer = nil
+        // The read ends are NOT closed here: a readability handler may be
+        // inside `availableData` on another thread, which raises on a closed
+        // descriptor (or reads a reused one). Their handlers stop now; the
+        // pipes close when this process object goes.
         stdoutPipe.fileHandleForReading.readabilityHandler = nil
         stderrPipe.fileHandleForReading.readabilityHandler = nil
-        try? stdoutPipe.fileHandleForReading.close()
-        try? stderrPipe.fileHandleForReading.close()
         try? stdinPipe?.fileHandleForWriting.close()
         flushStderrLine()
         let status: Int32 = launchFailed || !exited ? -1 : process.terminationStatus

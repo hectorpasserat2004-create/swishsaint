@@ -57,6 +57,9 @@ final class ForkMacBackupKopiaServer {
     }
 
     var isRunning: Bool { info != nil }
+    /// Crashed, its supervised restart waiting for its delay.
+    var isRestartScheduled: Bool { restart != nil && process == nil }
+    var isStopping: Bool { stopping }
     var processIdentifier: Int32? { info?.pid }
 
     /// Starts (or restarts) the server with `credentials`; `completion` on
@@ -176,7 +179,9 @@ final class ForkMacBackupKopiaServer {
         let line = ForkMacBackupKopiaText.errorLine(outcome.stderr)
         Self.log.error("server exited (\(outcome.status, privacy: .public)): \(line, privacy: .public); restart in \(delay, privacy: .public) s")
         let item = DispatchWorkItem { [weak self] in
-            guard let self, !self.stopping, self.process == nil else { return }
+            guard let self else { return }
+            self.restart = nil
+            guard !self.stopping, self.process == nil else { return }
             self.launch { _ in }
         }
         restart = item
