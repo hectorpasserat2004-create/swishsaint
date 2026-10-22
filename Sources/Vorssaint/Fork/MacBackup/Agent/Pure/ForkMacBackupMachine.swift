@@ -365,8 +365,10 @@ struct ForkMacBackupMachine {
         case .nothingToDo(_, let next):
             waiting = nil
             self.next = next
-        case .wait(let reason, _, let recheck, let forcedAt):
-            waiting = (reason, forcedAt ?? recheck)
+        case .wait(let reason, _, _, let forcedAt):
+            // `until`: when the wait ends at the latest (the soft conditions
+            // give way); a recheck is the agent's business, not a promise.
+            waiting = (reason, forcedAt)
             next = nil
         case .run(let trigger, let due):
             guard !rulesProblem, pausedUntil == nil else { return [] }

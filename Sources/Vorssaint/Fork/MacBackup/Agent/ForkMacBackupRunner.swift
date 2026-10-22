@@ -88,7 +88,28 @@ final class ForkMacBackupRunner {
     private var repositoryBytes: Int64?
     private var repositoryMeasuredAt: Date?
 
-    init(host: Host, paths: ForkMacBackupPaths, bundleID: String, defaults: UserDefaults = .standard) {
+    /// What the runner gets from outside: the engine (the Engine package's
+    /// owner in the app and the agent, a fake in a harness) and the look at
+    /// the other Kopia processes.
+    struct Dependencies {
+        var makeEngine: (ForkMacBackupPaths, DispatchQueue) -> (engine: ForkMacBackupEngineDriving, secrets: ForkMacBackupSecrets)?
+        var otherEngineWrites: (ForkMacBackupRepository, URL) -> Bool
+
+        static let live = Dependencies(
+            makeEngine: { paths, queue in
+                guard let secrets = ForkMacBackupEngineFactory.makeSecrets(),
+                      let engine = ForkMacBackupEngineFactory.makeOwner(paths: paths, secrets: secrets,
+                                                                        callbackQueue: queue) else { return nil }
+                return (engine, secrets)
+            },
+            otherEngineWrites: { repository, root in ForkMacBackupProcesses.otherEngineWrites(to: repository, ourRoot: root) })
+    }
+
+    private let dependencies: Dependencies
+
+    init(host: Host, paths: ForkMacBackupPaths, bundleID: String, defaults: UserDefaults = .standard,
+         dependencies: Dependencies = .live) {
+        self.dependencies = dependencies
         self.host = host
         self.paths = paths
         self.bundleID = bundleID
@@ -206,6 +227,12 @@ final class ForkMacBackupRunner {
         publish(force: true)
         running = false
         stopping = false
+        verifyHandle = nil
+        // The engine stops its `kopia server` once released, so the lock's
+        // next holder (the agent after the app's runner) starts its own.
+        engine = nil
+        secretsStore = nil
+        connectedKey = nil
         lock.release()
     }
 
@@ -300,9 +327,9 @@ final class ForkMacBackupRunner {
         guard engine == nil, settings.enabled, settings.isConfigured else { return }
         if let tried = engineTriedAt, now.timeIntervalSince(tried) < 15 * 60 { return }
         engineTriedAt = now
-        guard let secrets = ForkMacBackupEngineFactory.makeSecrets() else { return }
-        engine = ForkMacBackupEngineFactory.makeOwner(paths: paths, secrets: secrets, callbackQueue: queue)
-        if engine != nil { secretsStore = secrets }
+        guard let made = dependencies.makeEngine(paths, queue) else { return }
+        engine = made.engine
+        secretsStore = made.secrets
     }
 
     private var secretsStore: ForkMacBackupSecrets?
@@ -393,7 +420,7 @@ final class ForkMacBackupRunner {
         if let repository = settings.repository,
            otherEngineCheckedAt.map({ now.timeIntervalSince($0) >= 30 }) ?? true {
             otherEngineCheckedAt = now
-            otherEngine = ForkMacBackupProcesses.otherEngineWrites(to: repository, ourRoot: paths.root)
+            otherEngine = dependencies.otherEngineWrites(repository, paths.root)
         }
         if let peer = settings.repository?.peer, !peerProbeInFlight,
            peerCheckedAt.map({ now.timeIntervalSince($0) >= ForkMacBackupAgentTuning.peerRecheck }) ?? true {

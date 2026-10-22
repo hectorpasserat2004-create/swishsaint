@@ -23,6 +23,7 @@ enum ForkMacBackupAgentTests {
         machineFailures(suite)
         machineStops(suite)
         machineLimitsAndVerify(suite)
+        waits(suite)
         tracker(suite)
         presenter(suite)
         ipc(suite)
@@ -32,6 +33,7 @@ enum ForkMacBackupAgentTests {
         pending(suite)
         tailscale(suite)
         otherEngine(suite)
+        sparseImages(suite)
         cost(suite)
         proofStore(suite)
         journal(suite)
@@ -750,6 +752,22 @@ enum ForkMacBackupAgentTests {
                      "its report goes to the runner (proofs raised, history)")
     }
 
+    private static func waits(_ suite: TestSuite) {
+        var machine = ForkMacBackupMachine()
+        _ = machine.handle(.configure(settings()), now: t0)
+        _ = machine.handle(.decision(.wait(reason: .lowBattery, due: t0, recheck: nil, forcedAt: t0.addingTimeInterval(hour))), now: t0)
+        suite.expect(machine.phase(now: t0) == .waiting(reason: .lowBattery, until: t0.addingTimeInterval(hour)),
+                     "a wait says until when at the latest (forced)")
+        _ = machine.handle(.decision(.wait(reason: .peerOffline, due: t0, recheck: t0.addingTimeInterval(300), forcedAt: nil)), now: t0)
+        suite.expect(machine.phase(now: t0) == .waiting(reason: .peerOffline, until: nil),
+                     "an agent's recheck is no promise: no « until »")
+        _ = machine.handle(.decision(.idle(next: t0.addingTimeInterval(hour))), now: t0)
+        suite.expect(machine.phase(now: t0) == .ready(next: t0.addingTimeInterval(hour)), "the condition gone: ready, with the next run")
+        var notConfigured = ForkMacBackupMachine()
+        _ = notConfigured.handle(.configure(settings(configured: false)), now: t0)
+        suite.expect(notConfigured.phase(now: t0) == .notConfigured, "without a repository or a source: not configured")
+    }
+
     private static func tracker(_ suite: TestSuite) {
         var tracker = ForkMacBackupProgressTracker()
         tracker.add(done: 0, estimate: 1_000, at: t0)
@@ -1037,6 +1055,17 @@ enum ForkMacBackupAgentTests {
                         && !ForkMacBackupOtherEngine.sameRepository(configData: other, as: repository)
                         && !ForkMacBackupOtherEngine.sameRepository(configData: Data("nope".utf8), as: repository),
                      "the same bucket and prefix on the same host (or one of its addresses) is our repository")
+    }
+
+    private static func sparseImages(_ suite: TestSuite) {
+        suite.expect(ForkMacBackupSparseImages.isSparse(logical: 1_000_000_000_000, allocated: 4_000_000_000)
+                        && !ForkMacBackupSparseImages.isSparse(logical: 20_000_000_000, allocated: 15_000_000_000)
+                        && !ForkMacBackupSparseImages.isSparse(logical: 9_000_000_000, allocated: 0),
+                     "sparse: ≥ 10 GB announced and less than half written (Docker.raw yes, a full 20 GB video no)")
+        suite.expect(ForkMacBackupSparseImages.rule(for: home + "/VMs/kali [x].ext4", in: home) == "/VMs/kali \\[x\\].ext4"
+                        && ForkMacBackupSparseImages.rule(for: home + "/a.img", in: home + "/") == "/a.img"
+                        && ForkMacBackupSparseImages.rule(for: "/elsewhere/a.img", in: home) == nil,
+                     "its rule is anchored at the source and escapes pattern characters")
     }
 
     // MARK: Cost, proofs, journal, strings
