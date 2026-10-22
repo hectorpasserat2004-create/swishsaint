@@ -244,6 +244,24 @@ struct ForkCastralRecord: Equatable {
         hasSummary = status.hasSummary
         checkedAt = date
     }
+
+    /// Attached to another appointment (`move`): chosen by the person, and,
+    /// when its report is written again, followed again.
+    mutating func moved(_ answer: ForkCastralContract.Moved, booking: ForkCastralContract.Booking?, at date: Date) {
+        self.booking = answer.bookingID
+        bookingStart = booking?.startAt
+        company = answer.companyID
+        companyName = booking?.company?.name
+        rule = .chosen
+        if answer.regenerating {
+            stage = .summarizing
+            progress = ForkCastralContract.Stage.summarizing.progress
+            hasSummary = false
+            error = nil
+            warning = nil
+        }
+        checkedAt = date
+    }
 }
 
 // MARK: - What comes next

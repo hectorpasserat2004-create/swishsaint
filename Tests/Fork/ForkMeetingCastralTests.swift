@@ -21,6 +21,7 @@ enum ForkMeetingCastralTests {
         audio(suite)
         steps(suite)
         record(suite)
+        move(suite)
         failures(suite)
         configs(suite)
         texts(suite)
@@ -464,6 +465,64 @@ enum ForkMeetingCastralTests {
                         && ForkCastralPhase(record: ForkCastralRecord(target: "crm", step: .uploading, deposit: record.deposit)) == .sending(nil)
                         && ForkCastralPhase(record: record, followed: false) == .stillWorking,
                      "each phase as the library and the island say it")
+    }
+
+    // MARK: - Another appointment
+
+    private static func move(_ suite: TestSuite) {
+        let deposit = "ebb59da0-0f44-414c-baa3-3d8a337b417a"
+        suite.expect(ForkCastralContract.movePath(deposit) == "api/transcriptions/\(deposit)/move"
+                        && (try? JSONSerialization.jsonObject(with: ForkCastralContract.moveBody("00000000-0000-4000-8000-000000000002"))
+                            as? [String: String]) == ["booking_id": "00000000-0000-4000-8000-000000000002"],
+                     "a move asks the deposit's own route, with only the appointment chosen")
+        let answer = ForkCastralContract.moved(json([
+            "ok": true, "id": deposit, "booking_id": "00000000-0000-4000-8000-00000000000A",
+            "company_id": "11111111-0000-4000-8000-000000000002", "old_notes": "kept_edited", "summary": "regenerating",
+        ]))
+        suite.expect(answer == ForkCastralContract.Moved(bookingID: "00000000-0000-4000-8000-00000000000a",
+                                                         companyID: "11111111-0000-4000-8000-000000000002",
+                                                         oldNotes: .keptEdited, regenerating: true),
+                     "the move's answer: the new appointment, its company, the old notes, the report written again")
+        suite.expect(ForkCastralContract.moved(json(["booking_id": "00000000-0000-4000-8000-000000000002"])) == nil
+                        && ForkCastralContract.moved(json(["ok": true, "booking_id": "../x"])) == nil
+                        && ForkCastralContract.moved(json(["ok": true, "booking_id": "00000000-0000-4000-8000-000000000002",
+                                                           "company_id": NSNull(), "old_notes": "later",
+                                                           "summary": "pending"]))
+                        == .init(bookingID: "00000000-0000-4000-8000-000000000002", companyID: nil, oldNotes: nil,
+                                 regenerating: false),
+                     "no move without its ok and an appointment id; a value of a later version reads as none")
+        var record = ForkCastralRecord(target: "crm", step: .started, deposit: deposit)
+        record.booking = "00000000-0000-4000-8000-000000000001"
+        record.company = "11111111-0000-4000-8000-000000000001"
+        record.companyName = "Company 1"
+        record.rule = .meetCode
+        record.stage = .ready
+        record.progress = 100
+        record.hasSummary = true
+        let chosen = bookings([booking(2, start: "2026-10-19T14:00:00Z")])[0]
+        var moved = record
+        moved.moved(.init(bookingID: chosen.id, companyID: chosen.company?.id, oldNotes: .restored, regenerating: true),
+                    booking: chosen, at: at("2026-10-19T15:00:00Z"))
+        suite.expect(moved.booking == chosen.id && moved.company == chosen.company?.id && moved.companyName == "Company 2"
+                        && moved.bookingStart == at("2026-10-19T14:00:00Z") && moved.rule == .chosen
+                        && moved.deposit == deposit && moved.stage == .summarizing && !moved.hasSummary && !moved.isSettled,
+                     "moved: the same deposit on the appointment chosen, its report followed again until written")
+        var pending = record
+        pending.stage = .transcribing
+        pending.hasSummary = false
+        pending.moved(.init(bookingID: chosen.id, companyID: nil, oldNotes: .untouched, regenerating: false),
+                      booking: nil, at: at("2026-10-19T15:00:00Z"))
+        suite.expect(pending.stage == .transcribing && pending.booking == chosen.id && pending.company == nil
+                        && pending.companyName == nil,
+                     "a deposit still at work keeps its stage: its report will be written for the new appointment")
+        for language in AppLanguage.allCases {
+            let strings = ForkMeetingStrings.strings(language)
+            let said = ForkCastralContract.OldNotes.allCases.map(strings.castralMoved) + [strings.castralMoveUnsupported]
+            suite.expect(Set(said).count == said.count && strings.castralMoved(nil) == strings.castralMovedUntouched
+                            && strings.castralBadgeCurrent.count <= 28 && strings.castralMoving.count <= 28
+                            && strings.castralMoveSend != strings.castralSend,
+                         "\(language.rawValue): each end of a move says its own sentence; the badges fit")
+        }
     }
 
     // MARK: - Failures and settings

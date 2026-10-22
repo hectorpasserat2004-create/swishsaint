@@ -45,6 +45,13 @@ A profile never holds the token: it is typed once on the page, written at Save.
 4. **Follow** (`ForkCastralTracker`): `status` every 4 s, then 10 s, then 30 s, for 30 min (2 h for a
    batch engine), resumed at launch and at each look at the meeting's detail.
 
+5. **Another appointment** (`move`, "Change Appointment…" under the CRM's line): the same sheet,
+   the current appointment badged and never chosen; `POST api/transcriptions/<id>/move` attaches the
+   same deposit elsewhere, nothing sent or transcribed again. The server puts back the previous
+   appointment's notes when nobody changed them since the report, and writes the report again for the
+   new one: the record goes back to `summarizing` and is followed again. A server without the route
+   (404 without its sentence) is said so, never taken for a deposit gone.
+
 The island's Meetings page reads `ForkMeetingExports.castralStatus(folder)` (phase, share, failure)
 and `ForkCastralStatus.short(_:)`, 28 characters at most.
 
