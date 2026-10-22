@@ -48,3 +48,12 @@ notch-meetings9    Sources/Vorssaint/Services/Notch/NotchService.swift         #
 notch-calendar-crm   Sources/Vorssaint/Services/Notch/NotchCalendarService.swift  # calendrier de l'île : chaque lecture reçoit les RDV du CRM (fusionnés, sans doublon) ; le compte à rebours et la tuile les voient aussi
 notch-calendar-crm2  Sources/Vorssaint/UI/Notch/NotchCalendarView.swift          # calendrier de l'île : la carte d'un RDV avec visio ou du CRM (Rejoindre, Copier le lien, menu) — hors de NotchCalendarEventRow, extrait par generate_sources.py
 notch-calendar-crm3  Sources/Vorssaint/UI/Settings/NotchSettings.swift          # calendrier de l'île : réglage « Afficher les RDV du CRM » dans Contenu › Calendrier (seulement avec un CRM importé)
+#
+# Sauvegarde du Mac : chaque lot ajoute ses coutures sous SON titre (des fusions parallèles sans conflit).
+# macbackup · Agent (main.swift : macbackup-agent)
+
+#
+# macbackup · Island (notch-macbackups*, notch-macbackup*, notch-macbackup-tile*, notch-macbackup-event, command-bar-macbackup)
+
+#
+# macbackup · fin

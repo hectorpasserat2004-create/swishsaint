@@ -96,6 +96,7 @@ final class ForkMacBackupStatusModel: ObservableObject {
     }
 
     private func stop() {
+        let wasStarted = started
         if let stateToken { notify_cancel(stateToken) }
         stateToken = nil
         if let defaultsObserver { NotificationCenter.default.removeObserver(defaultsObserver) }
@@ -107,9 +108,9 @@ final class ForkMacBackupStatusModel: ObservableObject {
         liveViewers = 0
         started = false
         agentAlive = false
-        presentation = ForkMacBackupPresentation(phase: .off, updatedAt: Date())
+        if presentation.phase != .off { presentation = ForkMacBackupPresentation(phase: .off, updatedAt: Date()) }
         // The switch itself is a setting the agent follows.
-        notify_post(notify.settings)
+        if wasStarted { notify_post(notify.settings) }
     }
 
     // MARK: State
