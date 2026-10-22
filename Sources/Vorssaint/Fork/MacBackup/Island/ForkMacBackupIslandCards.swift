@@ -3,30 +3,18 @@
 
 import SwiftUI
 
-/// The only cards Mac Backup opens the island on (decision 3 of 22/10):
-/// the first heavy backup, a restore that landed, and Bran still running
-/// after its import. Never a delay nor a broken chain: those live in the
-/// section.
+/// The only card Mac Backup opens the island on (decision 3 of 22/10): a
+/// restore that landed, which follows the person's own action. Never a
+/// delay, a broken chain, the first backup or Bran: those live in the
+/// section and in the connection wizard.
 struct ForkMacBackupIslandCard {
     enum Kind: Equatable {
-        /// `bytes`: what the first backup will send, when measured.
-        case firstBackup(bytes: Int64?)
         case restored(files: Int64, path: String)
-        case bran
-
-        var isRestore: Bool {
-            if case .restored = self { return true }
-            return false
-        }
     }
 
     enum Action: Equatable {
-        case chooseContent
-        case startOnPower
         case showInFinder(String)
         case open(String)
-        case stopBran
-        case later
     }
 
     let kind: Kind
@@ -40,16 +28,7 @@ struct ForkMacBackupIslandCardView: View {
     var body: some View {
         let language = l10n.language
         let text = ForkMacBackupIslandStrings.strings(language)
-        let locale = language.formattingLocale()
         switch card.kind {
-        case .firstBackup(let bytes):
-            ForkMacBackupIslandMessage(
-                symbol: "externaldrive.badge.icloud", tint: .teal, title: text.firstTitle,
-                caption: bytes.map { String(format: text.firstCaption, ForkMacBackupFormat.bytes($0, locale: locale)) }
-                    ?? text.firstCaptionUnknown) {
-                ForkMacBackupIslandButton(title: text.chooseContent) { card.perform(.chooseContent) }
-                ForkMacBackupIslandButton(title: text.startOnPower, prominent: true) { card.perform(.startOnPower) }
-            }
         case .restored(let files, let path):
             ForkMacBackupIslandMessage(
                 symbol: "arrow.down.circle.fill", tint: .teal, title: text.noticeRestore,
@@ -57,12 +36,6 @@ struct ForkMacBackupIslandCardView: View {
                     + ForkMacBackupFormat.middleTruncated(path, limit: 40)) {
                 ForkMacBackupIslandButton(title: text.showInFinder) { card.perform(.showInFinder(path)) }
                 ForkMacBackupIslandButton(title: text.open, prominent: true) { card.perform(.open(path)) }
-            }
-        case .bran:
-            ForkMacBackupIslandMessage(symbol: "exclamationmark.arrow.triangle.2.circlepath", tint: .orange,
-                                       title: text.branTitle, caption: text.branCaption) {
-                ForkMacBackupIslandButton(title: text.later) { card.perform(.later) }
-                ForkMacBackupIslandButton(title: text.stopBran, prominent: true) { card.perform(.stopBran) }
             }
         }
     }

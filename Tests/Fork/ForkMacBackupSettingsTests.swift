@@ -17,6 +17,7 @@ enum ForkMacBackupSettingsTests {
         support(suite)
         scanner(suite)
         diagnostic(suite)
+        firstBackup(suite)
         strings(suite)
     }
 
@@ -441,13 +442,8 @@ enum ForkMacBackupSettingsTests {
         suite.expect(ForkMacBackupVerifyPlan.parse("refs:x,files1:2d,files2:1d,bogus:1d").storageValue == "files1:2d",
                      "a damaged plan keeps what it can")
 
-        suite.expect(ForkMacBackupNotifyChannel(island: true, system: true) == .both
-                        && ForkMacBackupNotifyChannel(island: false, system: false) == .none
-                        && ForkMacBackupNotifyChannel.island.island && !ForkMacBackupNotifyChannel.island.system
-                        && ForkMacBackupNotifyChannel.both.system,
-                     "the matrix's two switches map to the four channels")
-        suite.expect(ForkMacBackupNotifyEvent.allCases.filter { $0.defaultChannel != .none } == [.complete],
-                     "by default only the end-of-backup notice speaks (decision 3)")
+        suite.expect(ForkMacBackupNoticeEvent.allCases.filter(\.defaultOn) == [.complete, .restoreDone],
+                     "by default only the end-of-backup notice and the restore's card speak (decision 3)")
 
         let fresh = ForkMacBackupSetupState(engine: .notInstalled, fullDiskAccess: false, registration: .notRegistered,
                                             repository: nil, kitCreatedAt: nil)
@@ -629,6 +625,25 @@ enum ForkMacBackupSettingsTests {
                      "the Terminal script never carries a secret")
     }
 
+    // MARK: First backup
+
+    private static func firstBackup(_ suite: TestSuite) {
+        suite.expect(ForkMacBackupFirstBackup.startsAtOnce(externalConnected: true, hasBattery: true)
+                        && ForkMacBackupFirstBackup.startsAtOnce(externalConnected: false, hasBattery: false)
+                        && !ForkMacBackupFirstBackup.startsAtOnce(externalConnected: false, hasBattery: true),
+                     "« Commencer sur secteur » starts at once when plugged in or without a battery, else waits for the plug")
+        var preview = ForkMacBackupContentPreview(
+            formatVersion: ForkMacBackupContentPreview.formatVersion, sourcePaths: ["/Users/test"], measuredAt: now,
+            duration: 1, includedBytes: 7_000_000_000, includedFiles: 10, excludedBytes: 0, excludedFiles: 0, groups: [],
+            sparse: [], topFolders: [], cloudOnlyFiles: 0, cloudOnlyBytes: 0, unreadable: 0, complete: true)
+        suite.expect(ForkMacBackupFirstBackup.sizeToSend(preview: preview, protectedBytes: 9_000_000_000) == 7_000_000_000
+                        && ForkMacBackupFirstBackup.sizeToSend(preview: nil, protectedBytes: 9_000_000_000) == 9_000_000_000
+                        && ForkMacBackupFirstBackup.sizeToSend(preview: nil, protectedBytes: nil) == nil,
+                     "the size to send is the measured real one, else the agent's, else unknown")
+        preview.includedBytes = 0
+        suite.expect(ForkMacBackupFirstBackup.sizeToSend(preview: preview, protectedBytes: 9) == 0, "a measured zero stays zero")
+    }
+
     // MARK: Strings
 
     /// Words that may be the same as in English (names, units, tokens).
@@ -636,7 +651,7 @@ enum ForkMacBackupSettingsTests {
         "latencyMs", "minutesValue", "secondsValue", "presetDocker", "iCloudHeader", "kitFieldBucket", "serverBucket",
         "serverType", "kitFieldType", "kitPDFFingerprint", "serverAddressPrompt", "rulePlaceholder", "optionsTitle",
         "kitFieldKopia", "testHeader", "kitStepList", "serverPort", "engineVersion", "optionsTabNotifications",
-        "notifySystem", "conditionsHeader", "wizardStepKit", "kitPDFChecksum", "presetLogsCaption", "serverPrefix",
+        "conditionsHeader", "wizardStepKit", "kitPDFChecksum", "presetLogsCaption", "serverPrefix",
         "kitFieldPrefix", "kitFieldRegion", "serverRegion", "exclusionOne", "exclusionFew", "exclusionMany",
         "priorityNormal", "presetSecretsCaption", "presetCacheTagCaption", "presetDevFoldersCaption", "detailProbe",
         "branDetails", "megabytesPerSecond", "stopBran",

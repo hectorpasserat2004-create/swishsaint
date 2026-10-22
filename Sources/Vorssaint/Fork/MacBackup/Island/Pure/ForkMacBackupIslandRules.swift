@@ -224,8 +224,8 @@ enum ForkMacBackupIslandRules {
     }
 
     /// The ring's colour at rest: sarcelle while on time, orange past twice
-    /// the interval, red past the late threshold (`notify.lateHours`).
-    static func freshnessTone(protectedSince: Date?, interval: TimeInterval, lateHours: Int,
+    /// the interval, red past a day (inside the section only).
+    static func freshnessTone(protectedSince: Date?, interval: TimeInterval, lateHours: Int = 24,
                               now: Date) -> ForkMacBackupPresentation.Tone {
         guard let protectedSince else { return .calm }
         let age = now.timeIntervalSince(protectedSince)
@@ -295,19 +295,24 @@ enum ForkMacBackupIslandRules {
 
     // MARK: - The tile
 
-    /// The tile's reading: « 42 % » while something runs, as the closed
-    /// island shows it; nothing otherwise: the state lives in the section the
-    /// tile opens (decision 2 of 22/10), never a delay outside it.
+    /// The tile's reading, neutral: « 42 % » while something runs, as the
+    /// closed island shows it; at rest the age of the last protection
+    /// (« il y a 2 h »), nothing before one exists. Never a verdict: whether
+    /// that is late or broken is told in the section the tile opens
+    /// (decisions 2 and 3 of 22/10).
     static func tileReading(_ state: ForkMacBackupPresentation, text: ForkMacBackupStrings, locale: Locale,
                             reading: ForkMacBackupReading, now: Date) -> String? {
-        guard state.phase.showsInClosedIsland else { return nil }
-        return self.reading(state, text: text, locale: locale, reading: reading, finishing: false)
+        if state.phase.showsInClosedIsland {
+            return self.reading(state, text: text, locale: locale, reading: reading, finishing: false)
+        }
+        guard let since = state.protectedSince else { return nil }
+        return ForkMacBackupFormat.relative(since, now: now, locale: locale)
     }
 
-    /// The tile lights while something runs, like the timer's; never in red:
-    /// a broken chain is told in the section only (decision 3 of 22/10).
-    static func tileAccent(_ state: ForkMacBackupPresentation) -> (active: Bool, alert: Bool) {
-        (state.phase.showsInClosedIsland, false)
+    /// The tile takes the selection accent while something runs, like the
+    /// timer's; never an alert accent (decision 3 of 22/10).
+    static func tileLit(_ state: ForkMacBackupPresentation) -> Bool {
+        state.phase.showsInClosedIsland
     }
 
     // MARK: - Notices
@@ -319,7 +324,7 @@ enum ForkMacBackupIslandRules {
         case failed(ForkMacBackupRunFailure)
         case restored(files: Int64?)
 
-        var event: ForkMacBackupNotifyEvent {
+        var event: ForkMacBackupNoticeEvent {
             switch self {
             case .complete: return .complete
             case .partial: return .partial
@@ -352,9 +357,9 @@ enum ForkMacBackupIslandRules {
         old == .restoring && new != .restoring
     }
 
-    /// The notice a run's end deserves, if its event goes to the island.
+    /// The notice a run's end deserves, if the person left its event on.
     static func notice(for result: ForkMacBackupRunResult, sent: Int64?,
-                       channel: (ForkMacBackupNotifyEvent) -> ForkMacBackupNotifyChannel) -> Notice? {
+                       isOn: (ForkMacBackupNoticeEvent) -> Bool) -> Notice? {
         let notice: Notice
         switch result {
         case .complete: notice = .complete(sent: sent)
@@ -365,29 +370,12 @@ enum ForkMacBackupIslandRules {
             notice = .failed(failure)
         case .nothingToDo: return nil
         }
-        return showsInIsland(channel(notice.event)) ? notice : nil
+        return isOn(notice.event) ? notice : nil
     }
 
-    static func showsInIsland(_ channel: ForkMacBackupNotifyChannel) -> Bool {
-        channel == .island || channel == .both
-    }
-
-    /// The stored channel; anything unknown reads as the event's default.
-    static func channel(_ stored: String?, event: ForkMacBackupNotifyEvent) -> ForkMacBackupNotifyChannel {
-        stored.flatMap(ForkMacBackupNotifyChannel.init(rawValue:)) ?? event.defaultChannel
-    }
-
-    /// The island's switch for one event: on keeps a system notification
-    /// the person chose (both), off keeps it alone (system).
-    static func channel(_ current: ForkMacBackupNotifyChannel, island: Bool) -> ForkMacBackupNotifyChannel {
-        switch (current, island) {
-        case (.island, true), (.both, true): return current
-        case (.system, true): return .both
-        case (.none, true): return .island
-        case (.both, false): return .system
-        case (.island, false): return .none
-        case (.system, false), (.none, false): return current
-        }
+    /// Whether an event's notice is on: the stored Bool, else its default.
+    static func isOn(_ stored: Any?, event: ForkMacBackupNoticeEvent) -> Bool {
+        stored as? Bool ?? event.defaultOn
     }
 
     // MARK: - The mascot
@@ -410,39 +398,6 @@ enum ForkMacBackupIslandRules {
         case .failed: return before + 1
         case .complete, .partial: return 0
         }
-    }
-
-    // MARK: - Cards
-
-    static let offeredFirstBackup = "island.firstBackup"
-    static let offeredBran = "island.bran"
-
-    /// `fork.macbackup.offered`, comma-separated.
-    static func offered(_ stored: String?) -> Set<String> {
-        Set((stored ?? "").split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
-    }
-
-    static func adding(_ name: String, to stored: String?) -> String {
-        (offered(stored).union([name])).sorted().joined(separator: ",")
-    }
-
-    /// The first backup is about to go and has a lot to send: offered once,
-    /// so the person can choose what goes, or let it start plugged in.
-    static func offersFirstBackup(_ state: ForkMacBackupPresentation, offered: Set<String>,
-                                  heavyBytes: Int64 = 5_000_000_000) -> Bool {
-        guard !offered.contains(offeredFirstBackup), !state.sources.isEmpty, state.lastBackup == nil else { return false }
-        if let bytes = state.capacity.protectedBytes, bytes < heavyBytes { return false }
-        switch state.phase {
-        case .ready, .waiting(.power, _), .waiting(.lowBattery, _): return true
-        default: return false
-        }
-    }
-
-    /// Bran still backs this Mac up after its import: offered once.
-    static func offersBranStop(_ state: ForkMacBackupPresentation, branImported: Bool, offered: Set<String>) -> Bool {
-        guard branImported, !offered.contains(offeredBran) else { return false }
-        if case .waiting(.otherEngine, _) = state.phase { return true }
-        return false
     }
 
     // MARK: - Command Bar

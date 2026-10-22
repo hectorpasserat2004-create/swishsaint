@@ -18,7 +18,6 @@ enum ForkMacBackupIslandTests {
         timeline(suite)
         notices(suite)
         mascot(suite)
-        cards(suite)
         commandBar(suite)
         strings(suite)
     }
@@ -223,21 +222,24 @@ enum ForkMacBackupIslandTests {
         let text = ForkMacBackupStrings.strings(.fr)
         let fr = locale("fr_FR")
         let rest = ForkMacBackupPresentation.preview(.protected, now: now)
-        suite.expect(ForkMacBackupIslandRules.tileReading(rest, text: text, locale: fr, reading: .percent, now: now) == nil
-                        && ForkMacBackupIslandRules.tileReading(ForkMacBackupPresentation.preview(.failedChainBroken, now: now),
-                                                                text: text, locale: fr, reading: .percent, now: now) == nil,
-                     "at rest the tile only names the section: the state lives inside it (decision 2)")
+        let restReading = ForkMacBackupIslandRules.tileReading(rest, text: text, locale: fr, reading: .percent, now: now)
+        suite.expect(restReading?.hasPrefix("il y a") == true && restReading?.contains("%") == false,
+                     "at rest the tile reads the age of the last backup, « il y a 2 h » (decision 2)")
+        let brokenReading = ForkMacBackupIslandRules.tileReading(ForkMacBackupPresentation.preview(.failedChainBroken, now: now),
+                                                                 text: text, locale: fr, reading: .percent, now: now)
+        suite.expect(brokenReading == nil || brokenReading?.hasPrefix("il y a") == true,
+                     "a broken chain changes nothing in the tile's reading: only an age, never a verdict")
         let running = ForkMacBackupIslandRules.tileReading(ForkMacBackupPresentation.preview(.running42, now: now),
                                                            text: text, locale: fr, reading: .percent, now: now)
         suite.expect(running?.hasPrefix("42") == true, "« 42 % » while it runs")
         suite.expect(ForkMacBackupIslandRules.tileReading(ForkMacBackupPresentation.preview(.notConfigured, now: now),
                                                           text: text, locale: fr, reading: .percent, now: now) == nil,
                      "nothing before anything is set up")
-        let broken = ForkMacBackupIslandRules.tileAccent(ForkMacBackupPresentation.preview(.failedChainBroken, now: now))
-        let busy = ForkMacBackupIslandRules.tileAccent(ForkMacBackupPresentation.preview(.running42, now: now))
-        let calm = ForkMacBackupIslandRules.tileAccent(rest)
-        suite.expect(!broken.active && !broken.alert && busy.active && !busy.alert && !calm.active,
-                     "the tile lights while running, never in red: no alert outside the section (decision 3)")
+        let broken = ForkMacBackupIslandRules.tileLit(ForkMacBackupPresentation.preview(.failedChainBroken, now: now))
+        let busy = ForkMacBackupIslandRules.tileLit(ForkMacBackupPresentation.preview(.running42, now: now))
+        let calm = ForkMacBackupIslandRules.tileLit(rest)
+        suite.expect(!broken && busy && !calm,
+                     "the tile takes the selection accent while running, never an alert accent (decision 3)")
     }
 
     // MARK: Timeline
@@ -310,35 +312,33 @@ enum ForkMacBackupIslandTests {
                         && !ForkMacBackupIslandRules.endedRestore(from: .ready(next: nil), to: .restoring),
                      "a restore's end")
 
-        let defaults: (ForkMacBackupNotifyEvent) -> ForkMacBackupNotifyChannel = { $0.defaultChannel }
-        suite.expect(ForkMacBackupIslandRules.notice(for: .complete, sent: 3_100_000_000, channel: defaults)
+        let defaults: (ForkMacBackupNoticeEvent) -> Bool = { $0.defaultOn }
+        suite.expect(ForkMacBackupIslandRules.notice(for: .complete, sent: 3_100_000_000, isOn: defaults)
                         == .complete(sent: 3_100_000_000)
-                        && ForkMacBackupIslandRules.notice(for: .partial(files: 1), sent: nil, channel: defaults) == nil
-                        && ForkMacBackupIslandRules.notice(for: .failed(.chainBroken), sent: nil, channel: defaults) == nil,
+                        && ForkMacBackupIslandRules.notice(for: .partial(files: 1), sent: nil, isOn: defaults) == nil
+                        && ForkMacBackupIslandRules.notice(for: .failed(.chainBroken), sent: nil, isOn: defaults) == nil,
                      "by default only the complete backup's notice (decision 3 of 22/10)")
-        let all: (ForkMacBackupNotifyEvent) -> ForkMacBackupNotifyChannel = { _ in .both }
-        suite.expect(ForkMacBackupIslandRules.notice(for: .partial(files: 2), sent: nil, channel: all) == .partial(files: 2)
-                        && ForkMacBackupIslandRules.notice(for: .failed(.authentication), sent: nil, channel: all)
+        let all: (ForkMacBackupNoticeEvent) -> Bool = { _ in true }
+        suite.expect(ForkMacBackupIslandRules.notice(for: .partial(files: 2), sent: nil, isOn: all) == .partial(files: 2)
+                        && ForkMacBackupIslandRules.notice(for: .failed(.authentication), sent: nil, isOn: all)
                             == .failed(.authentication)
-                        && ForkMacBackupIslandRules.notice(for: .failed(.canceled), sent: nil, channel: all) == nil
-                        && ForkMacBackupIslandRules.notice(for: .nothingToDo, sent: nil, channel: all) == nil,
+                        && ForkMacBackupIslandRules.notice(for: .failed(.canceled), sent: nil, isOn: all) == nil
+                        && ForkMacBackupIslandRules.notice(for: .nothingToDo, sent: nil, isOn: all) == nil,
                      "turned on, partial and failed ends are told; a cancel by the person is not")
-        let system: (ForkMacBackupNotifyEvent) -> ForkMacBackupNotifyChannel = { _ in .system }
-        suite.expect(ForkMacBackupIslandRules.notice(for: .complete, sent: nil, channel: system) == nil,
-                     "a system-only channel puts nothing in the island")
+        let none: (ForkMacBackupNoticeEvent) -> Bool = { _ in false }
+        suite.expect(ForkMacBackupIslandRules.notice(for: .complete, sent: nil, isOn: none) == nil,
+                     "turned off, nothing is told")
         let events: [ForkMacBackupIslandRules.Notice] = [.complete(sent: nil), .partial(files: 1), .failed(.other), .restored(files: 2)]
         suite.expect(events.map(\.event) == [.complete, .partial, .failure, .restoreDone]
                         && Set(events.map(\.symbol)).count == 4,
                      "each notice follows its own key and has its own symbol")
-        suite.expect(ForkMacBackupIslandRules.channel("garbage", event: .complete) == .island
-                        && ForkMacBackupIslandRules.channel(nil, event: .partial) == ForkMacBackupNotifyChannel.none
-                        && ForkMacBackupIslandRules.channel("both", event: .partial) == .both,
-                     "an unknown stored channel reads as the default")
-        suite.expect(ForkMacBackupIslandRules.channel(.system, island: true) == .both
-                        && ForkMacBackupIslandRules.channel(.both, island: false) == .system
-                        && ForkMacBackupIslandRules.channel(.island, island: false) == ForkMacBackupNotifyChannel.none
-                        && ForkMacBackupIslandRules.channel(.none, island: true) == .island,
-                     "the island's switch keeps the system notification the person chose")
+        suite.expect(ForkMacBackupNoticeEvent.allCases == [.complete, .partial, .failure, .restoreDone],
+                     "only the ends of a run and of a restore have a notice: no late, chain, space, verification or kit one")
+        suite.expect(ForkMacBackupIslandRules.isOn("garbage", event: .complete) == ForkMacBackupNoticeEvent.complete.defaultOn
+                        && ForkMacBackupIslandRules.isOn(nil, event: .partial) == false
+                        && ForkMacBackupIslandRules.isOn(true, event: .partial)
+                        && !ForkMacBackupIslandRules.isOn(false, event: .complete),
+                     "an unknown stored value reads as the default")
     }
 
     private static func mascot(_ suite: TestSuite) {
@@ -357,41 +357,6 @@ enum ForkMacBackupIslandTests {
         }
         suite.expect(count == 2 && ForkMacBackupIslandRules.failures(after: .complete, before: count) == 0,
                      "failures in a row, a cancel aside, cleared by a success")
-    }
-
-    // MARK: Cards
-
-    private static func cards(_ suite: TestSuite) {
-        var first = ForkMacBackupPresentation.preview(.protected, now: now)
-        first.sources[0].last = nil
-        first.sources[0].lastComplete = nil
-        suite.expect(ForkMacBackupIslandRules.offersFirstBackup(first, offered: []),
-                     "the first heavy backup is offered")
-        suite.expect(!ForkMacBackupIslandRules.offersFirstBackup(first, offered: [ForkMacBackupIslandRules.offeredFirstBackup])
-                        && !ForkMacBackupIslandRules.offersFirstBackup(ForkMacBackupPresentation.preview(.protected, now: now),
-                                                                       offered: []),
-                     "once, and never after a first backup")
-        var light = first
-        light.capacity.protectedBytes = 800_000_000
-        var running = first
-        running.phase = .uploading
-        suite.expect(!ForkMacBackupIslandRules.offersFirstBackup(light, offered: [])
-                        && !ForkMacBackupIslandRules.offersFirstBackup(running, offered: []),
-                     "not for a light one, nor once it runs")
-
-        var bran = ForkMacBackupPresentation.preview(.protected, now: now)
-        bran.phase = .waiting(reason: .otherEngine, until: nil)
-        suite.expect(ForkMacBackupIslandRules.offersBranStop(bran, branImported: true, offered: [])
-                        && !ForkMacBackupIslandRules.offersBranStop(bran, branImported: false, offered: [])
-                        && !ForkMacBackupIslandRules.offersBranStop(bran, branImported: true,
-                                                                   offered: [ForkMacBackupIslandRules.offeredBran])
-                        && !ForkMacBackupIslandRules.offersBranStop(ForkMacBackupPresentation.preview(.protected, now: now),
-                                                                   branImported: true, offered: []),
-                     "Bran still running after its import is offered once")
-        let stored = ForkMacBackupIslandRules.adding("island.bran", to: "kit, island.firstBackup")
-        suite.expect(ForkMacBackupIslandRules.offered(stored) == ["kit", "island.firstBackup", "island.bran"]
-                        && ForkMacBackupIslandRules.offered(nil).isEmpty,
-                     "the offers made are kept with the others: \(stored)")
     }
 
     // MARK: Command Bar
@@ -426,7 +391,7 @@ enum ForkMacBackupIslandTests {
 
     private static let longLabels: Set<String> = [
         "sectionSummary", "emptyMessage", "chainSpoken", "chainHint", "seeHint", "activityHint", "closedIslandCaption",
-        "noticesCaption", "allSettings", "islandSettings", "firstCaption", "firstCaptionUnknown", "branCaption",
+        "noticesCaption", "allSettings", "islandSettings",
         "barBackUpNow", "barPause", "barResume", "barStatus", "barRestore", "barNotBackedUp", "barVerify", "barKit",
         "barKeywords", "rightWing", "sectionSize",
     ]
@@ -452,7 +417,7 @@ enum ForkMacBackupIslandTests {
 
     private static func strings(_ suite: TestSuite) {
         let english = Dictionary(uniqueKeysWithValues: fields(.enUS))
-        suite.expect(AppLanguage.allCases.count == 15 && english.count > 60, "fifteen languages, every island word")
+        suite.expect(AppLanguage.allCases.count == 15 && english.count > 45, "fifteen languages, every island word")
         var empty: [String] = []
         var untranslated: [String] = []
         var wrongPlaceholders: [String] = []

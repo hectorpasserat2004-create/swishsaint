@@ -219,6 +219,9 @@ final class ForkMacBackupWizardModel: ObservableObject {
         stopState = .stopping
         context.services.stopBran { [weak self] stopped in
             self?.stopState = stopped ? .stopped : .failed
+            // Ours then plans again at once, instead of waiting for the other
+            // engine to show up as gone.
+            if stopped { self?.context.send(.stopOtherEngine) }
         }
     }
 

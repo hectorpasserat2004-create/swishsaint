@@ -25,7 +25,6 @@ struct ForkMacBackupIslandSection: View {
     @AppStorage(ForkDefaultsKey.macBackupIslandShowChain) private var showChain = true
     @AppStorage(ForkDefaultsKey.macBackupIslandShowPending) private var showPending = true
     @AppStorage(ForkDefaultsKey.macBackupIslandSize) private var sizeStored = "compact"
-    @AppStorage(ForkDefaultsKey.macBackupNotifyLateHours) private var lateHours = 24
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hoveredNode: String?
     /// A fixed clock (the render harness); nil: now.
@@ -179,7 +178,7 @@ struct ForkMacBackupIslandSection: View {
         case .rest:
             let interval = ForkMacBackupIslandRules.interval(of: state.rhythm)
             let tone = ForkMacBackupIslandRules.freshnessTone(protectedSince: state.protectedSince, interval: interval,
-                                                              lateHours: lateHours, now: now)
+                                                              now: now)
             ForkMacBackupIslandHeroRing(
                 progress: ForkMacBackupIslandRules.freshness(protectedSince: state.protectedSince,
                                                              nextRun: state.nextRun, interval: interval, now: now),

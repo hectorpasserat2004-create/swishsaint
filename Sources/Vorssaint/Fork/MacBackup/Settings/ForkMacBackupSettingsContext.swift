@@ -91,7 +91,6 @@ final class ForkMacBackupSettingsContext: ObservableObject {
     @Published private(set) var kitRemindAt: Date?
     @Published private(set) var kitFingerprint: String?
     @Published var fullDiskAccess = false
-    @Published var notifications: Permissions.NotificationPermissionState = .unknown
     @Published private(set) var preview: ForkMacBackupContentPreview?
     /// Non-nil while « Aperçu » walks the disk.
     @Published private(set) var scanProgress: ForkMacBackupContentScanner.Progress?
@@ -110,6 +109,8 @@ final class ForkMacBackupSettingsContext: ObservableObject {
     /// turned off stops it (`cancelRunningScan`) without creating a context.
     private static var runningScan: ForkMacBackupFlag?
     private var permissionObservers: Set<AnyCancellable> = []
+    /// « Commencer sur secteur » waiting for the charger (`startFirstBackupOnPower`).
+    var powerWait: AnyCancellable?
 
     private init() {
         status = .shared
@@ -123,11 +124,8 @@ final class ForkMacBackupSettingsContext: ObservableObject {
         reloadMachineState()
         let permissions = Permissions.shared
         fullDiskAccess = permissions.fullDiskAccess
-        notifications = permissions.notifications
         permissions.$fullDiskAccess.receive(on: DispatchQueue.main)
             .sink { [weak self] in self?.fullDiskAccess = $0 }.store(in: &permissionObservers)
-        permissions.$notifications.receive(on: DispatchQueue.main)
-            .sink { [weak self] in self?.notifications = $0 }.store(in: &permissionObservers)
         loadPreviewCache()
     }
 
@@ -189,9 +187,7 @@ final class ForkMacBackupSettingsContext: ObservableObject {
     }
 
     var customRules: [String] {
-        guard let text = defaults.string(forKey: ForkDefaultsKey.macBackupRules), !text.isEmpty,
-              let rules = try? JSONDecoder().decode([String].self, from: Data(text.utf8)) else { return [] }
-        return rules
+        ForkMacBackupSource.customRules(fromStored: defaults.string(forKey: ForkDefaultsKey.macBackupRules))
     }
 
     var iCloudMode: ForkMacBackupICloudMode {

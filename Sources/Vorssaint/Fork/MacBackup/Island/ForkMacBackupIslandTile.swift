@@ -6,8 +6,9 @@ import SwiftUI
 /// The island's Backup button among its controls (seams
 /// `notch-macbackup-tile*`): it opens the Backup section, where « Back Up
 /// Now », the pause and the rest live (decision 2 of 22/10). Like the
-/// timer's, it lights with « 42 % » while something runs; at rest it only
-/// names the section, and never turns red (decision 3).
+/// timer's, it lights with « 42 % » while something runs; at rest it reads
+/// the age of the last backup (« il y a 2 h »), and never turns red
+/// (decision 3).
 struct ForkMacBackupIslandTile: View {
     let service: NotchService
     @ObservedObject private var status: ForkMacBackupStatusModel
@@ -23,12 +24,11 @@ struct ForkMacBackupIslandTile: View {
         let now = Date()
         let state = status.presentation
         let text = ForkMacBackupStrings.strings(l10n.language)
-        let accent = ForkMacBackupIslandRules.tileAccent(state)
         let reading = ForkMacBackupIslandRules.tileReading(
             state, text: text, locale: l10n.language.formattingLocale(),
             reading: ForkMacBackupReading(rawValue: readingStored) ?? .fallback, now: now)
         NotchActionTile(symbol: NotchControlItem.macBackup.symbol, title: Self.title(l10n.language),
-                        reading: reading, active: accent.active, accent: accent.alert ? .alert : .selection) {
+                        reading: reading, active: ForkMacBackupIslandRules.tileLit(state), accent: .selection) {
             ForkMacBackupIsland.openSection(from: service)
         }
         .accessibilityHint(ForkMacBackupIslandStrings.strings(l10n.language).activityHint)

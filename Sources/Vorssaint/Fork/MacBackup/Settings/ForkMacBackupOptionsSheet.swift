@@ -394,29 +394,15 @@ struct ForkMacBackupVerificationsPane: View {
 struct ForkMacBackupNotificationsPane: View {
     @ObservedObject var context: ForkMacBackupSettingsContext
     @ObservedObject private var l10n = L10n.shared
-    @AppStorage(ForkDefaultsKey.macBackupNotifyLateHours) private var lateHours = 24
-    @AppStorage(ForkDefaultsKey.macBackupNotifyNASFreePercent) private var nasFreePercent = 10
-    /// Bumped on each change, so the matrix redraws (its keys are many).
+    /// Bumped on each change, so the rows redraw (their keys are many).
     @State private var revision = 0
 
     private var text: ForkMacBackupSettingsStrings { .strings(l10n.language) }
-    private var locale: Locale { l10n.language.formattingLocale() }
 
     var body: some View {
         Section {
-            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
-                GridRow {
-                    Text(text.notifyEvent)
-                    Text(text.notifyIsland).gridColumnAlignment(.center)
-                    Text(text.notifySystem).gridColumnAlignment(.center)
-                    Text(text.notifyNothing).gridColumnAlignment(.center)
-                }
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                Divider().gridCellUnsizedAxes(.horizontal)
-                ForEach(ForkMacBackupNotifyEvent.allCases, id: \.self) { event in
-                    row(event)
-                }
+            ForEach(ForkMacBackupNoticeEvent.allCases, id: \.self) { event in
+                Toggle(text.notifyEventTitle(event), isOn: binding(event))
             }
             .id(revision)
         } header: {
@@ -424,92 +410,16 @@ struct ForkMacBackupNotificationsPane: View {
         } footer: {
             ForkMacBackupCaption(text.notifyFooter)
         }
-
-        Section {
-            ForkMacBackupStepperRow(title: text.lateThreshold,
-                                    value: ForkMacBackupFormat.age(TimeInterval(lateHours) * 3_600, locale: locale),
-                                    number: $lateHours, range: 1...240)
-            ForkMacBackupStepperRow(title: text.nasThreshold, value: ForkMacBackupFormat.percent(Double(nasFreePercent) / 100, locale: locale), number: $nasFreePercent, range: 1...50)
-        } header: {
-            Text(text.thresholdsHeader)
-        }
-
-        Section {
-            permission
-        } header: {
-            Text(text.notifyPermissionHeader)
-        }
     }
 
-    private func channel(_ event: ForkMacBackupNotifyEvent) -> ForkMacBackupNotifyChannel {
+    private func isOn(_ event: ForkMacBackupNoticeEvent) -> Bool {
         _ = revision
-        return ForkMacBackupNotifyChannel(rawValue: context.defaults.string(forKey: ForkDefaultsKey.macBackupNotify(event)) ?? "")
-            ?? event.defaultChannel
+        return context.defaults.object(forKey: ForkDefaultsKey.macBackupNotice(event)) as? Bool ?? event.defaultOn
     }
 
-    private func set(_ event: ForkMacBackupNotifyEvent, _ channel: ForkMacBackupNotifyChannel) {
-        context.defaults.set(channel.rawValue, forKey: ForkDefaultsKey.macBackupNotify(event))
-        revision += 1
-    }
-
-    private func row(_ event: ForkMacBackupNotifyEvent) -> some View {
-        let current = channel(event)
-        return GridRow {
-            Text(text.notifyEventTitle(event))
-                .font(.callout)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            check(current.island, label: "\(text.notifyEventTitle(event)), \(text.notifyIsland)") {
-                set(event, ForkMacBackupNotifyChannel(island: !current.island, system: current.system))
-            }
-            check(current.system, label: "\(text.notifyEventTitle(event)), \(text.notifySystem)") {
-                set(event, ForkMacBackupNotifyChannel(island: current.island, system: !current.system))
-            }
-            Button {
-                set(event, .none)
-            } label: {
-                Image(systemName: current == .none ? "largecircle.fill.circle" : "circle")
-                    .foregroundStyle(current == .none ? ForkMacBackupStyle.accent : Color.secondary)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("\(text.notifyEventTitle(event)), \(text.notifyNothing)")
-            .accessibilityAddTraits(current == .none ? .isSelected : [])
-        }
-    }
-
-    private func check(_ on: Bool, label: String, toggle: @escaping () -> Void) -> some View {
-        Button(action: toggle) {
-            Image(systemName: on ? "checkmark.square.fill" : "square")
-                .font(.system(size: 15))
-                .foregroundStyle(on ? ForkMacBackupStyle.accent : Color.secondary)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
-        .accessibilityAddTraits(on ? .isSelected : [])
-    }
-
-    @ViewBuilder
-    private var permission: some View {
-        switch context.notifications {
-        case .granted:
-            Label(text.notifyGranted, systemImage: "checkmark.circle.fill")
-                .foregroundStyle(.green)
-        case .denied:
-            HStack {
-                Label(text.notifyDenied, systemImage: "xmark.circle.fill")
-                    .foregroundStyle(.orange)
-                Spacer()
-                Button(text.openSystemSettings) { Permissions.shared.openNotificationSettings() }
-                    .controlSize(.small)
-            }
-        case .undetermined, .unknown:
-            HStack {
-                Label(text.notifyUndetermined, systemImage: "questionmark.circle")
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button(text.openSystemSettings) { Permissions.shared.openNotificationSettings() }
-                    .controlSize(.small)
-            }
-        }
+    private func binding(_ event: ForkMacBackupNoticeEvent) -> Binding<Bool> {
+        Binding(get: { isOn(event) },
+                set: { context.defaults.set($0, forKey: ForkDefaultsKey.macBackupNotice(event)); revision += 1 })
     }
 }
 

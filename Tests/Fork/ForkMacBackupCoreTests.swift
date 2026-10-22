@@ -454,11 +454,14 @@ enum ForkMacBackupCoreTests {
                         && registered[ForkDefaultsKey.macBackupICloudMode] as? String == "local"
                         && registered[ForkDefaultsKey.macBackupMeetingMode] as? String == "slow",
                      "off by default; once on: Automatic rhythm, closed island only while running, iCloud local files")
-        let notify = ForkMacBackupNotifyEvent.allCases.map { (event: ForkMacBackupNotifyEvent) -> (ForkMacBackupNotifyEvent, String?) in
-            (event, registered[ForkDefaultsKey.macBackupNotify(event)] as? String)
+        let notices = ForkMacBackupNoticeEvent.allCases.map { (event: ForkMacBackupNoticeEvent) -> (ForkMacBackupNoticeEvent, Bool?) in
+            (event, registered[ForkDefaultsKey.macBackupNotice(event)] as? Bool)
         }
-        suite.expect(notify.allSatisfy { $0.0 == .complete ? $0.1 == "island" : $0.1 == "none" },
-                     "nothing is notified by default but the end-of-backup notice in the island (decision 3)")
+        suite.expect(notices.allSatisfy { $0.1 == ($0.0 == .complete || $0.0 == .restoreDone) },
+                     "only the end-of-backup notice and the restore's card are on by default (decision 3)")
+        suite.expect(!registered.keys.contains { $0.contains(".notify.") || $0.hasSuffix("lateHours") }
+                        && registered.keys.filter { $0.hasPrefix("fork.macbackup.notice.") }.count == 4,
+                     "no late, chain, space, verification or kit notification key is left")
         suite.expect(!registered.keys.contains { $0.contains("lock") || $0.contains("menuBar") || $0.contains("secondCopy") }
                         && ForkMacBackupCompactSetting.allCases == [.running, .never],
                      "no lock screen, menu bar or second copy setting, and no « problems » choice for the closed island")

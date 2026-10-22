@@ -8,7 +8,10 @@ Plan : `PLAN-sauvegarde-mac.md` (hors dépôt) ; **les décisions de Martial du 
    **exclus par défaut**, jamais supprimés ni redimensionnés ;
 2. l'état ne vit que **dans la section de l'île, à la demande** ; l'île fermée ne montre qu'une sauvegarde, une
    restauration ou une vérification **en cours** (`ForkMacBackupPhase.showsInClosedIsland`) ;
-3. **aucune alerte hors de la section** ; notifications à « Rien » par défaut, sauf la notice de fin dans l'île ;
+3. **aucune alerte hors de la section** : seules des notices dans l'île, à la fin d'une sauvegarde (terminée, partielle, échouée)
+   et d'une restauration (`fork.macbackup.notice.*`, Bool) ; aucune notification système, aucune carte qui ouvre l'île d'elle-même
+   sauf « restauration terminée » (suite d'une action de la personne). Tuile : l'âge de la dernière sauvegarde au repos, le
+   pourcentage en cours, accent neutre. Le choix de la première sauvegarde et l'arrêt de Bran sont dans l'assistant de connexion ;
 4. pas de seconde copie ; 5. rythme **Automatique** par défaut, réglages simples, chaîne du profil dessinée.
 
 Règles du fork (`.claude/CLAUDE.md`) et de l'île (`Fork/Notch/README.md`) : elles restent la loi.
@@ -48,7 +51,7 @@ Une complétion par appel, sur la file de rappel (principale pour le client, cel
 | Extra | Utilisé par | Pour |
 |---|---|---|
 | `startServer` | runner | démarrer le serveur sur la config existante, sans réseau (`repo/<key>/connected` = même dépôt) ; sinon `connect` |
-| `priority` | runner | normale pour « Sauvegarder maintenant », `fork.macbackup.priority` pour le planificateur, appliquée au serveur vivant |
+| `priority` | runner | normale pour « Sauvegarder maintenant » et la première sauvegarde, `fork.macbackup.priority` pour le planificateur ; appliquée (`setpriority(PRIO_DARWIN_BG)`) au serveur vivant **et** à chaque nouveau pid ; l'agent lui-même est un processus standard (plist sans `Background` ni `LowPriorityBackgroundIO`) |
 | `serverProcessID` | runner | coût réel (CPU, lectures) ; à défaut `run/server.json` |
 | `liveProgress(of:)` | runner | octets **vraiment** envoyés (le « Uploaded Bytes » de la tâche ; celui de l'API de contrôle reste 0) |
 | `conclude(…)` | runner | fin d'un run lue dans le manifeste, échecs complets → `errors/<manifest>.json` |
@@ -68,6 +71,8 @@ iCloud : chaque enfant Kopia naît avec la politique `IOPOL_TYPE_VFS_MATERIALIZE
 (`ForkMacBackupDatalessPolicy`) : OFF partout (un fichier absent du Mac échoue en EDEADLK, classé « iCloud seulement »),
 ON pour le seul serveur du mode « Tout télécharger avant », refusé (`localSpace`) si l'espace libre ne couvre pas le
 téléchargement + max(5 Go, 10 %) (`ForkMacBackupMaterializeCheck`).
+Préréglages et règles : l'agent les lit dans `fork.macbackup.presets` / `.rules` (les clés des Réglages, celles de l'import
+des réglages), jamais dans les copies par source de l'état de la machine (`ForkMacBackupSource.applying`).
 Rétention : `ForkMacBackupRetentionReplay` (portage vérifié de Kopia), par source. Noms d'une restauration :
 `ForkMacBackupRestoreNaming` (« garder les deux »).
 
@@ -100,13 +105,13 @@ Réglages de la personne (Bool/Int/String, exportés) : rythme, alimentation, r�
 sauvegarde anticipée, iCloud, préréglages, règles, rétention, vérifications, notifications, île, et pour l'agent
 `fork.macbackup.priority` et `fork.macbackup.timeout.{watchdogMinutes,repositorySeconds,probeSeconds}`.
 État de la machine (jamais enregistré ni exporté, `machineKeys`) : dépôt, sources, profil, adaptateurs, version du
-moteur, dates et empreinte du kit, profils connus, import Bran, offres faites.
+moteur, dates et empreinte du kit, profils connus, import Bran.
 
 ## 5. Interrupteur
 
 `ForkFeature.macBackup.sync()` → `ForkMacBackupApp.sync()` : modèle d'état (phase `.off`, observateurs coupés, bail
 rendu), `ForkMacBackupAgentLink` (agent désenregistré, runner de l'app arrêté : serveur Kopia, minuteurs, FSEvents,
-assertion), île (section, activité, cartes), téléchargement du moteur annulé ; la fenêtre se ferme sur `.off`. L'agent
+assertion), île (section, activité, carte de restauration), téléchargement du moteur annulé ; la fenêtre se ferme sur `.off`. L'agent
 lit le changement et sort (code 0). Rallumé : enregistrement, puis l'agent ou le runner de l'app repart.
 
 ## 6. Tests et banc

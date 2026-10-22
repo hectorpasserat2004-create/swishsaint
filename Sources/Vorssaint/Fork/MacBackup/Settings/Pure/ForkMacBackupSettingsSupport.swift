@@ -152,24 +152,6 @@ struct ForkMacBackupVerifyPlan: Equatable {
     }
 }
 
-// MARK: - Notifications
-
-/// One event's channel as the page's matrix shows it: two switches, island
-/// and system; neither is « Rien ».
-extension ForkMacBackupNotifyChannel {
-    var island: Bool { self == .island || self == .both }
-    var system: Bool { self == .system || self == .both }
-
-    init(island: Bool, system: Bool) {
-        switch (island, system) {
-        case (true, true): self = .both
-        case (true, false): self = .island
-        case (false, true): self = .system
-        case (false, false): self = .none
-        }
-    }
-}
-
 // MARK: - Setup
 
 /// The five steps of « Mise en route » (plan §11.1), in order.

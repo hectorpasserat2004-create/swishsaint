@@ -31,7 +31,7 @@ enum ForkMacBackupIsland {
             wing: { ForkMacBackupIslandStrip.wing(in: $0) })
         NotchControlItem.macBackupIsAvailable = enabled
         // Its own switch is the feature's: which ends are told is chosen per
-        // event in the Activity tab's card (`fork.macbackup.notify.*`).
+        // event in the Activity tab's card (`fork.macbackup.notice.*`).
         NotchEvent.backupHooks = (preferenceKey: ForkDefaultsKey.macBackupEnabled,
                                   routes: { enabled($0) && NotchSupport.modules(in: $0).contains(.macBackup) })
         sync()
@@ -171,7 +171,7 @@ enum ForkMacBackupIsland {
 
 /// What the island follows of the backup, on the main thread: the closed
 /// island's activity (and the checkmark that ends it), the notices at the
-/// end of a run, the mascot's reactions and the cards offered once. Reads
+/// end of a run, the mascot's reactions and the restore's card. Reads
 /// only `ForkMacBackupStatusModel.shared.presentation`, never the disk.
 final class ForkMacBackupIslandModel: ObservableObject {
     static let shared = ForkMacBackupIslandModel()
@@ -191,9 +191,6 @@ final class ForkMacBackupIslandModel: ObservableObject {
     private var finishWork: DispatchWorkItem?
     private var checkWork: DispatchWorkItem?
     private var card: (id: UUID, kind: ForkMacBackupIslandCard.Kind)?
-    private var cardShownAt: Date?
-    private var waitsForPower = false
-    private var powerObserver: AnyCancellable?
 
     private init() {}
 
@@ -242,8 +239,6 @@ final class ForkMacBackupIslandModel: ObservableObject {
         defaultsObserver = nil
         finishWork?.cancel()
         finishWork = nil
-        powerObserver = nil
-        waitsForPower = false
         if finishing { finishing = false }
         if checked { checked = false }
         checkWork?.cancel()
@@ -271,7 +266,6 @@ final class ForkMacBackupIslandModel: ObservableObject {
         // A restore's end is told by `restoreFinished` (the window's report),
         // only when it succeeded: the phase leaving « restoring » says nothing
         // of how it ended (canceled, failed).
-        offerCards(state)
     }
 
     private func runEnded(_ result: ForkMacBackupRunResult, previous: ForkMacBackupPresentation,
@@ -280,7 +274,7 @@ final class ForkMacBackupIslandModel: ObservableObject {
                                                      failuresBefore: failuresInRow)
         failuresInRow = ForkMacBackupIslandRules.failures(after: result, before: failuresInRow)
         let notice = ForkMacBackupIslandRules.notice(for: result, sent: state.capacity.lastSentBytes) { [defaults] event in
-            ForkMacBackupIslandRules.channel(defaults.string(forKey: ForkDefaultsKey.macBackupNotify(event)), event: event)
+            ForkMacBackupIslandRules.isOn(defaults.object(forKey: ForkDefaultsKey.macBackupNotice(event)), event: event)
         }
         // Nothing at all when the person chose « Rien » for this end: no
         // notice, and no mascot reacting to a failure in the closed island
@@ -340,27 +334,6 @@ final class ForkMacBackupIslandModel: ObservableObject {
 
     // MARK: Cards
 
-    private var offered: Set<String> {
-        ForkMacBackupIslandRules.offered(defaults.string(forKey: ForkDefaultsKey.macBackupOffered))
-    }
-
-    private func markOffered(_ name: String) {
-        defaults.set(ForkMacBackupIslandRules.adding(name, to: defaults.string(forKey: ForkDefaultsKey.macBackupOffered)),
-                     forKey: ForkDefaultsKey.macBackupOffered)
-    }
-
-    private func offerCards(_ state: ForkMacBackupPresentation) {
-        guard card == nil, ForkMacBackupIsland.isAvailable else { return }
-        if ForkMacBackupIslandRules.offersBranStop(state, branImported: defaults.object(forKey: ForkDefaultsKey.macBackupBranImportedAt) != nil,
-                                                   offered: offered) {
-            markOffered(ForkMacBackupIslandRules.offeredBran)
-            show(.bran)
-        } else if ForkMacBackupIslandRules.offersFirstBackup(state, offered: offered) {
-            markOffered(ForkMacBackupIslandRules.offeredFirstBackup)
-            show(.firstBackup(bytes: state.capacity.protectedBytes))
-        }
-    }
-
     private func show(_ kind: ForkMacBackupIslandCard.Kind) {
         let id = UUID()
         let card = ForkMacBackupIslandCard(kind: kind) { [weak self] action in self?.cardAction(action, id: id) }
@@ -369,58 +342,24 @@ final class ForkMacBackupIslandModel: ObservableObject {
             self?.card = nil
         }) else { return }
         self.card = (id, kind)
-        cardShownAt = Date()
     }
 
     private func cardAction(_ action: ForkMacBackupIslandCard.Action, id: UUID) {
         ForkMacBackupIsland.remove(id: id)
         if card?.id == id { card = nil }
         switch action {
-        case .chooseContent:
-            NotchService.shared.perform { ForkMacBackupIsland.openFeatureSettings() }
-        case .startOnPower:
-            startWhenPlugged()
         case .showInFinder(let path):
             NotchService.shared.perform {
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
             }
         case .open(let path):
             NotchService.shared.perform { NSWorkspace.shared.open(URL(fileURLWithPath: path)) }
-        case .stopBran:
-            // Bran's own agent is stopped here; ours then plans again at once
-            // instead of waiting for the other engine to show up as gone.
-            ForkMacBackupLiveServices.stopBran { _ in self.status.send(.stopOtherEngine, origin: .island) }
-        case .later:
-            break
         }
-    }
-
-    /// « Commencer sur secteur »: now when plugged in, else at the plug.
-    private func startWhenPlugged() {
-        let island = NotchService.shared
-        if island.power.externalConnected || !island.power.hasBattery {
-            status.send(.backUpNow, origin: .island)
-            return
-        }
-        waitsForPower = true
-        powerObserver = island.$power
-            .map(\.externalConnected)
-            .removeDuplicates()
-            .filter { $0 }
-            .first()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                guard let self, self.waitsForPower, self.isEnabled else { return }
-                self.waitsForPower = false
-                self.powerObserver = nil
-                self.status.send(.backUpNow, origin: .island)
-            }
     }
 
     fileprivate func restoreFinished(_ report: ForkMacBackupRestoreReport) {
-        let channel = ForkMacBackupIslandRules.channel(defaults.string(forKey: ForkDefaultsKey.macBackupNotify(.restoreDone)),
-                                                      event: .restoreDone)
-        guard isEnabled, ForkMacBackupIslandRules.showsInIsland(channel) else { return }
+        guard isEnabled, ForkMacBackupIslandRules.isOn(defaults.object(forKey: ForkDefaultsKey.macBackupNotice(.restoreDone)),
+                                                      event: .restoreDone) else { return }
         if card == nil, ForkMacBackupIsland.isAvailable {
             show(.restored(files: report.files, path: report.destinationPath))
             if card != nil { return }

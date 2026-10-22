@@ -151,7 +151,8 @@ enum ForkMacBackupCommand: Codable, Equatable {
     case reloadSettings
     /// Stops the other engine that writes to the same repository (Bran
     /// still scheduled after its import, `ForkMacBackupWaitReason.otherEngine`):
-    /// the island's card « Arrêter Bran » asks it; the agent alone acts.
+    /// the wizard's « Arrêter Bran » stops it, then asks the agent to plan
+    /// again at once; the agent alone acts.
     case stopOtherEngine
 }
 

@@ -47,8 +47,6 @@ extension ForkDefaultsKey {
     static let macBackupRetentionCustom = "fork.macbackup.retention.custom"
     /// « refs:7d,files1:1d,restore50:30d ».
     static let macBackupVerifyPlan = "fork.macbackup.verify.plan"
-    static let macBackupNotifyLateHours = "fork.macbackup.notify.lateHours"
-    static let macBackupNotifyNASFreePercent = "fork.macbackup.notify.nasFreePercent"
     /// `ForkMacBackupCompactSetting`: running or never (decision 2 of 22/10).
     static let macBackupIslandCompact = "fork.macbackup.island.compact"
     /// `ForkMacBackupReading`: percent or remaining.
@@ -67,10 +65,10 @@ extension ForkDefaultsKey {
     /// Seconds a chain probe (Tailscale, the server's port) may take.
     static let macBackupProbeTimeout = "fork.macbackup.timeout.probeSeconds"
 
-    /// `fork.macbackup.notify.<event>`: `ForkMacBackupNotifyChannel` per
-    /// `ForkMacBackupNotifyEvent`.
-    static func macBackupNotify(_ event: ForkMacBackupNotifyEvent) -> String {
-        "fork.macbackup.notify.\(event.rawValue)"
+    /// `fork.macbackup.notice.<event>`: whether the island tells the end of
+    /// a run or a restore (`ForkMacBackupNoticeEvent`), a Bool.
+    static func macBackupNotice(_ event: ForkMacBackupNoticeEvent) -> String {
+        "fork.macbackup.notice.\(event.rawValue)"
     }
 
     // MARK: Machine state (never registered, never exported)
@@ -89,8 +87,6 @@ extension ForkDefaultsKey {
     static let macBackupKitCreatedAt = "fork.macbackup.kitCreatedAt"
     static let macBackupKitRemindAt = "fork.macbackup.kitRemindAt"
     static let macBackupBranImportedAt = "fork.macbackup.branImportedAt"
-    /// The offers already made on this Mac (comma-separated names).
-    static let macBackupOffered = "fork.macbackup.offered"
     /// `ForkMacBackupKit.fingerprint` of the repository the last kit was made
     /// for: another one means « Kit à refaire ».
     static let macBackupKitFingerprint = "fork.macbackup.kitFingerprint"
@@ -110,32 +106,17 @@ enum ForkMacBackupScheduleMode: String, CaseIterable {
     static let fallback: ForkMacBackupScheduleMode = .auto
 }
 
-/// The events a notice or a notification can follow (plan §12).
-enum ForkMacBackupNotifyEvent: String, CaseIterable {
-    case start
+/// The ends the island tells with a notice (decision 3 of 22/10: nothing
+/// else leaves the section, and no system notification is sent).
+enum ForkMacBackupNoticeEvent: String, CaseIterable {
     case complete
     case partial
     case failure
-    case late
-    case chainBroken
-    case chainRestored
-    case nasLow
-    case verifyFailed
     case restoreDone
-    case kitStale
 
-    /// Decision 3 of 22/10: nothing outside the section by default, but the
-    /// end-of-backup notice in the island.
-    var defaultChannel: ForkMacBackupNotifyChannel {
-        self == .complete ? .island : .none
-    }
-}
-
-enum ForkMacBackupNotifyChannel: String, CaseIterable {
-    case island
-    case system
-    case both
-    case none
+    /// On by default: the end-of-backup notice, and the restore the person
+    /// just ran (its card is what follows their own action).
+    var defaultOn: Bool { self == .complete || self == .restoreDone }
 }
 
 enum ForkMacBackupDefaults {
@@ -165,8 +146,6 @@ enum ForkMacBackupDefaults {
             ForkDefaultsKey.macBackupRetentionPreset: ForkMacBackupRetention.Preset.fallback.rawValue,
             ForkDefaultsKey.macBackupRetentionCustom: ForkMacBackupRetention.balanced.storageValue,
             ForkDefaultsKey.macBackupVerifyPlan: "refs:7d,files1:1d,restore50:30d",
-            ForkDefaultsKey.macBackupNotifyLateHours: 24,
-            ForkDefaultsKey.macBackupNotifyNASFreePercent: 10,
             ForkDefaultsKey.macBackupIslandCompact: ForkMacBackupCompactSetting.fallback.rawValue,
             ForkDefaultsKey.macBackupIslandReading: ForkMacBackupReading.fallback.rawValue,
             ForkDefaultsKey.macBackupIslandShowChain: true,
@@ -177,8 +156,8 @@ enum ForkMacBackupDefaults {
             ForkDefaultsKey.macBackupRepositoryTimeout: 60,
             ForkDefaultsKey.macBackupProbeTimeout: 5,
         ]
-        for event in ForkMacBackupNotifyEvent.allCases {
-            values[ForkDefaultsKey.macBackupNotify(event)] = event.defaultChannel.rawValue
+        for event in ForkMacBackupNoticeEvent.allCases {
+            values[ForkDefaultsKey.macBackupNotice(event)] = event.defaultOn
         }
         return values
     }()
@@ -188,7 +167,7 @@ enum ForkMacBackupDefaults {
         ForkDefaultsKey.macBackupRepository, ForkDefaultsKey.macBackupSources, ForkDefaultsKey.macBackupProfile,
         ForkDefaultsKey.macBackupAdapters, ForkDefaultsKey.macBackupEngineVersion,
         ForkDefaultsKey.macBackupKitCreatedAt, ForkDefaultsKey.macBackupKitRemindAt,
-        ForkDefaultsKey.macBackupBranImportedAt, ForkDefaultsKey.macBackupOffered,
+        ForkDefaultsKey.macBackupBranImportedAt,
         ForkDefaultsKey.macBackupKitFingerprint, ForkDefaultsKey.macBackupKnownProfiles,
     ]
 }

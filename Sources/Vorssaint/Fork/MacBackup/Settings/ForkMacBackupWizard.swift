@@ -16,6 +16,7 @@ struct ForkMacBackupWizard: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.forkMacBackupSheetHeight) private var heightOverride
     @State private var confirmingStop = false
+    @State private var firstBackup: ForkMacBackupFirstBackup.Choice?
     @State private var startProblem: String?
 
     init(context: ForkMacBackupSettingsContext, start: ForkMacBackupWizardStart,
@@ -608,6 +609,11 @@ struct ForkMacBackupWizard: View {
                         ForkMacBackupCaption(text.kitWhy)
                     }
                 }
+            }
+        }
+        if model.origin != .otherMac || !model.browseOnly {
+            ForkMacBackupFirstBackupSection(context: model.context, status: model.context.status, choice: $firstBackup) {
+                open(.content)
             }
         }
         if model.bran != nil {

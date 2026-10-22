@@ -52,10 +52,10 @@ struct ForkMacBackupIslandActivityCard: View {
     @AppStorage(ForkDefaultsKey.macBackupEnabled) private var enabled = false
     @AppStorage(ForkDefaultsKey.macBackupIslandCompact) private var compact = ForkMacBackupCompactSetting.fallback.rawValue
     @AppStorage(ForkDefaultsKey.macBackupIslandReading) private var reading = ForkMacBackupReading.fallback.rawValue
-    @AppStorage(ForkDefaultsKey.macBackupNotify(.complete)) private var complete = ForkMacBackupNotifyEvent.complete.defaultChannel.rawValue
-    @AppStorage(ForkDefaultsKey.macBackupNotify(.partial)) private var partial = ForkMacBackupNotifyEvent.partial.defaultChannel.rawValue
-    @AppStorage(ForkDefaultsKey.macBackupNotify(.failure)) private var failure = ForkMacBackupNotifyEvent.failure.defaultChannel.rawValue
-    @AppStorage(ForkDefaultsKey.macBackupNotify(.restoreDone)) private var restore = ForkMacBackupNotifyEvent.restoreDone.defaultChannel.rawValue
+    @AppStorage(ForkDefaultsKey.macBackupNotice(.complete)) private var complete = ForkMacBackupNoticeEvent.complete.defaultOn
+    @AppStorage(ForkDefaultsKey.macBackupNotice(.partial)) private var partial = ForkMacBackupNoticeEvent.partial.defaultOn
+    @AppStorage(ForkDefaultsKey.macBackupNotice(.failure)) private var failure = ForkMacBackupNoticeEvent.failure.defaultOn
+    @AppStorage(ForkDefaultsKey.macBackupNotice(.restoreDone)) private var restore = ForkMacBackupNoticeEvent.restoreDone.defaultOn
     /// Drawn whatever the switch says (the render harness).
     var forcesShown = false
 
@@ -85,10 +85,10 @@ struct ForkMacBackupIslandActivityCard: View {
             }
             Divider()
             Text(text.endNotices).font(.subheadline.weight(.semibold))
-            noticeRow("checkmark.circle", text.noticeComplete, $complete, event: .complete)
-            noticeRow("exclamationmark.circle", text.noticePartial, $partial, event: .partial)
-            noticeRow("xmark.octagon", text.noticeFailed, $failure, event: .failure)
-            noticeRow("arrow.down.circle", text.noticeRestore, $restore, event: .restoreDone)
+            noticeRow("checkmark.circle", text.noticeComplete, $complete)
+            noticeRow("exclamationmark.circle", text.noticePartial, $partial)
+            noticeRow("xmark.octagon", text.noticeFailed, $failure)
+            noticeRow("arrow.down.circle", text.noticeRestore, $restore)
             caption(text.noticesCaption)
             HStack(spacing: 8) {
                 Button(text.allSettings) { ForkMacBackupIsland.openFeatureSettings() }
@@ -97,16 +97,9 @@ struct ForkMacBackupIslandActivityCard: View {
         }
     }
 
-    /// The island's side of an event's channel: switching it keeps a
-    /// system notification the person chose on the feature's page.
-    private func noticeRow(_ symbol: String, _ title: String, _ stored: Binding<String>,
-                           event: ForkMacBackupNotifyEvent) -> some View {
-        let binding = Binding<Bool>(
-            get: { ForkMacBackupIslandRules.showsInIsland(ForkMacBackupIslandRules.channel(stored.wrappedValue, event: event)) },
-            set: { stored.wrappedValue = ForkMacBackupIslandRules.channel(
-                ForkMacBackupIslandRules.channel(stored.wrappedValue, event: event), island: $0).rawValue })
-        return SettingsRow(symbol: symbol, title: title) {
-            Toggle(title, isOn: binding).labelsHidden().toggleStyle(.switch)
+    private func noticeRow(_ symbol: String, _ title: String, _ isOn: Binding<Bool>) -> some View {
+        SettingsRow(symbol: symbol, title: title) {
+            Toggle(title, isOn: isOn).labelsHidden().toggleStyle(.switch)
         }
     }
 
