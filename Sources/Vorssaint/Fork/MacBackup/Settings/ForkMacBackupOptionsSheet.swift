@@ -398,17 +398,28 @@ struct ForkMacBackupNotificationsPane: View {
     @State private var revision = 0
 
     private var text: ForkMacBackupSettingsStrings { .strings(l10n.language) }
+    /// The same switches as the island's Activity card: the same words.
+    private var island: ForkMacBackupIslandStrings { .strings(l10n.language) }
 
     var body: some View {
         Section {
             ForEach(ForkMacBackupNoticeEvent.allCases, id: \.self) { event in
-                Toggle(text.notifyEventTitle(event), isOn: binding(event))
+                Toggle(title(event), isOn: binding(event))
             }
             .id(revision)
         } header: {
             Text(text.notifyHeader)
         } footer: {
-            ForkMacBackupCaption(text.notifyFooter)
+            ForkMacBackupCaption(island.noticesCaption)
+        }
+    }
+
+    private func title(_ event: ForkMacBackupNoticeEvent) -> String {
+        switch event {
+        case .complete: return island.noticeComplete
+        case .partial: return island.noticePartial
+        case .failure: return island.noticeFailed
+        case .restoreDone: return island.noticeRestore
         }
     }
 

@@ -195,9 +195,9 @@ enum ForkMacBackupIslandTests {
                         && parts?.day == 23 && parts?.hour == 8 && parts?.minute == 0,
                      "pause: an hour, until tomorrow 8:00, or until resumed: \(String(describing: parts))")
         suite.expect(ForkMacBackupIslandRules.sectionHeight("spacious") == 264
-                        && ForkMacBackupIslandRules.sectionHeight("compact") == 180
-                        && ForkMacBackupIslandRules.sectionHeight(nil) == 180,
-                     "the section is 180 pt, or 264 pt spacious")
+                        && ForkMacBackupIslandRules.sectionHeight("compact") == 152
+                        && ForkMacBackupIslandRules.sectionHeight(nil) == 152,
+                     "the compact section is as tall as its card, chain and actions (152 pt), or 264 pt spacious")
         let bare = AppLanguage.allCases.map { ForkMacBackupIslandRules.bare(ForkMacBackupStrings.strings($0).running) }
         suite.expect(bare.allSatisfy { !$0.isEmpty && !$0.contains("%") && !$0.hasSuffix("·") && !$0.hasSuffix(" ") }
                         && ForkMacBackupIslandRules.bare(ForkMacBackupStrings.fr.running) == "Sauvegarde",

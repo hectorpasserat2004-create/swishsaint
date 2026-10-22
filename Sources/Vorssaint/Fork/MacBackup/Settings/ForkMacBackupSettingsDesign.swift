@@ -176,9 +176,10 @@ struct ForkMacBackupProofLadder: View {
             .frame(maxWidth: .infinity)
     }
 
+    /// Read as the island reads it: « Preuve : Complète ».
     private var accessibility: String {
-        guard let level else { return shared.never }
-        return ForkMacBackupProofLevel.allCases.filter { $0 <= level }.map { $0.title(shared) }.joined(separator: ", ")
+        String(format: ForkMacBackupIslandStrings.strings(L10n.shared.language).proofSpoken,
+               level?.title(shared) ?? shared.never)
     }
 }
 

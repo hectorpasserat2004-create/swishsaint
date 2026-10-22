@@ -27,9 +27,9 @@ struct ForkMacBackupStatusCard: View {
                     if presentation.phase.showsInClosedIsland {
                         running(locale)
                     } else {
+                        // As wide as its longest word needs (Russian, German): never squeezed nor overflowing.
                         ForkMacBackupProofLadder(level: presentation.lastBackup?.level, shared: shared)
-                            .frame(width: 252)
-                            .padding(.leading, -8)
+                            .fixedSize()
                         details(locale, now: now)
                     }
                 }
