@@ -107,6 +107,10 @@ enum ForkMacBackupCommand: Codable, Equatable {
     case cancel
     /// `fork.macbackup.*` changed, or the repository, sources or secrets.
     case reloadSettings
+    /// Stops the other engine that writes to the same repository (Bran
+    /// still scheduled after its import, `ForkMacBackupWaitReason.otherEngine`):
+    /// the island's card « Arrêter Bran » asks it; the agent alone acts.
+    case stopOtherEngine
 }
 
 /// `MacBackup/commands/<id>.json`: one command, written by the app (0600),
