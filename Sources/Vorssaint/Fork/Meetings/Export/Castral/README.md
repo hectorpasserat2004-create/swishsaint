@@ -24,8 +24,10 @@ only the generic "Import a Profile…" in its Add menu.
 `name` (≤ 16 characters) and `maxUploadBytes` (1 MB to 500 MB, default 50 000 000) are optional.
 Every field is checked at the import and at every read (`ForkCastralProfile.parse`): HTTPS, ASCII
 host, no user, query or fragment; the upload host is matched **exactly**; the header cannot be one
-the system sets. The profile and the token live in the Keychain only (`castral-profile#<id>`,
-`castral-token#<id>`); the preferences hold the exporter's id, mode, author and speakers.
+the system sets. The profile and the token live only in the owner-only secrets file
+(`MeetingSecrets.json` in the app's container, `ForkMeetingKeychain`: `castral-profile#<id>`,
+`castral-token#<id>`), never in the Keychain, which asked for the password after every update of
+a fork signed without an Apple team; the preferences hold the exporter's id, mode, author and speakers.
 A profile never holds the token: it is typed once on the page, written at Save.
 
 ## A send
@@ -39,7 +41,7 @@ A profile never holds the token: it is typed once on the page, written at Save.
 2. **Sound** (`ForkCastralAudioPlan`, `ForkCastralAudio`): FLAC mono from the mix, 16 kHz, or
    8 kHz when 16 kHz is over the cap, else refused before anything opens on the server.
 3. **Steps** (`ForkCastralRecord`, `castral` in `meeting.json`): `uploading` (the upload address
-   in the Keychain, `castral-upload#<deposit>`) → `uploaded` → `started`. A quit resumes: the same
+   in the secrets file, `castral-upload#<deposit>`) → `uploaded` → `started`. A quit resumes: the same
    address while valid (2 h, less 10 min), else that deposit is deleted and a new one opened; after
    `uploaded`, only `start`; the server's `retry` only after `started` + `failed`.
 4. **Follow** (`ForkCastralTracker`): `status` every 4 s, then 10 s, then 30 s, for 30 min (2 h for a
