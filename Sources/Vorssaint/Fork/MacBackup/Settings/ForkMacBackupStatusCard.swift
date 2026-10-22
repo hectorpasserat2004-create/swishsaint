@@ -55,8 +55,9 @@ struct ForkMacBackupStatusCard: View {
             .controlSize(.regular)
         }
         .padding(.vertical, 4)
-        .onAppear { if presentation.phase.showsInClosedIsland { context.status.beginLiveViewing() } }
-        .onDisappear { if presentation.phase.showsInClosedIsland { context.status.endLiveViewing() } }
+        // Balanced as the phase changes under it: a run that starts or ends
+        // while the card shows takes or gives back the live lease.
+        .modifier(ForkMacBackupLiveLease(status: context.status, active: presentation.phase.showsInClosedIsland))
     }
 
     private var headlineColor: Color {
