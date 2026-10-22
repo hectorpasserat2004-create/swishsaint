@@ -57,7 +57,6 @@ struct ForkMacBackupSettingsView: View {
         let language = l10n.language
         let text = ForkMacBackupSettingsStrings.strings(language)
         let shared = ForkMacBackupStrings.strings(language)
-        _ = (engineStore.state, agentLink.registration)
         let setup = context.setup
 
         if let error = status.presentation.lastError, context.repository != nil, enabled {
@@ -134,14 +133,14 @@ struct ForkMacBackupSettingsView: View {
                                        summaryColor: context.repository == nil ? .secondary : .orange) { sheet = .kit }
         case .upToDate(let date):
             ForkMacBackupNavigationRow(symbol: "lifepreserver.fill", color: .orange, title: text.kitTitle,
-                                       summary: String(format: text.kitUpToDate, ForkMacBackupFormat.dayAndTime(date, locale: locale)))
+                                       summary: String(format: text.kitUpToDate, ForkMacBackupDay.text(date, locale: locale, now: context.services.now())))
             { sheet = .kit }
         case .repositoryChanged:
             ForkMacBackupNavigationRow(symbol: "lifepreserver.fill", color: .orange, title: text.kitTitle,
                                        summary: text.kitStaleChanged, summaryColor: .orange) { sheet = .kit }
         case .reminderDue(let date):
             ForkMacBackupNavigationRow(symbol: "lifepreserver.fill", color: .orange, title: text.kitTitle,
-                                       summary: String(format: text.kitStaleOld, ForkMacBackupFormat.dayAndTime(date, locale: locale)),
+                                       summary: String(format: text.kitStaleOld, ForkMacBackupDay.text(date, locale: locale, now: context.services.now())),
                                        summaryColor: .orange) { sheet = .kit }
         }
     }

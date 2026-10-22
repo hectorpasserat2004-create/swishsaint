@@ -107,6 +107,7 @@ struct ForkMacBackupRetentionPane: View {
                 }
             }
             .pickerStyle(.radioGroup)
+            .labelsHidden()
             if preset == .custom {
                 customSteppers
             }
@@ -138,6 +139,7 @@ struct ForkMacBackupRetentionPane: View {
                 }
             }
         }
+        .onAppear { if snapshots == nil, !loading, context.repository != nil { load() } }
         .alert(text.retentionConfirmTitle, isPresented: $confirming) {
             Button(text.cancel, role: .cancel) {}
             Button(text.apply, role: .destructive) { apply() }
@@ -176,10 +178,13 @@ struct ForkMacBackupRetentionPane: View {
     private func stepper(_ label: String, _ value: Int, set: @escaping (Int) -> Void) -> some View {
         GridRow {
             Text(label)
-            Stepper(value: Binding(get: { value }, set: set), in: 0...999) {
+            HStack {
+                Spacer()
                 Text(value.formatted(.number.locale(locale)))
                     .monospacedDigit()
-                    .frame(minWidth: 34, alignment: .trailing)
+                    .foregroundStyle(.secondary)
+                Stepper(label, value: Binding(get: { value }, set: set), in: 0...999)
+                    .labelsHidden()
             }
         }
     }
@@ -324,6 +329,7 @@ struct ForkMacBackupVerificationsPane: View {
             } label: {
                 Label(text.verifyNow, systemImage: "checkmark.shield")
             }
+            .menuStyle(.button)
             .fixedSize()
             ForkMacBackupCaption(text.verifyFullCaption)
             Button(text.openVerifications) { ForkMacBackupWindow.open(.verifications) }
@@ -411,12 +417,10 @@ struct ForkMacBackupNotificationsPane: View {
         }
 
         Section {
-            Stepper(value: $lateHours, in: 1...240) {
-                LabeledContent(text.lateThreshold, value: ForkMacBackupFormat.age(TimeInterval(lateHours) * 3_600, locale: locale))
-            }
-            Stepper(value: $nasFreePercent, in: 1...50) {
-                LabeledContent(text.nasThreshold, value: ForkMacBackupFormat.percent(Double(nasFreePercent) / 100, locale: locale))
-            }
+            ForkMacBackupStepperRow(title: text.lateThreshold,
+                                    value: ForkMacBackupFormat.age(TimeInterval(lateHours) * 3_600, locale: locale),
+                                    number: $lateHours, range: 1...240)
+            ForkMacBackupStepperRow(title: text.nasThreshold, value: ForkMacBackupFormat.percent(Double(nasFreePercent) / 100, locale: locale), number: $nasFreePercent, range: 1...50)
         } header: {
             Text(text.thresholdsHeader)
         }
@@ -444,6 +448,7 @@ struct ForkMacBackupNotificationsPane: View {
         return GridRow {
             Text(text.notifyEventTitle(event))
                 .font(.callout)
+                .frame(maxWidth: .infinity, alignment: .leading)
             check(current.island, label: "\(text.notifyEventTitle(event)), \(text.notifyIsland)") {
                 set(event, ForkMacBackupNotifyChannel(island: !current.island, system: current.system))
             }
@@ -454,7 +459,7 @@ struct ForkMacBackupNotificationsPane: View {
                 set(event, .none)
             } label: {
                 Image(systemName: current == .none ? "largecircle.fill.circle" : "circle")
-                    .foregroundStyle(current == .none ? Color.accentColor : Color.secondary)
+                    .foregroundStyle(current == .none ? ForkMacBackupStyle.accent : Color.secondary)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("\(text.notifyEventTitle(event)), \(text.notifyNothing)")
@@ -526,9 +531,10 @@ struct ForkMacBackupAdvancedPane: View {
                 }
             }
             HStack {
-                LabeledContent(text.cacheSize, value: context.records.cacheBytes.map {
-                    ForkMacBackupFormat.bytes($0, locale: locale)
-                } ?? "–")
+                Text(text.cacheSize)
+                Spacer()
+                Text(context.records.cacheBytes.map { ForkMacBackupFormat.bytes($0, locale: locale) } ?? "–")
+                    .foregroundStyle(.secondary)
                 Button(text.showInFinder) { reveal(context.repositoryFiles?.cache) }
                     .controlSize(.small)
                     .disabled(context.repositoryFiles == nil)
@@ -539,15 +545,9 @@ struct ForkMacBackupAdvancedPane: View {
         }
 
         Section {
-            Stepper(value: $watchdogMinutes, in: 2...120) {
-                LabeledContent(text.watchdog, value: String(format: text.minutesValue, watchdogMinutes))
-            }
-            Stepper(value: $repositoryTimeout, in: 10...600, step: 10) {
-                LabeledContent(text.repositoryTimeout, value: String(format: text.secondsValue, repositoryTimeout))
-            }
-            Stepper(value: $probeTimeout, in: 1...60) {
-                LabeledContent(text.probeTimeout, value: String(format: text.secondsValue, probeTimeout))
-            }
+            ForkMacBackupStepperRow(title: text.watchdog, value: String(format: text.minutesValue, watchdogMinutes), number: $watchdogMinutes, range: 2...120)
+            ForkMacBackupStepperRow(title: text.repositoryTimeout, value: String(format: text.secondsValue, repositoryTimeout), number: $repositoryTimeout, range: 10...600, step: 10)
+            ForkMacBackupStepperRow(title: text.probeTimeout, value: String(format: text.secondsValue, probeTimeout), number: $probeTimeout, range: 1...60)
         } header: {
             Text(text.timeoutsHeader)
         }
@@ -567,6 +567,7 @@ struct ForkMacBackupAdvancedPane: View {
             Button(text.importBran) { open(.wizard(.bran)) }
             ForkMacBackupCaption(text.importBranCaption)
             Button(text.disconnect, role: .destructive) { confirmingDisconnect = true }
+                .foregroundStyle(.red)
                 .disabled(context.repository == nil)
             ForkMacBackupCaption(text.disconnectCaption)
             if let message {

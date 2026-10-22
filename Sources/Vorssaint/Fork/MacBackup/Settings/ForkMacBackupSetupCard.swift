@@ -28,16 +28,19 @@ struct ForkMacBackupSetupCard: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Gauge(value: Double(setup.count), in: 0...Double(ForkMacBackupSetupStep.allCases.count)) {
-                    EmptyView()
-                } currentValueLabel: {
-                    Text("\(setup.count)")
-                        .font(.caption.weight(.semibold))
+                let total = ForkMacBackupSetupStep.allCases.count
+                ZStack {
+                    Circle()
+                        .stroke(Color.secondary.opacity(0.18), lineWidth: 4)
+                    Circle()
+                        .trim(from: 0, to: CGFloat(setup.count) / CGFloat(total))
+                        .stroke(ForkMacBackupStyle.accent, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                    Text("\(setup.count)/\(total)")
+                        .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                        .foregroundStyle(.secondary)
                 }
-                .gaugeStyle(.accessoryCircularCapacity)
-                .tint(ForkMacBackupStyle.accent)
-                .scaleEffect(0.75)
-                .frame(width: 40, height: 40)
+                .frame(width: 38, height: 38)
                 .accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: 0) {

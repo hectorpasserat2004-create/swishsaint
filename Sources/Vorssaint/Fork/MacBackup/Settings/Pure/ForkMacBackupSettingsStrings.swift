@@ -858,7 +858,7 @@ extension ForkMacBackupSettingsStrings {
                                                (retention.weekly, .weekOfMonth), (retention.monthly, .month),
                                                (retention.annual, .year)]
         for (value, unit) in spans where value > 0 {
-            parts.append(Self.span(value, unit, locale: locale, style: .abbreviated))
+            parts.append(Self.span(value, unit, locale: locale, style: .short))
         }
         return parts.joined(separator: " · ")
     }
@@ -1345,7 +1345,7 @@ extension ForkMacBackupSettingsStrings {
         branProfileName: "From Bran",
         branMagicDNS: "Its MagicDNS name replaces the address %@: an address change will break nothing.",
         branDetails: "Bucket %@ · identity %@",
-        branRules: "%d rules become presets, %d stay custom rules",
+        branRules: "Rules: %d as presets, %d custom",
         branRhythm: "Bran backed up every %d h; the Automatic rhythm is offered instead.",
         branSecretsRead: "Password and key read from Bran’s Keychain",
         branSecretsMissing: "Secrets not read: type them in the next steps",
@@ -1617,7 +1617,7 @@ extension ForkMacBackupSettingsStrings {
         scheduleInterval: "Intervalle",
         scheduleTimes: "Heures fixes",
         scheduleBoth: "Les deux",
-        autoExplain: "Sauvegarde dès que assez de choses ont changé, à au moins une heure d’écart et au plus 4\u{00A0}h sur secteur (8 sur batterie). Calé sur ce que coûte vraiment une sauvegarde sur ce Mac.",
+        autoExplain: "Sauvegarde dès qu’assez de choses ont changé, à au moins une heure d’écart et au plus 4\u{00A0}h sur secteur (8 sur batterie). Calé sur ce que coûte vraiment une sauvegarde sur ce Mac.",
         autoNotMeasured: "Mesuré après les premières sauvegardes.",
         measuredOne: "Mesuré sur 1 sauvegarde",
         measuredFew: "Mesuré sur %d sauvegardes",
@@ -1862,7 +1862,7 @@ extension ForkMacBackupSettingsStrings {
         branProfileName: "Depuis Bran",
         branMagicDNS: "Son nom MagicDNS remplace l’adresse %@\u{00A0}: un changement d’adresse ne cassera rien.",
         branDetails: "Bucket %@ · identité %@",
-        branRules: "%d règles deviennent des préréglages, %d restent personnalisées",
+        branRules: "Règles\u{00A0}: %d en préréglages, %d personnalisées",
         branRhythm: "Bran sauvegardait toutes les %d\u{00A0}h\u{00A0}; le rythme Automatique est proposé à la place.",
         branSecretsRead: "Mot de passe et clé lus dans le Trousseau de Bran",
         branSecretsMissing: "Secrets non lus\u{00A0}: saisissez-les aux étapes suivantes",

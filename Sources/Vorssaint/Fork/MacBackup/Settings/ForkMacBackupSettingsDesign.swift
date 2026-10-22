@@ -46,6 +46,16 @@ enum ForkMacBackupStyle {
     }
 }
 
+enum ForkMacBackupDay {
+    /// « 19 oct. », or « 19 oct. 2025 » in another year.
+    static func text(_ date: Date, locale: Locale, now: Date = Date()) -> String {
+        let calendar = Calendar.current
+        var style = Date.FormatStyle(locale: locale).day().month(.abbreviated)
+        if calendar.component(.year, from: date) != calendar.component(.year, from: now) { style = style.year() }
+        return date.formatted(style)
+    }
+}
+
 /// A rounded tile with a white symbol, the System Settings way.
 struct ForkMacBackupIconTile: View {
     let symbol: String
@@ -221,6 +231,7 @@ struct ForkMacBackupStateBadge: View {
 /// grouped form, the size of the Settings window's own sheets.
 struct ForkMacBackupSheetScaffold<Content: View, Footer: View>: View {
     let symbol: String
+    var color: Color = ForkMacBackupStyle.accent
     let title: String
     let subtitle: String?
     let done: String
@@ -232,9 +243,11 @@ struct ForkMacBackupSheetScaffold<Content: View, Footer: View>: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.forkMacBackupSheetHeight) private var heightOverride
 
-    init(symbol: String, title: String, subtitle: String? = nil, done: String, width: CGFloat = 600,
-         height: CGFloat = 640, @ViewBuilder content: () -> Content, @ViewBuilder footer: () -> Footer) {
+    init(symbol: String, color: Color = ForkMacBackupStyle.accent, title: String, subtitle: String? = nil,
+         done: String, width: CGFloat = 600, height: CGFloat = 640, @ViewBuilder content: () -> Content,
+         @ViewBuilder footer: () -> Footer) {
         self.symbol = symbol
+        self.color = color
         self.title = title
         self.subtitle = subtitle
         self.done = done
@@ -247,7 +260,7 @@ struct ForkMacBackupSheetScaffold<Content: View, Footer: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                ForkMacBackupIconTile(symbol: symbol, size: 30)
+                ForkMacBackupIconTile(symbol: symbol, color: color, size: 30)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title)
                         .font(.headline)
@@ -294,9 +307,9 @@ extension EnvironmentValues {
 }
 
 extension ForkMacBackupSheetScaffold where Footer == EmptyView {
-    init(symbol: String, title: String, subtitle: String? = nil, done: String, width: CGFloat = 600,
-         height: CGFloat = 640, @ViewBuilder content: () -> Content) {
-        self.init(symbol: symbol, title: title, subtitle: subtitle, done: done, width: width, height: height,
+    init(symbol: String, color: Color = ForkMacBackupStyle.accent, title: String, subtitle: String? = nil,
+         done: String, width: CGFloat = 600, height: CGFloat = 640, @ViewBuilder content: () -> Content) {
+        self.init(symbol: symbol, color: color, title: title, subtitle: subtitle, done: done, width: width, height: height,
                   content: content, footer: { EmptyView() })
     }
 }
@@ -338,5 +351,28 @@ struct ForkMacBackupSplitBar: View {
         }
         .frame(height: 10)
         .accessibilityHidden(true)
+    }
+}
+
+/// A stepper row: the title, its value on the right, the arrows.
+struct ForkMacBackupStepperRow: View {
+    let title: String
+    let value: String
+    @Binding var number: Int
+    let range: ClosedRange<Int>
+    var step: Int = 1
+
+    var body: some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Text(value)
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+            Stepper(title, value: $number, in: range, step: step)
+                .labelsHidden()
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(value)
     }
 }

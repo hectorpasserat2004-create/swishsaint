@@ -28,7 +28,7 @@ struct ForkMacBackupKitSheet: View {
     private var locale: Locale { l10n.language.formattingLocale() }
 
     var body: some View {
-        ForkMacBackupSheetScaffold(symbol: "lifepreserver.fill", title: text.kitTitle, subtitle: text.kitSubtitle,
+        ForkMacBackupSheetScaffold(symbol: "lifepreserver.fill", color: .orange, title: text.kitTitle, subtitle: text.kitSubtitle,
                                    done: text.done) {
             statusSection
             if context.repository != nil {
@@ -76,9 +76,9 @@ struct ForkMacBackupKitSheet: View {
     private var statusTitle: String {
         switch context.kitStatus {
         case .missing: return context.repository == nil ? text.kitNeedsConnection : text.kitMissing
-        case .upToDate(let date): return String(format: text.kitUpToDate, ForkMacBackupFormat.dayAndTime(date, locale: locale))
+        case .upToDate(let date): return String(format: text.kitUpToDate, ForkMacBackupDay.text(date, locale: locale, now: context.services.now()))
         case .repositoryChanged: return text.kitStaleChanged
-        case .reminderDue(let date): return String(format: text.kitStaleOld, ForkMacBackupFormat.dayAndTime(date, locale: locale))
+        case .reminderDue(let date): return String(format: text.kitStaleOld, ForkMacBackupDay.text(date, locale: locale, now: context.services.now()))
         }
     }
 
@@ -159,7 +159,7 @@ struct ForkMacBackupKitSheet: View {
     private var reminderSection: some View {
         Section {
             if let remind = context.kitRemindAt {
-                LabeledContent(text.kitNextReminder, value: ForkMacBackupFormat.dayAndTime(remind, locale: locale))
+                LabeledContent(text.kitNextReminder, value: ForkMacBackupDay.text(remind, locale: locale, now: context.services.now()))
             }
             Button(text.kitChecked) {
                 context.kitChecked(at: context.services.now())
@@ -181,7 +181,7 @@ struct ForkMacBackupKitSheet: View {
             if let kit = importedKit {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(String(format: text.kitFoundFor, kit.repository.clientIdentity.description,
-                                ForkMacBackupFormat.dayAndTime(kit.createdAt, locale: locale)))
+                                ForkMacBackupDay.text(kit.createdAt, locale: locale, now: context.services.now())))
                         .font(.callout)
                     if kit.secrets != nil {
                         SecureField(text.passphrase, text: $kitPassphrase)

@@ -40,7 +40,7 @@ struct ForkMacBackupRhythmSheet: View {
     private var scheduleMode: ForkMacBackupScheduleMode { ForkMacBackupScheduleMode(rawValue: mode) ?? .fallback }
 
     var body: some View {
-        ForkMacBackupSheetScaffold(symbol: "clock.fill", title: text.rhythmTitle, subtitle: text.rhythmSubtitle,
+        ForkMacBackupSheetScaffold(symbol: "clock.fill", color: .indigo, title: text.rhythmTitle, subtitle: text.rhythmSubtitle,
                                    done: text.done) {
             rhythmSection
             powerSection
@@ -73,9 +73,7 @@ struct ForkMacBackupRhythmSheet: View {
                 timesEditor
             }
 
-            Stepper(value: $catchUpMinutes, in: 0...60) {
-                LabeledContent(text.catchUp, value: String(format: text.minutesValue, catchUpMinutes))
-            }
+            ForkMacBackupStepperRow(title: text.catchUp, value: String(format: text.minutesValue, catchUpMinutes), number: $catchUpMinutes, range: 0...60)
             ForkMacBackupCaption(text.catchUpCaption)
         } header: {
             Text(text.rhythmTitle)
@@ -116,9 +114,7 @@ struct ForkMacBackupRhythmSheet: View {
     }
 
     private var intervalStepper: some View {
-        Stepper(value: $intervalHours, in: 1...48) {
-            LabeledContent(text.every, value: ForkMacBackupFormat.age(TimeInterval(intervalHours) * 3_600, locale: locale))
-        }
+        ForkMacBackupStepperRow(title: text.every, value: ForkMacBackupFormat.age(TimeInterval(intervalHours) * 3_600, locale: locale), number: $intervalHours, range: 1...48)
     }
 
     private var timesEditor: some View {
@@ -178,14 +174,10 @@ struct ForkMacBackupRhythmSheet: View {
                 Text(text.powerThreshold).tag("threshold")
             }
             if powerMode == "threshold" {
-                Stepper(value: $minPercent, in: 5...95, step: 5) {
-                    LabeledContent(text.powerMinimum, value: ForkMacBackupFormat.percent(Double(minPercent) / 100, locale: locale))
-                }
+                ForkMacBackupStepperRow(title: text.powerMinimum, value: ForkMacBackupFormat.percent(Double(minPercent) / 100, locale: locale), number: $minPercent, range: 5...95, step: 5)
             }
             if powerMode != "always" {
-                Stepper(value: $forceAfterHours, in: 1...168) {
-                    LabeledContent(text.forceAfter, value: ForkMacBackupFormat.age(TimeInterval(forceAfterHours) * 3_600, locale: locale))
-                }
+                ForkMacBackupStepperRow(title: text.forceAfter, value: ForkMacBackupFormat.age(TimeInterval(forceAfterHours) * 3_600, locale: locale), number: $forceAfterHours, range: 1...168)
             }
             Toggle(text.lowPowerWaits, isOn: $lowPowerWaits)
             Picker(text.keepAwake, selection: $keepAwake) {
@@ -221,9 +213,7 @@ struct ForkMacBackupRhythmSheet: View {
                 }
             }
             if earlyEnabled {
-                Stepper(value: $earlyThreshold, in: 20...5_000, step: 20) {
-                    LabeledContent(text.earlyThreshold, value: earlyThreshold.formatted(.number.locale(locale)))
-                }
+                ForkMacBackupStepperRow(title: text.earlyThreshold, value: earlyThreshold.formatted(.number.locale(locale)), number: $earlyThreshold, range: 20...5_000, step: 20)
             }
         } header: {
             Text(text.conditionsHeader)
@@ -236,9 +226,7 @@ struct ForkMacBackupRhythmSheet: View {
 
     private var speedSection: some View {
         Section {
-            Stepper(value: $slowMBps, in: 1...100) {
-                LabeledContent(text.slowLimit, value: String(format: text.megabytesPerSecond, slowMBps))
-            }
+            ForkMacBackupStepperRow(title: text.slowLimit, value: String(format: text.megabytesPerSecond, slowMBps), number: $slowMBps, range: 1...100)
             ForkMacBackupCaption(text.slowLimitCaption)
             Toggle(text.windowTitle, isOn: Binding(get: { window != nil }, set: { on in
                 throttleWindow = on ? ForkMacBackupThrottleWindow.suggested.storageValue : ""
@@ -252,13 +240,11 @@ struct ForkMacBackupRhythmSheet: View {
                         .datePickerStyle(.field)
                         .environment(\.locale, locale)
                 }
-                Stepper(value: Binding(get: { window.megabytesPerSecond }, set: { value in
+                ForkMacBackupStepperRow(title: text.windowLimit, value: String(format: text.megabytesPerSecond, window.megabytesPerSecond), number: Binding(get: { window.megabytesPerSecond }, set: { value in
                     var next = window
                     next.megabytesPerSecond = value
                     throttleWindow = next.storageValue
-                }), in: 1...100) {
-                    LabeledContent(text.windowLimit, value: String(format: text.megabytesPerSecond, window.megabytesPerSecond))
-                }
+                }), range: 1...100)
             }
             Picker(text.priorityTitle, selection: $priority) {
                 Text(text.priorityLow).tag("low")

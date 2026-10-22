@@ -29,7 +29,7 @@ struct ForkMacBackupContentSheet: View {
                                                 .logs, .secrets]
 
     var body: some View {
-        ForkMacBackupSheetScaffold(symbol: "folder.fill", title: text.contentTitle, subtitle: text.contentSubtitle,
+        ForkMacBackupSheetScaffold(symbol: "folder.fill", color: .blue, title: text.contentTitle, subtitle: text.contentSubtitle,
                                    done: text.done) {
             sourcesSection
             previewSection

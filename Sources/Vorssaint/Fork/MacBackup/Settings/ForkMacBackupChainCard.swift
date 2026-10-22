@@ -84,7 +84,7 @@ struct ForkMacBackupChainDiagram: View {
             ForEach(Array(nodes.enumerated()), id: \.element.id) { index, node in
                 if index > 0 {
                     ForkMacBackupChainLink(state: linkState(node))
-                        .frame(minWidth: 10, maxWidth: .infinity)
+                        .frame(minWidth: 10, maxWidth: 180)
                         .frame(height: Self.tileSize)
                 }
                 nodeButton(node)

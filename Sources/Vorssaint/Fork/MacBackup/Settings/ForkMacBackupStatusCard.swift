@@ -28,7 +28,8 @@ struct ForkMacBackupStatusCard: View {
                         running(locale)
                     } else {
                         ForkMacBackupProofLadder(level: presentation.lastBackup?.level, shared: shared)
-                            .padding(.leading, -18)
+                            .frame(width: 252)
+                            .padding(.leading, -8)
                         details(locale, now: now)
                     }
                 }
@@ -136,6 +137,7 @@ struct ForkMacBackupStatusCard: View {
             } label: {
                 Label(shared.pause, systemImage: "pause.fill")
             }
+            .menuStyle(.button)
             .fixedSize()
         case .paused:
             Button {
@@ -171,7 +173,7 @@ struct ForkMacBackupStatusCard: View {
                 ? Self.dayName(offset: 0, locale: locale) : Self.dayName(offset: -1, locale: locale)
             return day + " " + ForkMacBackupFormat.time(date, locale: locale)
         }
-        return ForkMacBackupFormat.dayAndTime(date, locale: locale)
+        return ForkMacBackupDay.text(date, locale: locale, now: now) + " " + ForkMacBackupFormat.time(date, locale: locale)
     }
 
     /// « aujourd'hui », « hier » in the locale's words.

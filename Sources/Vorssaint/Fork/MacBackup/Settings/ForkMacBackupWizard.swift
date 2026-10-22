@@ -315,7 +315,6 @@ struct ForkMacBackupWizard: View {
         Section {
             field(text.serverAccessKey, issue: .accessKey) {
                 TextField(text.serverAccessKey, text: $model.form.accessKeyID)
-                    .font(.body.monospaced())
             }
             field(text.serverSecretKey, issue: .secretKey) {
                 SecureField(text.serverSecretKey, text: $model.form.secretKey,
@@ -372,6 +371,7 @@ struct ForkMacBackupWizard: View {
                             .accessibilityLabel(String(format: text.tailscalePeerLabel, peer.shortName))
                         }
                     }
+                    .padding(1)
                 }
             }
         }

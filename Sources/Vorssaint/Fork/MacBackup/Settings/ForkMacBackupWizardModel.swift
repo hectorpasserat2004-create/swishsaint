@@ -277,8 +277,15 @@ final class ForkMacBackupWizardModel: ObservableObject {
     /// repository's default.
     var testChain: [ForkMacBackupChainNode] {
         guard let draft else { return [] }
-        if let profile, !profile.chain.isEmpty { return profile.chain }
-        return ForkMacBackupProfile.defaultChain(for: draft)
+        guard let profile, !profile.chain.isEmpty else { return ForkMacBackupProfile.defaultChain(for: draft) }
+        // The test always reports the repository, even when a profile does not draw it.
+        var chain = profile.chain
+        if !chain.contains(where: { $0.kind == .repository }) {
+            let server = chain.lastIndex { $0.kind == .s3 || $0.kind == .cloud }.map { $0 + 1 } ?? chain.count
+            chain.insert(ForkMacBackupChainNode(id: "repository", kind: .repository, detail: draft.bucket,
+                                                probe: .init(kind: .repositoryIdentity)), at: server)
+        }
+        return chain
     }
 
     func test() {
@@ -320,7 +327,9 @@ final class ForkMacBackupWizardModel: ObservableObject {
     }
 
     private func set(_ kind: ForkMacBackupChainNode.Kind, _ state: NodeState) {
-        for index in results.indices where results[index].node.kind == kind {
+        // The S3 server may be drawn as a provider's cloud.
+        let kinds: Set<ForkMacBackupChainNode.Kind> = kind == .s3 ? [.s3, .cloud] : [kind]
+        for index in results.indices where kinds.contains(results[index].node.kind) {
             results[index].state = state
         }
     }
@@ -376,7 +385,6 @@ final class ForkMacBackupWizardModel: ObservableObject {
                 self.set(.repository, .skipped)
                 self.set(.proxmox, .skipped)
                 self.set(.nas, .skipped)
-                self.set(.cloud, .skipped)
                 self.testError = text.testServerUnreachable
                 self.testing = false
             }
