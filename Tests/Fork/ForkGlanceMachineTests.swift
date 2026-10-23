@@ -209,7 +209,17 @@ enum ForkGlanceMachineTests {
         suite.expect(person.focuses.isEmpty && person.machine.currentZone == right,
                      "after the person clicks into a zone, gazing at it does nothing")
 
-        var gone = watching()
+        var commandTab = watching()
+        commandTab.send(.focusChanged(zone: right), at: 1)
+        commandTab.look(.zone(left), from: 1, to: 4)
+        suite.expect(commandTab.focuses.isEmpty && commandTab.machine.currentZone == right,
+                     "⌘-Tab to another zone while still looking at this one: the keyboard is never pulled back")
+        commandTab.look(.zone(mac), from: 4, to: 4.5)
+        commandTab.look(.zone(left), from: 4.5, to: 5.5)
+        suite.expect(commandTab.focuses.first == mac && commandTab.focuses.last == left,
+                     "once the gaze has moved on, coming back to the zone switches again")
+
+                var gone = watching()
         gone.send(.zonesChanged([zones[1], zones[2]]), at: 1)
         suite.expect(gone.machine.currentZone == nil, "a vanished zone no longer holds the keyboard")
         gone.look(.zone(left), from: 1, to: 2)

@@ -103,6 +103,9 @@ struct ForkGlanceMachine {
     private var candidate: Candidate?
     private var cooldownUntil: TimeInterval?
     private var zoneBeforeSwitch: String?
+    /// A zone that waits until the gaze leaves it: the one a focus failed
+    /// on, or the one the gaze was on when the person changed window
+    /// themselves (⌘-Tab, a click elsewhere): their choice wins.
     private var failedZone: String?
 
     private var governor = ForkGlanceGovernor()
@@ -152,7 +155,14 @@ struct ForkGlanceMachine {
 
         case let .focusChanged(zone):
             currentZone = zone
-            failedZone = nil
+            // The person picked this window while looking at another zone:
+            // never pull the keyboard back until the gaze moves on.
+            if case let .zone(looked)? = lastTarget, looked != zone {
+                failedZone = looked
+                candidate = nil
+            } else {
+                failedZone = nil
+            }
             if candidate?.zone == zone { candidate = nil }
 
         case let .inputs(snapshot):
