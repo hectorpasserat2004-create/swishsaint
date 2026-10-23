@@ -49,6 +49,7 @@ enum ForkDefaultsTests {
                                            ForkDefaultsKey.meetingsNudge, ForkDefaultsKey.meetingsLookback,
                                            ForkDefaultsKey.meetingsIslandAppointments]
         let addedSinceFork = addedBeforeMacBackup.union(ForkMacBackupDefaults.registered.keys)
+            .union(ForkGlanceDefaults.registered.keys)
         suite.expect(Set(ForkDefaults.legacyKeys.values) == Set(ForkDefaults.registered.keys).subtracting(addedSinceFork)
                         && ForkDefaults.legacyKeys.count == ForkDefaults.registered.count - addedSinceFork.count,
                      "every setting of the pre-fork test builds has its new name, and only those")
@@ -63,6 +64,14 @@ enum ForkDefaultsTests {
                               && ForkDefaults.registered[$0] == nil
                       },
                      "the update window's memory (last build run, notes read, notes kept) stays on this Mac")
+        suite.expect(ForkGlanceDefaults.machineKeys.allSatisfy {
+                         $0.hasPrefix("fork.glance.") && !ForkDefaults.backupKeys.contains($0)
+                             && ForkDefaults.registered[$0] == nil
+                     },
+                     "Glance Focus's camera, pause and last layout stay on this Mac, and are never registered")
+        suite.expect(ForkGlanceDefaults.registered.keys.allSatisfy { ForkDefaults.backupKeys.contains($0) }
+                        && ForkDefaults.registered[ForkDefaultsKey.glanceEnabled] as? Bool == false,
+                     "every Glance Focus setting goes into the backup, and the feature starts off")
         suite.expect(!ForkDefaults.backupKeys.contains(ForkDefaultsKey.dictationParakeetOffered),
                      "the Parakeet offer already made stays on this Mac")
         suite.expect(!ForkDefaults.backupKeys.contains(ForkDefaultsKey.meetingsFolder),
