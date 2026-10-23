@@ -54,6 +54,7 @@ FORK_SOURCES=(
     Sources/Vorssaint/Fork/Meetings/Export/ForkImmichStrings.swift
     Sources/Vorssaint/Fork/Meetings/Export/ForkImmichSupport.swift
     Sources/Vorssaint/Fork/Meetings/Export/ForkMeetingExporter.swift
+    Sources/Vorssaint/Fork/Meetings/Export/ForkMeetingKeychain.swift
     Sources/Vorssaint/Fork/Meetings/Export/ForkMeetingOriginPolicy.swift
     Sources/Vorssaint/Fork/Meetings/Export/ForkWebhookSupport.swift
     Sources/Vorssaint/Fork/Meetings/ForkMeetingActivity.swift
