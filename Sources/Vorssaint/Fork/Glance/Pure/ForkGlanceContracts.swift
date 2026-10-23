@@ -178,7 +178,8 @@ struct ForkGlanceZone: Sendable, Codable, Equatable, Hashable {
     /// "<display uuid>#<index>", or "win:<CGWindowID>" in Windows mode.
     var id: String
     var displayUUID: String
-    /// Global points. In Windows mode, the window's visible part's bounds.
+    /// Global points. In Windows mode, the largest rectangle of the window
+    /// left visible on its display.
     var rect: CGRect
     var position: ForkGlancePosition
     /// Windows mode only.
