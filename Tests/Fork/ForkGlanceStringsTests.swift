@@ -10,7 +10,7 @@ import Foundation
 enum ForkGlanceStringsTests {
     static func run(_ suite: TestSuite) {
         mirrorChecks(suite, "ForkGlanceStrings", ForkGlanceStrings.strings,
-                     island: island, sameInFrench: sameInFrench)
+                     island: island, sameInFrench: sameInFrench, untranslated: untranslated)
         names(suite)
         statusLines(suite)
         tileReadings(suite)
@@ -38,9 +38,14 @@ enum ForkGlanceStringsTests {
     /// their placeholder, the French typography, no straight apostrophe,
     /// and the French really written (only the `sameInFrench` labels may
     /// match the English).
+    ///
+    /// `untranslated` checks the thirteen other languages the same way: a
+    /// field that reads as the English in one of them fails unless it is
+    /// listed (a brand, a unit, a word both languages share). nil leaves
+    /// them unchecked, for a struct whose translations are still to come.
     static func mirrorChecks<Strings>(_ suite: TestSuite, _ name: String, _ strings: (AppLanguage) -> Strings,
                                       island: [KeyPath<Strings, String>] = [], sameInFrench: Set<String> = [],
-                                      sample: String = "MacBook") {
+                                      untranslated: Set<String>? = nil, sample: String = "MacBook") {
         let languages = AppLanguage.allCases
         suite.expect(languages.count == 15, "\(name) speaks the app's fifteen languages")
         let english = fields(strings(.enUS))
@@ -80,8 +85,19 @@ enum ForkGlanceStringsTests {
         suite.expect(loose.isEmpty, "\(name)'s French uses no-break spaces, typographic apostrophes, no capital after « · »: \(loose)")
         let straight = languages.flatMap { fields(strings($0)).map(\.1) }.filter { $0.contains("'") }
         suite.expect(straight.isEmpty, "no \(name) text uses a straight apostrophe: \(straight)")
-        let untranslated = french.filter { englishByLabel[$0.0] == $0.1 && !sameInFrench.contains($0.0) }.map(\.0)
-        suite.expect(untranslated.isEmpty, "every \(name) text is written in French, none left in English: \(untranslated)")
+        let leftInEnglish = french.filter { englishByLabel[$0.0] == $0.1 && !sameInFrench.contains($0.0) }.map(\.0)
+        suite.expect(leftInEnglish.isEmpty, "every \(name) text is written in French, none left in English: \(leftInEnglish)")
+
+        guard let untranslated else { return }
+        let unknown = untranslated.filter { englishByLabel[$0] == nil }.sorted()
+        suite.expect(unknown.isEmpty, "\(name)'s untranslated list names only its own fields: \(unknown)")
+        var stillEnglish: [String] = []
+        for language in languages where language != .enUS && language != .fr {
+            stillEnglish += fields(strings(language))
+                .filter { englishByLabel[$0.0] == $0.1 && !untranslated.contains($0.0) }
+                .map { "\(language.rawValue).\($0.0)" }
+        }
+        suite.expect(stillEnglish.isEmpty, "every \(name) text is translated in every language, none left in English: \(stillEnglish)")
     }
 
     /// A template as shown: each `%@` or `%n$@` filled with `sample`, each
@@ -177,6 +193,10 @@ enum ForkGlanceStringsTests {
 
     /// French words that are the English ones too.
     private static let sameInFrench: Set<String> = ["builtInDisplay", "modeZones", "feedbackHalo", "pause"]
+
+    /// Words the other languages share with the English: the built-in
+    /// display's name, and « Halo » (German, Spanish, Portuguese).
+    private static let untranslated: Set<String> = ["builtInDisplay", "feedbackHalo"]
 
     private static func names(_ suite: TestSuite) {
         suite.expect(zip(languages, all).allSatisfy { $0.1.featureTitle == ForkExtrasStrings.strings($0.0).glanceTitle },
@@ -330,12 +350,18 @@ enum ForkGlanceStringsTests {
         suite.expect(english.windowZoneName(app: "Safari") == "Safari window",
                      "a window zone is named by its app")
         let lg = ForkGlanceDisplay(uuid: "LG", name: "LG HDR WQHD", frame: .zero)
-        let macBook = ForkGlanceDisplay(uuid: "MB", name: "Built-in Retina Display", frame: .zero, isBuiltIn: true)
+        let macBook = ForkGlanceDisplay(uuid: "MB", name: "Built-in Retina Display", frame: .zero, isBuiltIn: true,
+                                        hasNotch: true)
+        let iMac = ForkGlanceDisplay(uuid: "IM", name: "iMac", frame: .zero,
+                                     millimeters: CGSize(width: 597, height: 336), isBuiltIn: true)
         let dellA = ForkGlanceDisplay(uuid: "A", name: "DELL U2720Q", frame: .zero)
         let dellB = ForkGlanceDisplay(uuid: "B", name: "DELL P2422H", frame: .zero)
         suite.expect(french.displayShortName(lg, among: [lg, macBook]) == "LG"
                         && french.displayShortName(macBook, among: [lg, macBook]) == "MacBook",
                      "a display is called by its brand, the built-in one MacBook")
+        suite.expect(french.displayShortName(iMac, among: [iMac, lg]) == "iMac"
+                        && french.zoneName(.left, display: french.displayShortName(iMac, among: [iMac, lg])) == "Zone gauche de l’iMac",
+                     "an iMac’s built-in display keeps its own name, never MacBook")
         suite.expect(french.displayShortName(dellA, among: [dellA, dellB]) == "DELL U2720Q"
                         && french.displayShortName(dellA, among: [dellA, macBook]) == "DELL",
                      "two displays of one brand keep their whole names")
