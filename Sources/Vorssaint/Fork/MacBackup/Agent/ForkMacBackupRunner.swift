@@ -88,6 +88,8 @@ final class ForkMacBackupRunner {
     /// Each source's last full pre-scan walk, kept up to date with FSEvents
     /// (`prescan.json`).
     private var prescanCache = ForkMacBackupPrescanCache()
+    /// The walk running for « Préparation » (files examined, folder, start).
+    private var preparation: (progress: ForkMacBackupScanProgress, startedAt: Date)?
     private var prescanCancel: ForkMacBackupFlag?
     private var maintenanceCheckedAt: Date?
     private var reconciledAt: Date?
@@ -101,6 +103,9 @@ final class ForkMacBackupRunner {
     struct Dependencies {
         var makeEngine: (ForkMacBackupPaths, DispatchQueue) -> (engine: ForkMacBackupEngineDriving, secrets: ForkMacBackupSecrets)?
         var otherEngineWrites: (ForkMacBackupRepository, URL) -> Bool
+        /// The planner's clock (when backups are due): the wall clock, or a
+        /// bench's shifted one. Runs, Kopia and the journals keep wall time.
+        var now: () -> Date = { Date() }
 
         static let live = Dependencies(
             makeEngine: { paths, queue in
@@ -113,6 +118,7 @@ final class ForkMacBackupRunner {
     }
 
     private let dependencies: Dependencies
+    private var plannerClock: () -> Date { dependencies.now }
 
     init(host: Host, paths: ForkMacBackupPaths, bundleID: String, defaults: UserDefaults = .standard,
          dependencies: Dependencies = .live) {
@@ -495,16 +501,21 @@ final class ForkMacBackupRunner {
         perform(machine.handle(.keepAwakeAllowed(ForkMacBackupPlanner.keepsAwake(settings.keepAwake, onAC: watch.onAC)),
                                now: now))
         notePause(now: now)
+        // When backups are due: the planner's clock (the wall clock but on a bench).
+        let planNow = plannerClock()
         var decision: ForkMacBackupPlanner.Decision?
         if !machine.isBusy {
             let conditions = conditions()
             let lastBackup = proofs.lastBackup(paths: settings.sources.map(\.path))
-            for record in book.sweep(now: now, lastBackup: lastBackup, settings: settings, onAC: conditions.onAC,
+            let lastRunEnd = ForkMacBackupRunRecord.lastProtectingEnd(runs)
+            let lastProtected = [lastBackup, lastRunEnd].compactMap { $0 }.max()
+            for record in book.sweep(now: planNow, lastBackup: lastProtected, settings: settings, onAC: conditions.onAC,
                                      calendar: calendar, timeline: timeline) {
                 append(record, to: paths.slots)
             }
-            var input = ForkMacBackupPlanner.Input(now: now, calendar: calendar, settings: settings, conditions: conditions,
-                                                   lastBackup: lastBackup, lastClosedDue: book.lastClosedDue,
+            var input = ForkMacBackupPlanner.Input(now: planNow, calendar: calendar, settings: settings, conditions: conditions,
+                                                   lastBackup: lastBackup, lastRunEnd: lastRunEnd,
+                                                   lastClosedDue: book.lastClosedDue,
                                                    openSlotDue: book.open?.due, pending: fsevents.summary,
                                                    retryAt: machine.retryAt, interrupted: machine.interrupted,
                                                    wokeAt: wokeAt, manual: manualRequest)
@@ -527,7 +538,7 @@ final class ForkMacBackupRunner {
             manualRequest = nil
             perform(machine.handle(.decision(planned), now: now))
         }
-        scheduleWake(now: now, decision: decision)
+        scheduleWake(now: planNow, decision: decision)
         syncPolling()
         publish()
     }
@@ -719,7 +730,7 @@ final class ForkMacBackupRunner {
             // A source's cached walk stays only while its rules and the iCloud
             // mode match (`ForkMacBackupPrescanPlan.fingerprint`); a removed
             // source's is forgotten.
-            let kept = Set(new.sources.map(\.path))
+            let kept = Set(new.sources.map { ForkMacBackupSourcePath.normalized($0.path) })
             prescanCache.entries = prescanCache.entries.filter { kept.contains($0.key) }
             savePrescans()
             restartFSEvents()
@@ -894,6 +905,7 @@ final class ForkMacBackupRunner {
             // « Sauvegarder maintenant » and the first backup after the setup
             // at normal priority, the planner's other runs as chosen.
             let firstBackup = proofs.lastBackup(paths: settings.sources.map(\.path)) == nil
+                && ForkMacBackupRunRecord.lastProtectingEnd(runs) == nil
             extras?.priority = settings.enginePriority(for: trigger, firstBackup: firstBackup)
             runStarted(id: id)
         case .runEnded(let summary):
@@ -1021,32 +1033,49 @@ final class ForkMacBackupRunner {
     private func prescan(_ source: ForkMacBackupSource, completion: @escaping (_ rules: [String], _ refusal: String?) -> Void) {
         let queue = self.queue
         let iCloud = settings.iCloud
+        let sparseExcluded = settings.sparseExcluded
         let home = NSHomeDirectory()
+        let now = Date()
         let fingerprint = ForkMacBackupPrescanPlan.fingerprint(source: source, iCloud: iCloud)
-        let changed = fsevents.changedPaths()
-        let cached = prescanCache.entries[source.path]
-        let choice = ForkMacBackupPrescanPlan.choose(cached: cached, fingerprint: fingerprint, now: Date(),
+        // The event the new walk (or refresh) starts at, taken BEFORE the
+        // list of changes: a change meanwhile is in the next refresh.
+        let startEvent = fsevents.currentEventID()
+        let cached = prescanCache.entry(for: source.path)
+        let changed = cached?.eventID.flatMap { fsevents.changedPaths(since: $0) }
+        let choice = ForkMacBackupPrescanPlan.choose(cached: cached, fingerprint: fingerprint, now: now,
                                                      onAC: watch.onAC, changesKnown: changed != nil)
         let cancel = ForkMacBackupFlag()
         prescanCancel = cancel
+        let progress = ForkMacBackupScanProgress()
+        preparation = (progress, now)
         // Background: the walk's reads are throttled by macOS while the Mac is in use.
         DispatchQueue.global(qos: .background).async {
             let matcher = ForkMacBackupRunRules.matcher(for: source)
             let collectDataless = iCloud != .exclude
             var entry: ForkMacBackupPrescanCache.Entry?
             if choice == .reuse, let cached, let changed {
-                let changes = ForkMacBackupPrescanPlan.relativeChanges(changed, source: source.path)
-                    .map { ForkMacBackupPrescanPlan.probe($0, root: source.path) }
+                let relative = ForkMacBackupPrescanPlan.relativeChanges(changed, source: source.path)
+                var changes: [ForkMacBackupPrescanPlan.Change] = []
+                for (index, path) in relative.enumerated() {
+                    changes.append(ForkMacBackupPrescanPlan.probe(path, root: source.path))
+                    if index % 256 == 0 { progress.note(files: Int64(index + 1), folder: nil) }
+                }
+                progress.note(files: Int64(relative.count), folder: nil)
                 entry = ForkMacBackupPrescanPlan.refreshed(cached, changes: changes, matcher: matcher,
                                                            collectDataless: collectDataless)
+                entry?.eventID = startEvent
             } else {
                 let usage = ForkMacBackupContentScan.scan(root: URL(fileURLWithPath: source.path, isDirectory: true),
                                                           matcher: matcher, collectDataless: collectDataless,
-                                                          topFolders: 0, isCanceled: { cancel.isSet })
-                if !usage.canceled { entry = ForkMacBackupPrescanCache.Entry(date: Date(), fingerprint: fingerprint, usage: usage) }
+                                                          topFolders: 0, progress: progress, isCanceled: { cancel.isSet })
+                if !usage.canceled {
+                    entry = ForkMacBackupPrescanCache.Entry(date: Date(), fingerprint: fingerprint, usage: usage,
+                                                            eventID: startEvent)
+                }
             }
             let rules = entry.map { ForkMacBackupRunRules.extra(for: source, sparseImages: $0.sparseImages,
-                                                                dataless: $0.dataless, iCloud: iCloud, home: home) }
+                                                                dataless: $0.dataless, iCloud: iCloud, home: home,
+                                                                sparseExcluded: sparseExcluded) }
                 ?? ForkMacBackupRunRules.extra(for: source, sparseImages: [], dataless: [], iCloud: iCloud, home: home)
             var refusal: String?
             if iCloud == .materialize {
@@ -1056,8 +1085,9 @@ final class ForkMacBackupRunner {
             }
             queue.async { [weak self] in
                 guard let self else { return }
+                self.preparation = nil
                 if let entry {
-                    self.prescanCache.entries[source.path] = entry
+                    self.prescanCache.entries[ForkMacBackupSourcePath.normalized(source.path)] = entry
                     self.savePrescans()
                 }
                 completion(rules, refusal)
@@ -1111,10 +1141,16 @@ final class ForkMacBackupRunner {
             append(slot, to: paths.slots)
         }
         if !summary.proofs.isEmpty {
-            // What the pre-scan measured is the run's real size on disk.
+            // What the pre-scan measured is the run's real size on disk: the
+            // walk's allocated bytes minus the sparse images left out. Without
+            // a walk, Kopia's own size stands (`diskBytes`), never 0.
             let measured = summary.proofs.map { proof -> ForkMacBackupSnapshotProof in
                 var proof = proof
-                if proof.incomplete == nil, let real = prescanCache.entries[proof.sourcePath]?.realBytes { proof.realBytes = real }
+                if proof.incomplete == nil, let entry = prescanCache.entry(for: proof.sourcePath),
+                   let source = settings.sources.first(where: { ForkMacBackupSourcePath.same($0.path, proof.sourcePath) }) {
+                    let real = ForkMacBackupRunRules.protectedBytes(entry, source: source, sparseExcluded: settings.sparseExcluded)
+                    if real > 0 { proof.realBytes = real }
+                }
                 return proof
             }
             proofs.record(measured, now: now)
@@ -1125,7 +1161,9 @@ final class ForkMacBackupRunner {
                 }
             }
             let protected = settings.sources.compactMap { proofs.last(of: $0.path)?.diskBytes }.reduce(0, +)
-            append(ForkMacBackupCapacitySample(kind: .real, bytes: protected, date: now, source: "snapshot"), to: paths.capacity)
+            if protected > 0 {
+                append(ForkMacBackupCapacitySample(kind: .real, bytes: protected, date: now, source: "snapshot"), to: paths.capacity)
+            }
         }
         if summary.bytesSent > 0 {
             append(ForkMacBackupCapacitySample(kind: .sent, bytes: summary.bytesSent, date: now, source: "run"),
@@ -1194,11 +1232,17 @@ final class ForkMacBackupRunner {
     // MARK: Publishing
 
     private func presentation(now: Date) -> ForkMacBackupPresentation {
-        ForkMacBackupPresenter.presentation(machine, context: .init(settings: settings, proofs: proofs, chain: chain,
-                                                                    pendingChanges: fsevents.summary?.total, runs: runs,
-                                                                    repositoryBytes: repositoryBytes,
-                                                                    repositoryMeasuredAt: repositoryMeasuredAt),
-                                            now: now)
+        let walk = preparation.map { running -> ForkMacBackupPresentation.Preparation in
+            let reading = running.progress.reading
+            return ForkMacBackupPresentation.Preparation(files: reading.files, folder: reading.folder,
+                                                         startedAt: running.startedAt)
+        }
+        return ForkMacBackupPresenter.presentation(machine, context: .init(settings: settings, proofs: proofs, chain: chain,
+                                                                           pendingChanges: fsevents.summary?.total, runs: runs,
+                                                                           repositoryBytes: repositoryBytes,
+                                                                           repositoryMeasuredAt: repositoryMeasuredAt,
+                                                                           preparation: walk),
+                                                   now: now)
     }
 
     /// Writes `state.json` (atomic, 0600) and posts the notification, at the

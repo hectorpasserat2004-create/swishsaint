@@ -14,6 +14,8 @@ struct ForkMacBackupWindowStrings {
     // MARK: Window and sidebar
     let windowTitle: String
     let sidebarOtherMacs: String
+    /// This Mac's sources no longer in the configuration (still browsable).
+    let sidebarFormerSources: String
     let sidebarActivity: String
     let tabBrowse: String
     let tabHistory: String
@@ -518,6 +520,7 @@ extension ForkMacBackupWindowStrings {
     static let enUS = ForkMacBackupWindowStrings(
         windowTitle: "Backups",
         sidebarOtherMacs: "Other Macs",
+        sidebarFormerSources: "Former sources",
         sidebarActivity: "Activity",
         tabBrowse: "Browse",
         tabHistory: "History",
@@ -763,6 +766,7 @@ extension ForkMacBackupWindowStrings {
     static let fr = ForkMacBackupWindowStrings(
         windowTitle: "Sauvegardes",
         sidebarOtherMacs: "Autres Mac",
+        sidebarFormerSources: "Anciennes sources",
         sidebarActivity: "Suivi",
         tabBrowse: "Parcourir",
         tabHistory: "Historique",
@@ -1008,6 +1012,7 @@ extension ForkMacBackupWindowStrings {
     static let ptBR = ForkMacBackupWindowStrings(
         windowTitle: "Backups",
         sidebarOtherMacs: "Outros Macs",
+        sidebarFormerSources: "Fontes antigas",
         sidebarActivity: "Atividade",
         tabBrowse: "Navegar",
         tabHistory: "Histórico",
@@ -1253,6 +1258,7 @@ extension ForkMacBackupWindowStrings {
     static let es = ForkMacBackupWindowStrings(
         windowTitle: "Copias de seguridad",
         sidebarOtherMacs: "Otros Mac",
+        sidebarFormerSources: "Fuentes anteriores",
         sidebarActivity: "Actividad",
         tabBrowse: "Explorar",
         tabHistory: "Historial",
@@ -1498,6 +1504,7 @@ extension ForkMacBackupWindowStrings {
     static let it = ForkMacBackupWindowStrings(
         windowTitle: "Backup",
         sidebarOtherMacs: "Altri Mac",
+        sidebarFormerSources: "Origini precedenti",
         sidebarActivity: "Attività",
         tabBrowse: "Sfoglia",
         tabHistory: "Cronologia",
@@ -1743,6 +1750,7 @@ extension ForkMacBackupWindowStrings {
     static let de = ForkMacBackupWindowStrings(
         windowTitle: "Backups",
         sidebarOtherMacs: "Andere Macs",
+        sidebarFormerSources: "Frühere Quellen",
         sidebarActivity: "Aktivität",
         tabBrowse: "Durchsuchen",
         tabHistory: "Verlauf",
@@ -1988,6 +1996,7 @@ extension ForkMacBackupWindowStrings {
     static let ru = ForkMacBackupWindowStrings(
         windowTitle: "Резервные копии",
         sidebarOtherMacs: "Другие Mac",
+        sidebarFormerSources: "Прежние источники",
         sidebarActivity: "Активность",
         tabBrowse: "Обзор",
         tabHistory: "История",
@@ -2233,6 +2242,7 @@ extension ForkMacBackupWindowStrings {
     static let uk = ForkMacBackupWindowStrings(
         windowTitle: "Резервні копії",
         sidebarOtherMacs: "Інші Mac",
+        sidebarFormerSources: "Попередні джерела",
         sidebarActivity: "Активність",
         tabBrowse: "Огляд",
         tabHistory: "Історія",
@@ -2478,6 +2488,7 @@ extension ForkMacBackupWindowStrings {
     static let sk = ForkMacBackupWindowStrings(
         windowTitle: "Zálohy",
         sidebarOtherMacs: "Iné Macy",
+        sidebarFormerSources: "Predchádzajúce zdroje",
         sidebarActivity: "Aktivita",
         tabBrowse: "Prehliadať",
         tabHistory: "História",
@@ -2723,6 +2734,7 @@ extension ForkMacBackupWindowStrings {
     static let tr = ForkMacBackupWindowStrings(
         windowTitle: "Yedeklemeler",
         sidebarOtherMacs: "Diğer Mac’ler",
+        sidebarFormerSources: "Eski kaynaklar",
         sidebarActivity: "Etkinlik",
         tabBrowse: "Göz At",
         tabHistory: "Geçmiş",
@@ -2968,6 +2980,7 @@ extension ForkMacBackupWindowStrings {
     static let ja = ForkMacBackupWindowStrings(
         windowTitle: "バックアップ",
         sidebarOtherMacs: "ほかのMac",
+        sidebarFormerSources: "以前のソース",
         sidebarActivity: "アクティビティ",
         tabBrowse: "ブラウズ",
         tabHistory: "履歴",
@@ -3213,6 +3226,7 @@ extension ForkMacBackupWindowStrings {
     static let ko = ForkMacBackupWindowStrings(
         windowTitle: "백업",
         sidebarOtherMacs: "다른 Mac",
+        sidebarFormerSources: "이전 소스",
         sidebarActivity: "활동",
         tabBrowse: "탐색",
         tabHistory: "기록",
@@ -3458,6 +3472,7 @@ extension ForkMacBackupWindowStrings {
     static let zhHans = ForkMacBackupWindowStrings(
         windowTitle: "备份",
         sidebarOtherMacs: "其他 Mac",
+        sidebarFormerSources: "以前的来源",
         sidebarActivity: "活动",
         tabBrowse: "浏览",
         tabHistory: "历史记录",
@@ -3703,6 +3718,7 @@ extension ForkMacBackupWindowStrings {
     static let zhTW = ForkMacBackupWindowStrings(
         windowTitle: "備份",
         sidebarOtherMacs: "其他 Mac",
+        sidebarFormerSources: "先前的來源",
         sidebarActivity: "活動",
         tabBrowse: "瀏覽",
         tabHistory: "歷史記錄",
@@ -3948,6 +3964,7 @@ extension ForkMacBackupWindowStrings {
     static let zhHK = ForkMacBackupWindowStrings(
         windowTitle: "備份",
         sidebarOtherMacs: "其他 Mac",
+        sidebarFormerSources: "以前的來源",
         sidebarActivity: "活動",
         tabBrowse: "瀏覽",
         tabHistory: "歷史記錄",

@@ -147,6 +147,7 @@ final class ForkMacBackupSettingsContext: ObservableObject {
     // MARK: Machine state
 
     func reloadMachineState() {
+        if !isPreview { ForkMacBackupDefaults.migrate(defaults) }
         repository = decode(ForkMacBackupRepository.self, ForkDefaultsKey.macBackupRepository)
         profile = defaults.data(forKey: ForkDefaultsKey.macBackupProfile).flatMap(ForkMacBackupProfile.decode)
             ?? defaults.string(forKey: ForkDefaultsKey.macBackupProfile).flatMap { ForkMacBackupProfile.decode(Data($0.utf8)) }
@@ -188,6 +189,26 @@ final class ForkMacBackupSettingsContext: ObservableObject {
 
     var customRules: [String] {
         ForkMacBackupSource.customRules(fromStored: defaults.string(forKey: ForkDefaultsKey.macBackupRules))
+    }
+
+    /// Sparse disk images left out by name (`ForkMacBackupSparsePolicy`).
+    var sparseExcluded: Set<String> {
+        Set(ForkMacBackupSparsePolicy.parse(defaults.string(forKey: ForkDefaultsKey.macBackupSparseExcluded)))
+    }
+
+    /// « Laisser de côté » on one sparse disk image (machine state: its path).
+    func setSparse(_ path: String, excluded: Bool) {
+        var paths = sparseExcluded
+        let path = ForkMacBackupSourcePath.normalized(path)
+        if excluded { paths.insert(path) } else { paths.remove(path) }
+        let value = ForkMacBackupSparsePolicy.storageValue(Array(paths))
+        if value.isEmpty {
+            defaults.removeObject(forKey: ForkDefaultsKey.macBackupSparseExcluded)
+        } else {
+            defaults.set(value, forKey: ForkDefaultsKey.macBackupSparseExcluded)
+        }
+        objectWillChange.send()
+        send(.reloadSettings)
     }
 
     var iCloudMode: ForkMacBackupICloudMode {
@@ -271,6 +292,7 @@ final class ForkMacBackupSettingsContext: ObservableObject {
     }
 
     func addSource(_ path: String) {
+        let path = ForkMacBackupSourcePath.normalized(path)
         var list = effectiveSources
         guard !list.contains(where: { $0.path == path }) else { return }
         list.append(ForkMacBackupSource(path: path, presets: presets, customRules: customRules))
@@ -278,7 +300,7 @@ final class ForkMacBackupSettingsContext: ObservableObject {
     }
 
     func removeSource(_ path: String) {
-        let list = effectiveSources.filter { $0.path != path }
+        let list = effectiveSources.filter { !ForkMacBackupSourcePath.same($0.path, path) }
         guard !list.isEmpty else { return }
         saveSources(list)
     }
@@ -373,7 +395,8 @@ final class ForkMacBackupSettingsContext: ObservableObject {
         let flag = ForkMacBackupFlag()
         scanCancelled = flag
         Self.runningScan = flag
-        let settings = ForkMacBackupContentScanner.Settings(presets: presets, customRules: customRules, iCloud: iCloudMode)
+        let settings = ForkMacBackupContentScanner.Settings(presets: presets, customRules: customRules, iCloud: iCloudMode,
+                                                            sparseExcluded: sparseExcluded)
         let roots = effectiveSources.map(\.path)
         let home = home
         scanProgress = .init(files: 0, bytes: 0, path: home)

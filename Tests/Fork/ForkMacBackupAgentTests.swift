@@ -13,6 +13,8 @@ enum ForkMacBackupAgentTests {
         settings(suite)
         mode(suite)
         plannerAutomatic(suite)
+        regression2331(suite)
+        automaticSafetyNet(suite)
         plannerConditions(suite)
         plannerManualRhythms(suite)
         plannerCatchUp(suite)
@@ -202,8 +204,8 @@ enum ForkMacBackupAgentTests {
         }
         suite.expect(decide(30, changes(10, important: 2)) == .idle(next: last.addingTimeInterval(4 * hour)),
                      "Automatic on AC: important changes within the first hour wait (at least 1 h apart)")
-        suite.expect(decide(70, changes(10, important: 2)) == .run(trigger: .scheduled, due: nil),
-                     "Automatic on AC: important changes after 1 h back up at once")
+        suite.expect(decide(70, changes(10, important: 2)) == .run(trigger: .scheduled, due: last.addingTimeInterval(70 * 60)),
+                     "Automatic on AC: important changes after 1 h back up at once, in a slot of their own")
         suite.expect(decide(70, changes(3)) == .idle(next: last.addingTimeInterval(4 * hour)),
                      "Automatic on AC: a few ordinary changes wait for the 4 h bound")
         suite.expect(decide(241, changes(3)) == .run(trigger: .scheduled, due: last.addingTimeInterval(4 * hour)),
@@ -217,7 +219,8 @@ enum ForkMacBackupAgentTests {
         let battery = ForkMacBackupConditions(onAC: false, batteryPercent: 80, network: .available(limited: false))
         suite.expect(decide(120, changes(10, important: 2), conditions: battery) == .idle(next: last.addingTimeInterval(8 * hour)),
                      "Automatic on battery: a small need waits, up to 8 h")
-        suite.expect(decide(120, changes(60, important: 10), conditions: battery) == .run(trigger: .scheduled, due: nil),
+        suite.expect(decide(120, changes(60, important: 10), conditions: battery)
+                        == .run(trigger: .scheduled, due: last.addingTimeInterval(120 * 60)),
                      "Automatic on battery: a big need backs up")
         suite.expect(decide(481, changes(1), conditions: battery) == .run(trigger: .scheduled, due: last.addingTimeInterval(8 * hour)),
                      "Automatic on battery: at most 8 h apart")
@@ -234,6 +237,153 @@ enum ForkMacBackupAgentTests {
                      "a big need on a low battery waits too")
         suite.expect(ForkMacBackupPlanner.decide(input(auto, now: t0, pending: changes(5000))) == .run(trigger: .scheduled, due: t0),
                      "Automatic: the very first backup is due at once")
+    }
+
+    /// Build 2331 on a real Mac: a source imported from Bran as « /Users/me/ »
+    /// (trailing slash), Kopia's snapshots recorded as « /Users/me »: no proof
+    /// matched, the planner believed nothing was ever backed up and started
+    /// three complete backups back to back (runs, proofs and the one slot of
+    /// that Mac, anonymized, in `agent-2331-*`).
+    private static func regression2331(_ suite: TestSuite) {
+        let stored = """
+        [{"customRules":["*.pyc",".DS_Store"],"path":"\\/Users\\/test\\/","presets":["trash","caches","docker",\
+        "appleContainer","sparseDiskImages","devFolders","cloudStorage","cacheDirTag","logs"]}]
+        """
+        let settings = ForkMacBackupAgentSettings { key in
+            switch key {
+            case ForkDefaultsKey.macBackupEnabled: return true
+            case ForkDefaultsKey.macBackupRepository: return try? ForkMacBackupJSON.encoder.encode(repository)
+            case ForkDefaultsKey.macBackupSources: return stored
+            default: return nil
+            }
+        }
+        suite.expect(settings.sources.map(\.path) == ["/Users/test"],
+                     "2331: a source stored « /Users/test/ » is read « /Users/test », Kopia's own form")
+        suite.expect(ForkMacBackupSourcePath.normalized("/Users/test/") == "/Users/test"
+                        && ForkMacBackupSourcePath.normalized("/Users//test/./Documents/../") == "/Users/test"
+                        && ForkMacBackupSourcePath.normalized("/") == "/" && ForkMacBackupSourcePath.normalized("///") == "/",
+                     "one canonical form: standardized, no trailing « / » but for the root")
+        let migrated = ForkMacBackupDefaults.canonicalSources(stored)
+        let reread = migrated.flatMap { try? ForkMacBackupJSON.decoder.decode([ForkMacBackupSource].self, from: Data($0.utf8)) }
+        suite.expect(migrated?.contains("\\/Users\\/test\"") == true && reread?.first?.customRules == ["*.pyc", ".DS_Store"]
+                        && migrated.flatMap(ForkMacBackupDefaults.canonicalSources) == nil,
+                     "2331: the stored sources are rewritten once in canonical form, their rules kept")
+        let twice = "[{\"path\":\"/Users/test/\",\"presets\":[],\"customRules\":[]},{\"path\":\"/Users/test\",\"presets\":[],\"customRules\":[]}]"
+        suite.expect(ForkMacBackupDefaults.canonicalSources(twice).flatMap {
+            try? ForkMacBackupJSON.decoder.decode([ForkMacBackupSource].self, from: Data($0.utf8)) }?.count == 1,
+                     "two spellings of one folder become one source")
+
+        guard let proofData = fixture("agent-2331-proofs.json"), let proofs = ForkMacBackupProofStore.decode(proofData),
+              let runData = fixture("agent-2331-runs.jsonl"), let slotData = fixture("agent-2331-slots.jsonl") else {
+            suite.expect(false, "the 2331 fixtures are in Tests/Fork/Fixtures/MacBackup")
+            return
+        }
+        let runs = ForkMacBackupJSON.lines(ForkMacBackupRunRecord.self, from: runData)
+        let slots = ForkMacBackupJSON.lines(ForkMacBackupSlotRecord.self, from: slotData)
+        let lastEnd = Date(timeIntervalSince1970: 1_792_761_233.620888)
+        let lastBackup = proofs.lastBackup(paths: settings.sources.map(\.path))
+        suite.expect(lastBackup == lastEnd && proofs.lastBackup(paths: ["/Users/test/"]) == lastEnd,
+                     "2331: Kopia's « /Users/test » snapshots are the source's, whichever way it is written")
+        suite.expect(proofs.last(of: "/Users/test/")?.manifestID == "62b13e88c8e0bc385d7d52aad8325920"
+                        && proofs.lastComplete(of: "/Users/test/") != nil,
+                     "2331: the last snapshot and the last complete one are found")
+        let runEnd = ForkMacBackupRunRecord.lastProtectingEnd(runs)
+        suite.expect(runs.count == 3 && runEnd == Date(timeIntervalSince1970: 1_792_761_236.151311),
+                     "2331: the journal knows the three runs")
+        // Martial's Mac 5 min after the third run: changes keep coming (his
+        // home folder), the rhythm is Automatic, on AC.
+        let now = runs[2].end!.addingTimeInterval(5 * 60)
+        let busy = changes(400, important: 12)
+        let book = ForkMacBackupSlotBook(lastClosedDue: slots.map(\.due).max())
+        let fixed = ForkMacBackupPlanner.decide(ForkMacBackupPlanner.Input(
+            now: now, calendar: paris, settings: settings, conditions: ForkMacBackupConditions(network: .available(limited: false)),
+            lastBackup: lastBackup, lastRunEnd: runEnd, lastClosedDue: book.lastClosedDue, pending: busy))
+        suite.expect(fixed == .idle(next: runEnd!.addingTimeInterval(hour)),
+                     "2331: 5 min after a backup, Automatic waits for the 1 h gap (it started a fourth one)")
+        let journalOnly = ForkMacBackupPlanner.decide(ForkMacBackupPlanner.Input(
+            now: now, calendar: paris, settings: settings, conditions: ForkMacBackupConditions(network: .available(limited: false)),
+            lastBackup: nil, lastRunEnd: runEnd, lastClosedDue: book.lastClosedDue, pending: busy))
+        suite.expect(journalOnly == .idle(next: runEnd!.addingTimeInterval(hour)),
+                     "2331: even with no proof matched, the run journal alone holds the gap")
+        suite.expect(ForkMacBackupPlanner.decide(ForkMacBackupPlanner.Input(
+            now: now, calendar: paris, settings: settings, conditions: ForkMacBackupConditions(network: .available(limited: false)),
+            lastBackup: lastBackup, lastRunEnd: runEnd, pending: ForkMacBackupPendingSummary.none)) == .idle(next: runEnd!.addingTimeInterval(hour)),
+                     "2331: nothing changed (pending 0): no backup")
+
+        var cache = ForkMacBackupPrescanCache()
+        var usage = ForkMacBackupDiskUsage()
+        usage.allocatedBytes = 405_000_000_000
+        cache.entries["/Users/test/"] = ForkMacBackupPrescanCache.Entry(date: t0, fingerprint: "x", usage: usage)
+        let decoded = cache.encoded().flatMap(ForkMacBackupPrescanCache.decode)
+        suite.expect(decoded?.entries.keys.sorted() == ["/Users/test"] && decoded?.entry(for: "/Users/test/")?.realBytes == 405_000_000_000
+                        && decoded?.entry(for: "/Users/test")?.realBytes == 405_000_000_000,
+                     "2331: the pre-scan of « /Users/test/ » is found for the snapshot of « /Users/test » (real size, reuse)")
+        let response = sources(path: "/Users/test", uploading: true)
+        suite.expect(response.source(path: "/Users/test/") != nil, "2331: Kopia's live source matches a source written with « / »")
+        let proof = ForkMacBackupSnapshotProof(manifestID: "m", sourcePath: "/Users/test/", endTime: t0, level: .complete,
+                                               bytes: 1, files: 1)
+        suite.expect(proof.sourcePath == "/Users/test", "a proof keeps the canonical path")
+    }
+
+    /// The Automatic rhythm's safety net (fix of 2331): never two backups
+    /// less than an hour apart, never one with nothing changed before the
+    /// 4 h bound, and every run writes its slot. Changes keep pouring in, as
+    /// in a busy home folder: over 6 h, backups an hour (plus their length)
+    /// apart, never back to back.
+    private static func automaticSafetyNet(_ suite: TestSuite) {
+        let auto = settings()
+        let online = ForkMacBackupConditions(network: .available(limited: false))
+        var book = ForkMacBackupSlotBook()
+        var runEnds: [Date] = []
+        var starts: [Date] = []
+        var slots: [ForkMacBackupSlotRecord] = []
+        var clock = t0
+        let runLength: TimeInterval = 9 * 60
+        while clock < t0.addingTimeInterval(6 * hour) {
+            let decision = ForkMacBackupPlanner.decide(ForkMacBackupPlanner.Input(
+                now: clock, calendar: paris, settings: auto, conditions: online, lastBackup: nil, lastRunEnd: runEnds.last,
+                lastClosedDue: book.lastClosedDue, openSlotDue: book.open?.due, pending: changes(300, important: 20)))
+            if case .run(_, let due) = decision {
+                if let due { book.open(due) }
+                let id = UUID()
+                book.runStarted(at: clock, runID: id)
+                starts.append(clock)
+                clock = clock.addingTimeInterval(runLength)
+                runEnds.append(clock)
+                if let slot = book.runEnded(.complete, runID: id, canceledByPerson: false) { slots.append(slot) }
+            } else {
+                clock = clock.addingTimeInterval(60)
+            }
+        }
+        let gaps = zip(starts.dropFirst(), runEnds).map { $0.timeIntervalSince($1) }
+        suite.expect(starts.count == 6 && gaps.allSatisfy { $0 >= hour },
+                     "Automatic with changes pouring in: one backup an hour at most (\(starts.count) in 6 h), never back to back")
+        suite.expect(slots.count == starts.count && slots.allSatisfy { $0.outcome == .done },
+                     "every Automatic run writes its slot")
+
+        let end = t0.addingTimeInterval(runLength)
+        func decide(_ minutes: Double, _ pending: ForkMacBackupPendingSummary?) -> ForkMacBackupPlanner.Decision {
+            ForkMacBackupPlanner.decide(ForkMacBackupPlanner.Input(
+                now: end.addingTimeInterval(minutes * 60), calendar: paris, settings: auto, conditions: online,
+                lastBackup: nil, lastRunEnd: end, lastClosedDue: t0, pending: pending))
+        }
+        suite.expect(decide(1, changes(5000, important: 900)) == .idle(next: end.addingTimeInterval(hour)),
+                     "a burst of changes right after a backup waits for the 1 h gap")
+        suite.expect(decide(61, ForkMacBackupPendingSummary.none) == .idle(next: end.addingTimeInterval(4 * hour)),
+                     "past the gap, nothing changed: nothing before the 4 h bound")
+        suite.expect(decide(4 * 60 + 1, ForkMacBackupPendingSummary.none) == .nothingToDo(due: end.addingTimeInterval(4 * hour),
+                                                                next: end.addingTimeInterval(8 * hour)),
+                     "at the bound with nothing changed: a « nothing to do » slot, no backup")
+        var manual = ForkMacBackupPlanner.Input(now: end.addingTimeInterval(60), calendar: paris, settings: auto,
+                                                conditions: online, lastRunEnd: end, pending: ForkMacBackupPendingSummary.none)
+        manual.manual = .island
+        suite.expect(ForkMacBackupPlanner.decide(manual) == .run(trigger: .island, due: nil),
+                     "« Sauvegarder maintenant » is never held by the gap")
+        let interval = settings([ForkDefaultsKey.macBackupScheduleMode: "interval", ForkDefaultsKey.macBackupIntervalHours: 1])
+        suite.expect(ForkMacBackupPlanner.decide(ForkMacBackupPlanner.Input(
+            now: end.addingTimeInterval(61 * 60), calendar: paris, settings: interval, conditions: online,
+            lastRunEnd: end, pending: changes(1))) == .run(trigger: .scheduled, due: end.addingTimeInterval(hour)),
+                     "a manual rhythm keeps its own interval, counted from the journal too")
     }
 
     private static func plannerConditions(_ suite: TestSuite) {
@@ -1062,6 +1212,19 @@ enum ForkMacBackupAgentTests {
         tally.add(home + "/Library/c", weight: .library, eventID: 30)
         suite.expect(tally.summary == ForkMacBackupPendingSummary(total: 3, important: 1, weighted: 6.1),
                      "distinct paths counted once, weighted")
+        var paths = ForkMacBackupPendingChanges.Tally()
+        suite.expect(paths.changedPaths(since: 5) == nil, "no starting point: the changed paths are not known")
+        paths.clear(from: 100)
+        paths.add(home + "/Documents/a", weight: .important, eventID: 120)
+        suite.expect(paths.changedPaths(since: 110) == [home + "/Documents/a"] && paths.changedPaths(since: 90) == nil,
+                     "the paths are known since the stream's start, not before")
+        paths.reset(upTo: 130)
+        paths.add(home + "/Projects/b", weight: .ordinary, eventID: 140)
+        suite.expect(paths.changedPaths(since: 135) == [home + "/Projects/b"] && paths.changedPaths(since: 125) == nil,
+                     "a snapshot's reset forgets up to its start: a walk after it is refreshed, one before is walked again")
+        paths.lostPaths(at: 150)
+        suite.expect(paths.changedPaths(since: 145) == nil && paths.changedPaths(since: 155) != nil,
+                     "dropped events: a walk before them is walked again, one after is refreshed")
         tally.reset(upTo: 20)
         suite.expect(tally.summary.total == 1, "a complete snapshot clears what happened before its start only")
         suite.expect(ForkMacBackupPendingChanges.replayStart(saved: 100, current: 500) == 100
@@ -1127,16 +1290,38 @@ enum ForkMacBackupAgentTests {
 
     private static func sparseImages(_ suite: TestSuite) {
         var usage = ForkMacBackupDiskUsage()
-        usage.sparseImages = [.init(relativePath: "VMs/kali [x].ext4", logicalBytes: 1_000_000_000_000, allocatedBytes: 4_000_000_000)]
+        usage.sparseImages = [.init(relativePath: "VMs/kali [x].ext4", logicalBytes: 1_000_000_000_000, allocatedBytes: 4_000_000_000),
+                              .init(relativePath: "Disks/Docker.raw", logicalBytes: 900_000_000_000, allocatedBytes: 9_000_000_000),
+                              .init(relativePath: "Documents/QNAP/castral/kvm4-hostinger-backup/kvm4-clone.vhd",
+                                    logicalBytes: 200_000_000_000, allocatedBytes: 45_800_000_000)]
         usage.dataless = ["Library/Mobile Documents/com~apple~CloudDocs/film.mov", "Library/Mobile Documents/x/"]
         let source = ForkMacBackupSource(path: home)
         suite.expect(ForkMacBackupRunRules.extra(for: source, usage: usage, iCloud: .local, home: home)
-                        == ["/VMs/kali \\[x].ext4", "/Library/Mobile Documents/com~apple~CloudDocs/film.mov",
+                        == ["/Disks/Docker.raw", "/Library/Mobile Documents/com~apple~CloudDocs/film.mov",
                             "/Library/Mobile Documents/x/"],
-                     "the run's rules: the sparse images and, in local mode, the cloud-only files (escaped, anchored)")
+                     "the run's rules: Docker's disk image (recreatable) and, in local mode, the cloud-only files; "
+                        + "a VM's or a server clone's sparse image is real data, backed up")
+        suite.expect(ForkMacBackupRunRules.extra(for: source, usage: usage, iCloud: .local, home: home,
+                                                 sparseExcluded: [home + "/VMs/kali [x].ext4"]).first
+                        == "/VMs/kali \\[x].ext4",
+                     "a sparse image left out by name becomes a rule (escaped, anchored)")
         suite.expect(ForkMacBackupRunRules.extra(for: ForkMacBackupSource(path: home, presets: []), usage: usage,
                                                  iCloud: .materialize, home: home).isEmpty,
-                     "the sparse images stay when their preset is off; nothing cloud-only when iCloud downloads")
+                     "Docker's image stays when its preset is off; nothing cloud-only when iCloud downloads")
+        suite.expect(ForkMacBackupSparsePolicy.isRecreatable(home + "/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw")
+                        && ForkMacBackupSparsePolicy.isRecreatable(home + "/Library/Application Support/com.apple.container/x/rootfs.ext4")
+                        && !ForkMacBackupSparsePolicy.isRecreatable(home + "/Documents/QNAP/castral/kvm4-clone.vhd"),
+                     "only Docker Desktop's and Apple Container's images are recreatable")
+        let entry = ForkMacBackupPrescanCache.Entry(date: t0, fingerprint: "", usage: {
+            var walked = usage
+            walked.allocatedBytes = 405_000_000_000
+            return walked
+        }())
+        suite.expect(ForkMacBackupRunRules.protectedBytes(entry, source: source, sparseExcluded: []) == 396_000_000_000,
+                     "the real size protected: the walk's minus Docker's image left out, the VM clone counted (45,8 GB)")
+        suite.expect(ForkMacBackupSparsePolicy.parse(ForkMacBackupSparsePolicy.storageValue([home + "/a.vhd/", home + "/a.vhd"]))
+                        == [home + "/a.vhd"] && ForkMacBackupSparsePolicy.parse("{") == [],
+                     "the list of images left out: canonical paths, once; damaged: none")
         suite.expect(ForkMacBackupRunRules.extra(for: source, usage: ForkMacBackupDiskUsage(), iCloud: .exclude, home: home)
                         == ["/Library/Mobile Documents/"]
                         && ForkMacBackupRunRules.iCloudDriveRule(source: home + "/Library", home: home) == "/Mobile Documents/"
@@ -1355,8 +1540,10 @@ enum ForkMacBackupAgentTests {
         suite.expect(gone.sparseImages.isEmpty && gone.dataless == walked.dataless, "a deleted image leaves the list")
         let rules = ForkMacBackupRunRules.extra(for: source, sparseImages: refreshed.sparseImages, dataless: refreshed.dataless,
                                                 iCloud: .local, home: home)
-        suite.expect(rules.contains("/vm/new.img") && rules.contains("/Library/Mobile Documents/x/"),
-                     "the refreshed walk gives the run's rules")
+        let named = ForkMacBackupRunRules.extra(for: source, sparseImages: refreshed.sparseImages, dataless: refreshed.dataless,
+                                                iCloud: .local, home: home, sparseExcluded: [home + "/vm/new.img"])
+        suite.expect(!rules.contains("/vm/new.img") && named.contains("/vm/new.img") && rules.contains("/Library/Mobile Documents/x/"),
+                     "the refreshed walk gives the run's rules (a VM image only when left out by name)")
         let cache = ForkMacBackupPrescanCache(entries: [home: refreshed])
         suite.expect(cache.encoded().flatMap(ForkMacBackupPrescanCache.decode) == cache, "prescan.json reads back what it wrote")
 

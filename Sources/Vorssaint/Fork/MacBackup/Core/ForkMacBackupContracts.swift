@@ -66,6 +66,24 @@ final class ForkMacBackupFlag: @unchecked Sendable {
     }
 }
 
+/// How far a walk of the disk went, written by the walk (any thread),
+/// read by the agent each second for « Préparation » (files examined, the
+/// top-level folder being walked).
+final class ForkMacBackupScanProgress: @unchecked Sendable {
+    private let lock = NSLock()
+    private var examined: Int64 = 0
+    private var currentFolder: String?
+
+    func note(files: Int64, folder: String?) {
+        lock.withLock {
+            examined = files
+            if let folder { currentFolder = folder }
+        }
+    }
+
+    var reading: (files: Int64, folder: String?) { lock.withLock { (examined, currentFolder) } }
+}
+
 /// The secrets handed to Kopia for one call, through its environment
 /// (`KOPIA_PASSWORD`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`), never on
 /// its command line. Never Codable, never logged.

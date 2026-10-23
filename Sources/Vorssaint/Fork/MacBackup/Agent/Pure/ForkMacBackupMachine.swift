@@ -360,7 +360,7 @@ struct ForkMacBackupMachine {
     /// The state of each source, as the section lists them.
     func sourceState(_ path: String) -> ForkMacBackupPresentation.SourceState? {
         guard let run else { return nil }
-        guard let index = run.sources.firstIndex(where: { $0.source.path == path }) else { return nil }
+        guard let index = run.sources.firstIndex(where: { ForkMacBackupSourcePath.same($0.source.path, path) }) else { return nil }
         if index == run.index { return .running }
         if index > run.index { return .waiting }
         let done = run.sources[index]
@@ -639,7 +639,7 @@ struct ForkMacBackupMachine {
             run.abortMessage = message(of: error)
         case .success(let manifests):
             // `snapshot list <path>` also returns the parents' snapshots.
-            let mine = manifests.filter { $0.source?.path == source.path }
+            let mine = manifests.filter { $0.source?.path.map { ForkMacBackupSourcePath.same($0, source.path) } == true }
                 .filter { ($0.startDate ?? .distantPast) >= startedAt.addingTimeInterval(-5) }
                 .max { ($0.startDate ?? .distantPast) < ($1.startDate ?? .distantPast) }
             if let manifest = mine {

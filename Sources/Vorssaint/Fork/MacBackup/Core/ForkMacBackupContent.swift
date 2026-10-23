@@ -13,9 +13,11 @@ enum ForkMacBackupPreset: String, Codable, CaseIterable {
     case docker
     /// Apple Container: sparse `.ext4` images (the `kali` container).
     case appleContainer
-    /// Any file ≥ 10 GB of which less than half is really written (decision
-    /// 1 of 22/10). No fixed path: the agent finds them before each run with
-    /// `totalFileAllocatedSize` and adds them to the run's rules.
+    /// The recreatable sparse disk images (Docker Desktop's, Apple
+    /// Container's) wherever they live; any other sparse image is backed
+    /// up unless left out by name (`ForkMacBackupSparsePolicy`, fix of
+    /// 23/10: a VM clone holds real data). No fixed path: the agent finds
+    /// them before each run with `totalFileAllocatedSize`.
     case sparseDiskImages
     case virtualMachines
     /// `node_modules`, `.venv`… regenerable.
@@ -89,6 +91,49 @@ enum ForkMacBackupPreset: String, Codable, CaseIterable {
     }
 }
 
+/// Which sparse disk images (≥ 10 GB announced, less than half written)
+/// stay out of the backup. Only the recreatable ones are left out by the
+/// `sparseDiskImages` preset: Docker Desktop's and Apple Container's, which
+/// their apps rebuild. Any other one holds real data (a VM clone, a disk
+/// image of a server): it is backed up unless the person leaves THAT file
+/// out (`fork.macbackup.sparse.excluded`, absolute paths).
+enum ForkMacBackupSparsePolicy {
+    /// Docker Desktop (`Docker.raw`, `com.docker.docker`) or Apple
+    /// Container (`com.apple.container`), wherever the image lives.
+    static func isRecreatable(_ path: String) -> Bool {
+        let parts = path.split(separator: "/").map(String.init)
+        if parts.last == "Docker.raw" { return true }
+        return parts.contains("com.docker.docker") || parts.contains("com.apple.container")
+    }
+
+    /// Whether the image at `relativePath` of `source` is left out.
+    static func excludes(relativePath: String, source: ForkMacBackupSource, excluded: Set<String>) -> Bool {
+        let absolute = absolutePath(relativePath, in: source.path)
+        if excluded.contains(absolute) { return true }
+        return source.presets.contains(.sparseDiskImages) && isRecreatable(absolute)
+    }
+
+    static func absolutePath(_ relativePath: String, in sourcePath: String) -> String {
+        let root = ForkMacBackupSourcePath.normalized(sourcePath)
+        let relative = relativePath.hasPrefix("/") ? String(relativePath.dropFirst()) : relativePath
+        return ForkMacBackupSourcePath.normalized(root == "/" ? "/" + relative : root + "/" + relative)
+    }
+
+    /// `fork.macbackup.sparse.excluded`: a JSON array of absolute paths;
+    /// empty or damaged: none.
+    static func parse(_ stored: String?) -> [String] {
+        guard let stored, !stored.isEmpty,
+              let paths = try? JSONDecoder().decode([String].self, from: Data(stored.utf8)) else { return [] }
+        return paths.map(ForkMacBackupSourcePath.normalized)
+    }
+
+    static func storageValue(_ paths: [String]) -> String {
+        let unique = Array(Set(paths.map(ForkMacBackupSourcePath.normalized))).sorted()
+        guard !unique.isEmpty, let data = try? JSONEncoder().encode(unique) else { return "" }
+        return String(decoding: data, as: UTF8.self)
+    }
+}
+
 /// What happens to iCloud Drive files that are only in the cloud (plan §4.4).
 enum ForkMacBackupICloudMode: String, Codable, CaseIterable {
     /// Files on the Mac only; the cloud-only ones are listed apart and do
@@ -102,9 +147,51 @@ enum ForkMacBackupICloudMode: String, Codable, CaseIterable {
     static let fallback: ForkMacBackupICloudMode = .local
 }
 
-/// One folder backed up, with its own rules. Machine state (absolute paths).
+/// Source paths in their ONE canonical form, the one Kopia records: absolute,
+/// standardized (no « // », « . » or « .. »), no trailing « / » but for the
+/// root itself. Every boundary goes through it (settings, Bran import,
+/// pre-scan keys, proofs, capacity, Kopia's sources, FSEvents roots): a
+/// source saved as « /Users/me/ » once made the planner miss every snapshot
+/// Kopia recorded as « /Users/me » and back up in a loop (build 2331).
+enum ForkMacBackupSourcePath {
+    static func normalized(_ path: String) -> String {
+        guard path.hasPrefix("/") else {
+            var relative = path
+            while relative.count > 1, relative.hasSuffix("/") { relative.removeLast() }
+            return relative
+        }
+        var parts: [Substring] = []
+        for part in path.split(separator: "/", omittingEmptySubsequences: true) {
+            switch part {
+            case ".": continue
+            case "..": if !parts.isEmpty { parts.removeLast() }
+            default: parts.append(part)
+            }
+        }
+        return "/" + parts.joined(separator: "/")
+    }
+
+    /// Whether two paths name the same source.
+    static func same(_ lhs: String, _ rhs: String) -> Bool {
+        lhs == rhs || normalized(lhs) == normalized(rhs)
+    }
+
+    /// This Mac's sources in the repository, split: those of the current
+    /// configuration, and the former ones (an old test, a folder removed),
+    /// still browsable and restorable. Nothing configured: all are current.
+    static func split(_ paths: [String], configured: [String]) -> (current: [String], former: [String]) {
+        guard !configured.isEmpty else { return (paths, []) }
+        let wanted = Set(configured.map(normalized))
+        return (paths.filter { wanted.contains(normalized($0)) }, paths.filter { !wanted.contains(normalized($0)) })
+    }
+}
+
+/// One folder backed up, with its own rules. Machine state (absolute paths,
+/// always in `ForkMacBackupSourcePath` form, however they were stored).
 struct ForkMacBackupSource: Codable, Equatable, Identifiable {
-    var path: String
+    var path: String {
+        didSet { if path != oldValue { path = ForkMacBackupSourcePath.normalized(path) } }
+    }
     var presets: [ForkMacBackupPreset]
     /// Free rules, in Kopia's ignore syntax.
     var customRules: [String]
@@ -112,9 +199,27 @@ struct ForkMacBackupSource: Codable, Equatable, Identifiable {
     var id: String { path }
 
     init(path: String, presets: [ForkMacBackupPreset] = ForkMacBackupPreset.defaultApplied, customRules: [String] = []) {
-        self.path = path
+        self.path = ForkMacBackupSourcePath.normalized(path)
         self.presets = ForkMacBackupPreset.normalized(presets)
         self.customRules = customRules
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case path
+        case presets
+        case customRules
+    }
+
+    /// A stored source is read in canonical form (the migration of build
+    /// 2331's « /Users/me/ »).
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        path = ForkMacBackupSourcePath.normalized(try container.decode(String.self, forKey: .path))
+        // Unknown presets (a newer build) are skipped, as in `fork.macbackup.presets`.
+        let names = try container.decodeIfPresent([String].self, forKey: .presets)
+        presets = names.map { ForkMacBackupPreset.normalized($0.compactMap(ForkMacBackupPreset.init(rawValue:))) }
+            ?? ForkMacBackupPreset.defaultApplied
+        customRules = try container.decodeIfPresent([String].self, forKey: .customRules) ?? []
     }
 
     /// `fork.macbackup.rules`: a JSON array of strings; empty or damaged: none.

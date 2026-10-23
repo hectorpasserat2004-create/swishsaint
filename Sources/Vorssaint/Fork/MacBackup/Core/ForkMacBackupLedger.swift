@@ -137,6 +137,13 @@ struct ForkMacBackupRunRecord: Codable, Equatable, Identifiable {
     }
 
     var duration: TimeInterval? { end.map { $0.timeIntervalSince(start) } }
+
+    /// The end of the newest backup run that left a snapshot (complete or
+    /// partial): the Automatic rhythm's minimum gap counts from it.
+    static func lastProtectingEnd(_ runs: [ForkMacBackupRunRecord]) -> Date? {
+        runs.filter { $0.kind == .backup && ($0.outcome == .complete || $0.outcome == .partial) }
+            .compactMap { $0.end ?? $0.start }.max()
+    }
 }
 
 /// Why an expected slot did not run (plan §3.9).

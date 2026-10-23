@@ -207,7 +207,9 @@ struct ForkMacBackupIslandSection: View {
                                     now: Date) -> some View {
         switch top {
         case .running, .restoring, .verifying, .maintaining:
-            if let progress = state.progress, progress.bytesDone > 0 || progress.bytesTotal != nil,
+            if let line = state.preparationLine(text, locale: locale) {
+                caption(line, digits: true)
+            } else if let progress = state.progress, progress.bytesDone > 0 || progress.bytesTotal != nil,
                let line = state.progressLine(text, locale: locale) {
                 caption(line, digits: true)
             }

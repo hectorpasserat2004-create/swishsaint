@@ -416,7 +416,8 @@ enum ForkMacBackupKopia {
         }
 
         func source(path: String) -> SourceStatus? {
-            sources.first { $0.source?.path == path }
+            let path = ForkMacBackupSourcePath.normalized(path)
+            return sources.first { $0.source?.path.map(ForkMacBackupSourcePath.normalized) == path }
         }
     }
 

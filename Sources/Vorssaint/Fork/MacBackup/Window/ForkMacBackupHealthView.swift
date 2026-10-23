@@ -231,8 +231,9 @@ struct ForkMacBackupHealthView: View {
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             } else {
-                Text(shared.unknown)
-                    .font(.title2.weight(.semibold))
+                // Nothing measured: once a backup ran, the size is known.
+                Text(presentation.lastBackup == nil ? shared.afterFirstBackup : shared.unknown)
+                    .font(presentation.lastBackup == nil ? .callout.weight(.semibold) : .title2.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
         }
@@ -258,6 +259,9 @@ struct ForkMacBackupHealthView: View {
                 }
                 Text(engineLine)
                 Text(presentation.headline(shared, language: model.language, locale: locale, now: model.now()))
+                if let line = presentation.preparationLine(shared, locale: locale) {
+                    Text(line).monospacedDigit()
+                }
             }
             .font(.callout)
             .foregroundStyle(.secondary)
@@ -278,7 +282,8 @@ struct ForkMacBackupHealthView: View {
 
     private var cost: some View {
         ForkMacBackupCard(title: text.costTitle, symbol: "bolt") {
-            Text(presentation.costLine(shared, locale: locale) ?? text.costUnknown)
+            Text(presentation.costLine(shared, locale: locale)
+                 ?? (presentation.lastBackup == nil ? shared.afterFirstBackup : text.costUnknown))
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

@@ -32,9 +32,12 @@ struct ForkMacBackupProofStore: Codable, Equatable {
 
     // MARK: Reading
 
-    /// A source's snapshots, newest first.
+    /// A source's snapshots, newest first. Paths compare in canonical form
+    /// (`ForkMacBackupSourcePath`): Kopia's « /Users/me » is the source « /Users/me/ ».
     func snapshots(of path: String) -> [ForkMacBackupSnapshotProof] {
-        proofs.values.filter { $0.sourcePath == path }.sorted { $0.endTime > $1.endTime }
+        let path = ForkMacBackupSourcePath.normalized(path)
+        return proofs.values.filter { ForkMacBackupSourcePath.normalized($0.sourcePath) == path }
+            .sorted { $0.endTime > $1.endTime }
     }
 
     /// The newest snapshot of `path`, partial or not.
@@ -71,15 +74,16 @@ struct ForkMacBackupProofStore: Codable, Equatable {
     /// left out by the caller's filter.
     mutating func reconcile(with manifests: [ForkMacBackupKopia.SnapshotManifest], paths: [String],
                             identity: ForkMacBackupRepository.Identity?, iCloud: ForkMacBackupICloudMode, now: Date) {
+        let paths = Set(paths.map(ForkMacBackupSourcePath.normalized))
         let mine = manifests.filter { manifest in
-            guard let path = manifest.source?.path, paths.contains(path) else { return false }
+            guard let path = manifest.source?.path, paths.contains(ForkMacBackupSourcePath.normalized(path)) else { return false }
             guard let identity else { return true }
             let host = manifest.source?.host ?? identity.hostName
             let user = manifest.source?.userName ?? identity.userName
             return host == identity.hostName && user == identity.userName
         }
         let present = Set(mine.map(\.id))
-        proofs = proofs.filter { !paths.contains($0.value.sourcePath) || present.contains($0.key) }
+        proofs = proofs.filter { !paths.contains(ForkMacBackupSourcePath.normalized($0.value.sourcePath)) || present.contains($0.key) }
         for manifest in mine {
             proofs[manifest.id] = merged(ForkMacBackupSnapshotProof(manifest: manifest, iCloud: iCloud))
         }

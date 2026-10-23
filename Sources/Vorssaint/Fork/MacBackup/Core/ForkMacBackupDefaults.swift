@@ -93,6 +93,10 @@ extension ForkDefaultsKey {
     /// Profiles imported on this Mac, JSON `[ForkMacBackupProfile]`, for the
     /// chain header's menu.
     static let macBackupKnownProfiles = "fork.macbackup.knownProfiles"
+    /// Sparse disk images the person chose to leave out, JSON array of
+    /// absolute paths (`ForkMacBackupSparsePolicy`). Any other sparse image
+    /// is backed up, except Docker Desktop's and Apple Container's.
+    static let macBackupSparseExcluded = "fork.macbackup.sparse.excluded"
 }
 
 /// `fork.macbackup.schedule.mode`.
@@ -169,5 +173,38 @@ enum ForkMacBackupDefaults {
         ForkDefaultsKey.macBackupKitCreatedAt, ForkDefaultsKey.macBackupKitRemindAt,
         ForkDefaultsKey.macBackupBranImportedAt,
         ForkDefaultsKey.macBackupKitFingerprint, ForkDefaultsKey.macBackupKnownProfiles,
+        ForkDefaultsKey.macBackupSparseExcluded,
     ]
+
+    /// What an older build stored in a form this one no longer writes,
+    /// rewritten once at launch (the app's side; the agent reads either
+    /// form): source paths in canonical form (build 2331 kept Bran's
+    /// « /Users/me/ »). Returns the keys rewritten.
+    @discardableResult
+    static func migrate(_ defaults: UserDefaults) -> [String] {
+        var rewritten: [String] = []
+        if let stored = defaults.string(forKey: ForkDefaultsKey.macBackupSources)
+            ?? defaults.data(forKey: ForkDefaultsKey.macBackupSources).map({ String(decoding: $0, as: UTF8.self) }),
+           let migrated = canonicalSources(stored) {
+            defaults.set(migrated, forKey: ForkDefaultsKey.macBackupSources)
+            rewritten.append(ForkDefaultsKey.macBackupSources)
+        }
+        return rewritten
+    }
+
+    /// `fork.macbackup.sources` with every path in canonical form; nil when
+    /// it already is (or cannot be read: left as is).
+    static func canonicalSources(_ stored: String) -> String? {
+        guard let raw = try? JSONSerialization.jsonObject(with: Data(stored.utf8)) as? [[String: Any]] else { return nil }
+        let paths = raw.compactMap { $0["path"] as? String }
+        guard paths.contains(where: { ForkMacBackupSourcePath.normalized($0) != $0 }),
+              let sources = try? ForkMacBackupJSON.decoder.decode([ForkMacBackupSource].self, from: Data(stored.utf8)) else {
+            return nil
+        }
+        // Two spellings of one folder become one source.
+        var seen = Set<String>()
+        let unique = sources.filter { seen.insert($0.path).inserted }
+        guard let data = try? ForkMacBackupJSON.encoder.encode(unique) else { return nil }
+        return String(decoding: data, as: UTF8.self)
+    }
 }

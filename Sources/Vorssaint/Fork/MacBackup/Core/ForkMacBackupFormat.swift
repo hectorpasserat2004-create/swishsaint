@@ -90,6 +90,14 @@ enum ForkMacBackupFormat {
         return date.formatted(style)
     }
 
+    /// A count in at most 5 characters, the locale's own compact form
+    /// (« 1,2 M », « 845 k », « 312 »): the closed island's files examined.
+    static func count(_ value: Int64, locale: Locale) -> String {
+        let value = max(0, value)
+        let digits = value >= 1_000_000 ? 1...2 : 1...3
+        return value.formatted(.number.notation(.compactName).precision(.significantDigits(digits)).locale(locale))
+    }
+
     /// « 42 % » in the locale's own percent.
     static func percent(_ fraction: Double, locale: Locale) -> String {
         let clamped = fraction.isFinite ? min(1, max(0, fraction)) : 0
