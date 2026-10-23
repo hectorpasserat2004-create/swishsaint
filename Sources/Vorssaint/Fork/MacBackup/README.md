@@ -125,6 +125,24 @@ rendu), `ForkMacBackupAgentLink` (agent désenregistré, runner de l'app arrêt�
 assertion), île (section, activité, carte de restauration), téléchargement du moteur annulé ; la fenêtre se ferme sur `.off`. L'agent
 lit le changement et sort (code 0). Rallumé : enregistrement, puis l'agent ou le runner de l'app repart.
 
+**Après une mise à jour** (incident du 23/10, 2331 → 2340) : launchd garde la contrainte de lancement (LWCR) de
+l'ancien binaire et refuse le nouveau (`job state = spawn failed`, `last exit code = 78: EX_CONFIG`, `needs LWCR
+update`). Au lancement de l'app (et à chaque `sync`, à l'activation au plus toutes les 5 min), `ForkMacBackupAgentLink`
+compare l'empreinte de l'enregistrement (`fork.macbackup.agent.registeredStamp` : build + cdhash, ce Mac seulement)
+à la sienne et lit `launchctl print gui/<uid>/<label>` (lecture seule, 3 s) : autre build ou spawn refusé →
+`unregister`, 1,5 s, `register`, puis 30 s pour que l'agent écrive son `state.json` (`health` `.repairing`, l'app ne
+sauvegarde pas à sa place pendant ce temps). **Une seule tentative par lancement et par build**
+(`ForkMacBackupAgentRepair.decide`) ; sinon `.stoppedBySystem` : la Santé dit « Agent arrêté par macOS — à
+réautoriser » et l'app sauvegarde tant qu'elle est ouverte. Idem pour le LaunchAgent d'une build Developer.
+
+**Accès complet au disque** : Kopia est l'enfant du processus qui le lance (`Process`, sans `setsid` ni désaveu de
+responsabilité), donc macOS le juge sur les droits de ce processus. Le runner sonde depuis ce processus
+(`ForkMacBackupDiskAccess.probe` : `TCC.db`, puis les dossiers de `Permissions`), toutes les 10 min dans l'agent,
+toutes les 30 s dans l'app ; `TCC.db` n'existe plus sur macOS 27, l'ancienne sonde ne refusait donc jamais rien.
+Refusé → attente `noDiskAccess` (« Accès au disque à redonner ») au lieu d'un instantané partiel. Un run dont les
+échecs montrent le refus (≥ 20 « operation not permitted » dans Containers, Downloads…) bloque aussi les suivants
+programmés jusqu'à un run qui les lit.
+
 ## 6. Tests et banc
 
 `fork/test.sh --suite=fork-macbackup-<core|engine|agent|island|settings|window>` : fichiers `Core/` et `*/Pure/`, avec

@@ -45,6 +45,9 @@ enum ForkMacBackupAgentTests {
         prescanPlan(suite)
         materialize(suite)
         strings(suite)
+        agentRepair(suite)
+        diskAccess(suite)
+        lastIncludesRecentRun(suite)
     }
 
     // MARK: Helpers
@@ -1603,5 +1606,260 @@ enum ForkMacBackupAgentTests {
                 && !text.contains("'")
         } && french.keepAwakeReason == "Sauvegarde du Mac en cours",
                      "French: no plain space before « : ; ! ? », typographic apostrophes")
+    }
+    // MARK: After an update (23/10, build 2340)
+
+    /// `launchctl print` of the agent on Martial's Mac after the in-app
+    /// update 2331 → 2340 (abridged, same layout): launchd refused the new
+    /// binary.
+    private static let spawnFailedPrint = """
+    gui/501/io.example.swishsaint.backup-agent = {
+    \tactive count = 0
+    \tpath = (submitted by smd.64675)
+    \ttype = Submitted
+    \tstate = spawn scheduled
+    \tprogram identifier = Contents/MacOS/Vorssaint (mode: 2)
+    \tparent bundle version = 2340
+    \tLWCR = {
+    \t\t"vers" => 1
+    \t}
+    \truns = 20
+    \tlast exit code = 78: EX_CONFIG
+    \tresource coalition = {
+    \t\tID = 101234
+    \t\tstate = active
+    \t}
+    \tjob state = spawn failed
+    \tproperties = partial import | runatload | resolve program | needs LWCR update | has LWCR
+    }
+    """
+
+    /// The same job once registered again: running build 2340.
+    private static let runningPrint = """
+    gui/501/io.example.swishsaint.backup-agent = {
+    \tactive count = 1
+    \tstate = running
+    \truns = 1
+    \tpid = 83775
+    \tlast exit code = (never exited)
+    \tjetsam coalition = {
+    \t\tstate = active
+    \t}
+    \tjob state = running
+    \tproperties = partial import | runatload | resolve program | has LWCR
+    }
+    """
+
+    private static func agentRepair(_ suite: TestSuite) {
+        let failed = ForkMacBackupLaunchdJob.parse(spawnFailedPrint)
+        suite.expect(failed?.jobState == "spawn failed" && failed?.lastExitCode == 78 && failed?.runs == 20
+                        && failed?.pid == nil && failed?.state == "spawn scheduled"
+                        && failed?.properties.contains("needs LWCR update") == true
+                        && failed?.spawnFailed == true && failed?.isRunning == false,
+                     "launchctl print after the update: spawn failed, EX_CONFIG, the launch constraint to update")
+        let running = ForkMacBackupLaunchdJob.parse(runningPrint)
+        suite.expect(running?.isRunning == true && running?.pid == 83775 && running?.lastExitCode == nil
+                        && running?.spawnFailed == false && running?.state == "running",
+                     "a running job: nested « state = active » lines are not the job's")
+        suite.expect(ForkMacBackupLaunchdJob.parse("Bad request.\nCould not find service \"x\" in domain for user gui: 501\n") == nil,
+                     "a job launchd does not know is no job")
+        suite.expect(ForkMacBackupLaunchdJob(state: "not running", lastExitCode: 75).spawnFailed == false
+                        && ForkMacBackupLaunchdJob(state: "not running", lastExitCode: 78).spawnFailed,
+                     "exit 75 (moving to a new build) is no failure; EX_CONFIG without a pid is")
+
+        let v2340 = ForkMacBackupAgentStamp.make(build: "2340", cdhash: "aa11")
+        let v2341 = ForkMacBackupAgentStamp.make(build: "2341", cdhash: "bb22")
+        suite.expect(v2341 == "2341+bb22" && ForkMacBackupAgentStamp.build(of: v2341) == "2341"
+                        && ForkMacBackupAgentStamp.make(build: nil, cdhash: nil) == "?"
+                        && ForkMacBackupAgentStamp.make(build: "7", cdhash: "") == "7",
+                     "a stamp is the build and the cdhash")
+
+        let updated = ForkMacBackupAgentRepair.Input(
+            enabled: true, registration: .enabled, storedStamp: v2340, currentStamp: v2341, job: failed,
+            jobReadable: true, heartbeatFresh: false, attempted: [])
+        suite.expect(ForkMacBackupAgentRepair.decide(updated) == .reregister(.newBuild),
+                     "a new build since the registration: registered again")
+        var afterOne = updated
+        afterOne.attempted = [v2341]
+        suite.expect(ForkMacBackupAgentRepair.decide(afterOne) == .giveUp,
+                     "once per launch and build: the second look gives up instead of looping")
+        var noStamp = updated
+        noStamp.storedStamp = nil
+        suite.expect(ForkMacBackupAgentRepair.decide(noStamp) == .reregister(.newBuild),
+                     "no stamp yet (an agent registered by build 2340): registered again too")
+        var answered = noStamp
+        answered.heartbeatFresh = true
+        suite.expect(ForkMacBackupAgentRepair.decide(answered) == .record,
+                     "the agent of this build already answers: only its stamp is kept")
+        var sameBuildFailed = updated
+        sameBuildFailed.storedStamp = v2341
+        suite.expect(ForkMacBackupAgentRepair.decide(sameBuildFailed) == .reregister(.spawnFailed),
+                     "same build, but launchd cannot spawn it: registered again")
+        var healthy = sameBuildFailed
+        healthy.job = running
+        suite.expect(ForkMacBackupAgentRepair.decide(healthy) == .none, "same build, running: nothing to do")
+        var gone = sameBuildFailed
+        gone.job = nil
+        suite.expect(ForkMacBackupAgentRepair.decide(gone) == .reregister(.notLoaded),
+                     "registered for the app, unknown to launchd: registered again")
+        gone.jobReadable = false
+        suite.expect(ForkMacBackupAgentRepair.decide(gone) == .none, "launchctl not answering proves nothing")
+        var approval = updated
+        approval.registration = .requiresApproval
+        suite.expect(ForkMacBackupAgentRepair.decide(approval) == .none,
+                     "waiting for the person's approval: shown, never forced")
+        var off = updated
+        off.enabled = false
+        suite.expect(ForkMacBackupAgentRepair.decide(off) == .none, "switched off: nothing registered")
+        var failedRegistration = updated
+        failedRegistration.registration = .failed
+        suite.expect(ForkMacBackupAgentRepair.decide(failedRegistration) == .reregister(.registrationFailed),
+                     "a failed registration gets its one new try")
+        var developer = updated
+        developer.registration = .developmentFallback
+        suite.expect(ForkMacBackupAgentRepair.decide(developer) == .reregister(.newBuild),
+                     "the Developer LaunchAgent is bootstrapped again after a new build too")
+
+        let since = t0
+        suite.expect(ForkMacBackupAgentRepair.heartbeat(writtenAt: t0.addingTimeInterval(4), agentPID: 900, agentBuild: "2341",
+                                                        alive: true, appPID: 500, build: "2341", since: since),
+                     "the agent wrote after the registration: it answers")
+        suite.expect(!ForkMacBackupAgentRepair.heartbeat(writtenAt: t0.addingTimeInterval(4), agentPID: 500, agentBuild: "2341",
+                                                         alive: true, appPID: 500, build: "2341", since: since)
+                        && !ForkMacBackupAgentRepair.heartbeat(writtenAt: t0.addingTimeInterval(4), agentPID: 900,
+                                                               agentBuild: "2340", alive: true, appPID: 500, build: "2341",
+                                                               since: since)
+                        && !ForkMacBackupAgentRepair.heartbeat(writtenAt: t0.addingTimeInterval(-1), agentPID: 900,
+                                                               agentBuild: "2341", alive: true, appPID: 500, build: "2341",
+                                                               since: since)
+                        && !ForkMacBackupAgentRepair.heartbeat(writtenAt: t0.addingTimeInterval(4), agentPID: 900,
+                                                               agentBuild: "2341", alive: false, appPID: 500, build: "2341",
+                                                               since: since),
+                     "the app's own runner, the old build, an older file or a dead process are no answer")
+        suite.expect(ForkMacBackupAgentRepair.answerTimeout == 30, "the agent gets 30 s to answer")
+
+        for language in AppLanguage.allCases {
+            let text = ForkMacBackupAgentHealthStrings.strings(language)
+            suite.expect([text.repairing, text.reauthorize, text.openLoginItems, text.partialMark].allSatisfy { !$0.isEmpty }
+                            && text.line(.repairing) == text.repairing && text.line(.stoppedBySystem) == text.reauthorize
+                            && text.line(.running) == nil,
+                         "\(language.rawValue): the agent's health is said")
+        }
+        suite.expect(ForkMacBackupAgentHealthStrings.fr.repairing == "Agent arrêté par macOS — réenregistrement…"
+                        && ForkMacBackupAgentHealthStrings.fr.reauthorize == "Agent arrêté par macOS — à réautoriser"
+                        && ForkMacBackupStrings.fr.waitDiskAccess == "Accès au disque à redonner",
+                     "French: the words Martial asked for")
+    }
+
+    private static func diskAccess(_ suite: TestSuite) {
+        typealias Access = ForkMacBackupDiskAccess
+        suite.expect(Access.verdict(database: .absent, folders: [.denied, .absent, .denied]) == .refused,
+                     "macOS 27 has no TCC.db: a protected folder denied is a refusal (the old probe said « not refused »)")
+        suite.expect(Access.verdict(database: .absent, folders: [.denied, .readable]) == .granted
+                        && Access.verdict(database: .readable, folders: []) == .granted,
+                     "one protected place readable: granted")
+        suite.expect(Access.verdict(database: .absent, folders: [.absent, .other]) == .unknown,
+                     "nothing to probe: never blocks")
+        suite.expect(Access.answer(errno: EPERM) == .denied && Access.answer(errno: EACCES) == .denied
+                        && Access.answer(errno: ENOENT) == .absent && Access.answer(errno: EIO) == .other,
+                     "errno read as denied, absent or nothing")
+
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent("fork-macbackup-fda-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: home) }
+        try? FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        suite.expect(Access.probe(home: home.path) == .unknown, "a home without any protected folder: unknown")
+        let mail = home.appendingPathComponent("Library/Mail")
+        try? FileManager.default.createDirectory(at: mail, withIntermediateDirectories: true)
+        suite.expect(Access.probe(home: home.path) == .granted, "a protected folder that lists: granted")
+        chmod(mail.path, 0)
+        suite.expect(Access.probe(home: home.path) == .refused,
+                     "the folder exists and cannot be listed (here EACCES, under TCC EPERM): refused, the run waits")
+        chmod(mail.path, 0o700)
+
+        let containers = (0..<25).map {
+            ForkMacBackupFailure(path: "Library/Containers/com.apple.app\($0)/Data",
+                                 message: "cannot create iterator: unable to read directory: open /Users/x/Library/Containers/com.apple.app\($0)/Data: operation not permitted")
+        }
+        suite.expect(containers.allSatisfy { $0.cause == .permission } && Access.runShowsRefusal(containers),
+                     "the 23/10 partial (535 « operation not permitted » in Containers, Downloads…) shows the refusal")
+        suite.expect(!Access.runShowsRefusal(Array(containers.prefix(5))),
+                     "a few refused files are a partial backup, not a missing access")
+        let elsewhere = (0..<30).map {
+            ForkMacBackupFailure(path: "Projects/locked\($0)", message: "open: permission denied")
+        }
+        suite.expect(!Access.runShowsRefusal(elsewhere), "permission failures outside the protected folders say nothing of it")
+        suite.expect(Access.isProtected("Downloads") && Access.isProtected("Downloads/a.zip")
+                        && Access.isProtected("Library/Group Containers/group.x") && !Access.isProtected("DownloadsOld")
+                        && !Access.isProtected("Library/Containers"),
+                     "protected roots match whole names")
+
+        // Kopia is spawned the way the engine does (`Process` inside
+        // `ForkMacBackupDatalessPolicy.spawning`): no disclaim, no new
+        // session, so macOS judges Kopia's reads by the process that spawned
+        // it (the app in the fallback, the agent otherwise).
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        process.arguments = ["5"]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        let started = (try? ForkMacBackupDatalessPolicy.spawning(materialize: false) { try process.run() }) != nil
+        typealias Responsible = @convention(c) (pid_t) -> pid_t
+        if started, let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "responsibility_get_pid_responsible_for_pid") {
+            let responsible = unsafeBitCast(symbol, to: Responsible.self)
+            let mine = responsible(getpid())
+            let child = responsible(process.processIdentifier)
+            suite.expect(child == mine && getsid(process.processIdentifier) == getsid(0),
+                         "Kopia's child stays in this process's session and responsibility: it gets this process's Full Disk Access")
+        } else {
+            suite.expect(started, "the child starts")
+        }
+        if process.isRunning { process.terminate() }
+        process.waitUntilExit()
+    }
+
+    /// The island said « Partielle · 535 fichiers — Dernière : Jamais »:
+    /// the run's snapshot was not in the proofs the presentation read.
+    private static func lastIncludesRecentRun(_ suite: TestSuite) {
+        let configured = settings()
+        var machine = ForkMacBackupMachine()
+        _ = machine.handle(.configure(configured), now: t0)
+        _ = machine.handle(.decision(.idle(next: t0.addingTimeInterval(hour))), now: t0)
+        let partial = ForkMacBackupSnapshotProof(manifest: manifest(id: "p", start: t0.addingTimeInterval(-600),
+                                                                    end: t0.addingTimeInterval(-60), errors: ["Downloads"]),
+                                                 iCloud: .local)
+        let run = ForkMacBackupRunRecord(kind: .backup, trigger: .scheduled, start: t0.addingTimeInterval(-700),
+                                         end: t0.addingTimeInterval(-50), proofs: [partial], outcome: .partial)
+        var reconciled = ForkMacBackupProofStore()
+        reconciled.reconcile(with: [], paths: [home], identity: repository.clientIdentity, iCloud: .local,
+                             now: t0.addingTimeInterval(-3_000), listedAt: t0.addingTimeInterval(-3_000))
+        let empty = ForkMacBackupPresenter.presentation(machine, context: .init(settings: configured, proofs: reconciled,
+                                                                               runs: [run]), now: t0)
+        suite.expect(empty.lastBackup?.manifestID == "p" && empty.lastBackup?.failures == 1 && empty.lastBackup?.level == .present
+                        && empty.lastComplete == nil && empty.sources.first?.state == .partial,
+                     "the partial snapshot just made is « Dernière », even before the proofs hold it; no complete one yet")
+
+        var withComplete = reconciled
+        let complete = ForkMacBackupSnapshotProof(manifest: manifest(id: "c", start: t0.addingTimeInterval(-9_000),
+                                                                     end: t0.addingTimeInterval(-8_000)), iCloud: .local)
+        withComplete.record([complete], now: t0.addingTimeInterval(-7_000))
+        let both = ForkMacBackupPresenter.presentation(machine, context: .init(settings: configured, proofs: withComplete,
+                                                                              runs: [run]), now: t0)
+        suite.expect(both.lastBackup?.manifestID == "p" && both.lastComplete?.manifestID == "c",
+                     "« Dernière » is the partial one, « Dernière complète » stays apart")
+
+        var later = ForkMacBackupProofStore()
+        later.reconcile(with: [], paths: [home], identity: repository.clientIdentity, iCloud: .local, now: t0,
+                        listedAt: t0)
+        let stale = ForkMacBackupPresenter.presentation(machine, context: .init(settings: configured, proofs: later,
+                                                                               runs: [run]), now: t0)
+        suite.expect(stale.lastBackup == nil,
+                     "a run older than the last reconciliation is the proofs' word alone (retention, another repository)")
+
+        var raced = ForkMacBackupProofStore()
+        raced.record([partial, complete], now: t0)
+        raced.reconcile(with: [], paths: [home], identity: repository.clientIdentity, iCloud: .local, now: t0,
+                        listedAt: t0.addingTimeInterval(-120))
+        suite.expect(raced.proofs["p"] != nil && raced.proofs["c"] == nil && raced.reconciledAt == t0.addingTimeInterval(-120),
+                     "a snapshot that ended after the list was asked is kept: the list could not know it")
     }
 }
