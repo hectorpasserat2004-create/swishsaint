@@ -207,7 +207,7 @@ struct ForkMacBackupServerForm: Equatable {
 struct ForkMacBackupTailscalePeer: Equatable, Identifiable {
     /// `ID`: stable across renames and address changes.
     var stableID: String
-    /// `DNSName` without its final dot (« minio.tailef3e9f.ts.net »).
+    /// `DNSName` without its final dot (« minio.example-tailnet.ts.net »).
     var dnsName: String
     var hostName: String
     var addresses: [String]

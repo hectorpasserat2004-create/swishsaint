@@ -238,7 +238,7 @@ enum ForkMacBackupChainDisplay {
 // MARK: - Machines in a repository
 
 /// One Kopia identity found in a repository, with its snapshots (wizard,
-/// step 3: « whyteduke@macbook-pro · 29 snapshots »).
+/// step 3: « alice@macbook-pro · 29 snapshots »).
 struct ForkMacBackupRepositoryMachine: Equatable, Identifiable {
     var identity: ForkMacBackupRepository.Identity
     var snapshots: Int
