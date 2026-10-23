@@ -269,13 +269,31 @@ final class ForkMacBackupWindowModel: ObservableObject {
             return key.host.caseInsensitiveCompare(identity.hostName) == .orderedSame
                 && key.userName.caseInsensitiveCompare(identity.userName) == .orderedSame
         }
-        let known = Set(ledger.sources.map(\.path) + status.presentation.sources.map(\.path))
-        if known.contains(key.path) { return true }
+        let known = Set((ledger.sources.map(\.path) + status.presentation.sources.map(\.path))
+            .map(ForkMacBackupSourcePath.normalized))
+        if known.contains(ForkMacBackupSourcePath.normalized(key.path)) { return true }
         return key.host.caseInsensitiveCompare(ForkMacBackupFormat.localHostName) == .orderedSame && key.userName == NSUserName()
     }
 
     var localSources: [ForkMacBackupSourceKey] {
         snapshots.keys.filter(isThisMac).sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+    }
+
+    /// The paths of this Mac's current configuration.
+    private var configuredPaths: [String] {
+        ledger.sources.isEmpty ? status.presentation.sources.map(\.path) : ledger.sources.map(\.path)
+    }
+
+    /// This Mac's sources of the current configuration…
+    var currentSources: [ForkMacBackupSourceKey] {
+        let current = Set(ForkMacBackupSourcePath.split(localSources.map(\.path), configured: configuredPaths).current)
+        return localSources.filter { current.contains($0.path) }
+    }
+
+    /// …and the former ones (« Anciennes sources »), still browsable.
+    var formerSources: [ForkMacBackupSourceKey] {
+        let former = Set(ForkMacBackupSourcePath.split(localSources.map(\.path), configured: configuredPaths).former)
+        return localSources.filter { former.contains($0.path) }
     }
 
     /// Other Macs of the repository, each with its sources.
@@ -287,7 +305,7 @@ final class ForkMacBackupWindowModel: ObservableObject {
     }
 
     private var defaultSourceKey: ForkMacBackupSourceKey? {
-        localSources.first ?? otherMachines.first?.sources.first
+        currentSources.first ?? localSources.first ?? otherMachines.first?.sources.first
     }
 
     var selectedKey: ForkMacBackupSourceKey? {

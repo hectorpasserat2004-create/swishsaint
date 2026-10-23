@@ -45,10 +45,18 @@ struct ForkMacBackupWindowView: View {
 
     private var sidebar: some View {
         List(selection: $model.sidebarSelection) {
-            if !model.localSources.isEmpty {
+            if !model.currentSources.isEmpty {
                 Section(shared.nodeMac) {
-                    ForEach(model.localSources) { key in
+                    ForEach(model.currentSources) { key in
                         sourceRow(key, subtitle: nil)
+                            .tag(ForkMacBackupSidebarItem.source(key.id))
+                    }
+                }
+            }
+            if !model.formerSources.isEmpty {
+                Section(text.sidebarFormerSources) {
+                    ForEach(model.formerSources) { key in
+                        sourceRow(key, subtitle: ForkMacBackupFormat.middleTruncated(key.path, limit: 40))
                             .tag(ForkMacBackupSidebarItem.source(key.id))
                     }
                 }
