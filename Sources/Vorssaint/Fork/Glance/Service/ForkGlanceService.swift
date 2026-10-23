@@ -218,6 +218,9 @@ final class ForkGlanceService: ObservableObject {
     private var previewOpen = false
     private var calibrationActive = false
     private var calibrationGeneration = 0
+    /// The displays followed while the assistant runs with the feature off
+    /// (on, `displaysToken` does it).
+    private var calibrationDisplaysToken: NSObjectProtocol?
 
     // Observers (all removed by `tearDown`).
     private var observers: [(NotificationCenter, NSObjectProtocol)] = []
@@ -372,6 +375,8 @@ final class ForkGlanceService: ObservableObject {
     private func bringUp() {
         isUp = true
         Self.log.info("glance focus up")
+        // The feature's own observation follows the displays from now on.
+        stopCalibrationDisplays()
         ForkGlancePowerWatch.shared.start()
         ForkGlanceCamera.shared.watch(deviceID: cameraID)
 
@@ -586,8 +591,13 @@ final class ForkGlanceService: ObservableObject {
         guard isUp else { return }
         switch state {
         case let .failed(reason):
-            // A missing permission is the snapshot's, not a failure.
-            guard reason != .cameraPermission, failure != reason else { return }
+            // A missing permission is the snapshot's, not a failure: the
+            // machine reads it now (it was withdrawn while filming).
+            if reason == .cameraPermission {
+                sendSystem()
+                return
+            }
+            guard failure != reason else { return }
             failure = reason
             send(.cameraFailure(reason))
         case .running:
@@ -751,7 +761,8 @@ final class ForkGlanceService: ObservableObject {
         let signature = ForkGlanceProfiles.signature(layout: layout, cameraID: cameraKey)
         let defaults = UserDefaults.standard
         newLayoutNoticeAllowed = defaults.string(forKey: ForkDefaultsKey.glanceLastLayoutSignature) != signature
-        defaults.set(signature, forKey: ForkDefaultsKey.glanceLastLayoutSignature)
+        // Only on a change: every write wakes each `UserDefaults` observer of the app.
+        if newLayoutNoticeAllowed { defaults.set(signature, forKey: ForkDefaultsKey.glanceLastLayoutSignature) }
 
         recomputeZones()
         send(.calibrationNeed(need))
@@ -763,6 +774,8 @@ final class ForkGlanceService: ObservableObject {
         let list = ForkGlanceServiceRules.replacing(old ?? updated.id, with: updated, in: profiles)
         profiles = list
         ForkGlanceStore.shared.save(list)
+        // A profile dropped past the twelve takes its calibration points with it.
+        retainPoints()
         if let id = profile?.id, id == updated.id || id == old {
             profile = updated
             profileIsNew = false
@@ -784,6 +797,13 @@ final class ForkGlanceService: ObservableObject {
         zones = fresh
         mark(.zonesChanged(time: 0, zones: fresh))
         send(.zonesChanged(fresh))
+    }
+
+    /// The points file keeps only the listed profiles' points; never before
+    /// the list is read, which would take every point for an orphan.
+    private func retainPoints() {
+        guard profilesLoaded else { return }
+        pointsStore.retain(profiles)
     }
 
     // MARK: - Camera
@@ -857,12 +877,12 @@ final class ForkGlanceService: ObservableObject {
             lastGaze = gaze
             send(.gaze(gaze))
             if now - lastFocusCheck >= Self.focusCheckInterval { refreshFocusZone(force: false) }
-            if var recording, recording.generation == recordingGeneration {
-                recording.trace.frames.append(ForkGlanceTrace.Frame(
-                    time: frame.time - recording.start, sample: sample.facePresent ? sample : nil, gaze: gaze,
+            if let start = recording?.start, recording?.generation == recordingGeneration {
+                // In place: a copy of `recording` would copy every frame so far at each image.
+                recording?.trace.frames.append(ForkGlanceTrace.Frame(
+                    time: frame.time - start, sample: sample.facePresent ? sample : nil, gaze: gaze,
                     input: ForkGlanceTrace.Input(inputs, neverLeaveApps: settings.neverLeaveApps),
                     guards: machine?.guards ?? []))
-                self.recording = recording
             }
         } else if let calibration {
             // The assistant's validation draws the estimate.
@@ -1189,6 +1209,7 @@ final class ForkGlanceService: ObservableObject {
             ForkGlanceStore.shared.save(list)
         }
         pointsStore.remove(id)
+        retainPoints()
         guard profile?.id == id else { return }
         removedSignature = id
         profile = nil
@@ -1368,16 +1389,17 @@ final class ForkGlanceService: ObservableObject {
 
     /// Something happened between images, for the trace being recorded.
     private func mark(_ mark: ForkGlanceTrace.Mark) {
-        guard var recording, recording.generation == recordingGeneration else { return }
-        let time = clock.now - recording.start
+        guard let start = recording?.start, recording?.generation == recordingGeneration else { return }
+        let time = clock.now - start
+        let stamped: ForkGlanceTrace.Mark
         switch mark {
-        case let .click(_, point, zone): recording.trace.marks.append(.click(time: time, point: point, zone: zone))
-        case let .focusChanged(_, zone): recording.trace.marks.append(.focusChanged(time: time, zone: zone))
-        case let .switched(_, zone, succeeded):
-            recording.trace.marks.append(.switched(time: time, zone: zone, succeeded: succeeded))
-        case let .zonesChanged(_, zones): recording.trace.marks.append(.zonesChanged(time: time, zones: zones))
+        case let .click(_, point, zone): stamped = .click(time: time, point: point, zone: zone)
+        case let .focusChanged(_, zone): stamped = .focusChanged(time: time, zone: zone)
+        case let .switched(_, zone, succeeded): stamped = .switched(time: time, zone: zone, succeeded: succeeded)
+        case let .zonesChanged(_, zones): stamped = .zonesChanged(time: time, zones: zones)
         }
-        self.recording = recording
+        // In place, like the frames.
+        recording?.trace.marks.append(stamped)
     }
 
     private func finishRecording(cancelled: Bool) {
@@ -1545,6 +1567,9 @@ final class ForkGlanceService: ObservableObject {
             return false
         }
         refreshWhileDown()
+        if !isUp, calibrationDisplaysToken == nil {
+            calibrationDisplaysToken = ForkGlanceDisplays.observe { [weak self] layout in self?.layoutChanged(layout) }
+        }
         calibrationGeneration += 1
         recenterCollect = nil
         if !calibrationActive {
@@ -1584,6 +1609,13 @@ final class ForkGlanceService: ObservableObject {
             }
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
+                // The displays changed while fitting: the points belong to the
+                // old desk, and the profile in force may be another one now.
+                guard ForkGlanceServiceRules.sameDesk(layout, self.layout) else {
+                    Self.log.info("calibration fit dropped: the displays changed")
+                    completion(.failure(ForkGlanceCalibrationError.layoutChanged))
+                    return
+                }
                 if case let .success(calibration) = result, generation == self.calibrationGeneration {
                     self.keep(calibration, points: points, splits: splits, mode: mode, layout: layout,
                               cameraKey: cameraKey)
@@ -1670,8 +1702,14 @@ final class ForkGlanceService: ObservableObject {
         endCalibration()
     }
 
+    private func stopCalibrationDisplays() {
+        if let calibrationDisplaysToken { ForkGlanceDisplays.stopObserving(calibrationDisplaysToken) }
+        calibrationDisplaysToken = nil
+    }
+
     /// The model's estimate for a sample, with the current profile (validation step).
     func estimate(_ sample: ForkGlanceSample) -> ForkGlanceEstimate? {
+        precondition(Thread.isMainThread)
         guard let calibration = profile?.calibration else { return nil }
         return ForkGlanceCalibrationModel.estimate(sample, with: calibration)
     }
@@ -1681,9 +1719,13 @@ final class ForkGlanceService: ObservableObject {
         guard calibrationActive else { return }
         calibrationActive = false
         calibrationProgress = nil
+        stopCalibrationDisplays()
         pipeline.vision.usesEyes = profile?.calibration?.usesEyes ?? false
         pipeline.vision.wantsQuality = false
         applyCamera()
+        // Off, the assistant was the camera's only user: its sharing and the
+        // cameras coming and going stop being observed too.
+        if !isUp { ForkGlanceCamera.shared.stopWatching() }
         if cameraRunning, let machineRate { ForkGlanceCamera.shared.setRate(machineRate) }
         publishState()
     }
@@ -1779,6 +1821,17 @@ private final class ForkGlancePointsStore: @unchecked Sendable {
             var all = self.read()
             guard all.removeValue(forKey: id) != nil else { return }
             self.write(all)
+        }
+    }
+
+    /// Drops the points of every profile not in `profiles` (deleted, or past
+    /// the twelve): `ForkGlanceServiceRules.points(_:keeping:)`.
+    func retain(_ profiles: [ForkGlanceProfile]) {
+        queue.async {
+            let all = self.read()
+            let kept = ForkGlanceServiceRules.points(all, keeping: profiles)
+            guard kept.count != all.count else { return }
+            self.write(kept)
         }
     }
 

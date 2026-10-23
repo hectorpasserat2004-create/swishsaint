@@ -19,9 +19,9 @@ import CoreGraphics
 /// Chromium apps are never asked (`ForkGlancePaneRules.chromiumBundleIDs`).
 /// Main thread only; every Accessibility call carries a short timeout.
 enum ForkGlancePanes {
-    /// `CGEventField.eventSourceUserData` of the fallback's click, "Swis" + G:
-    /// the click monitor of the learning drops events carrying it.
-    static let syntheticMarker: Int64 = 0x5377_6973_0047_0001
+    /// `CGEventField.eventSourceUserData` of the fallback's click: the click
+    /// monitor of the learning drops events carrying it.
+    static let syntheticMarker = ForkGlanceInputRules.syntheticClickMarker
 
     /// One Accessibility round trip, per element: a hung app costs little.
     private static let timeout: Float = 0.15
