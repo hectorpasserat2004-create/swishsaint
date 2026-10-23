@@ -18,9 +18,8 @@ struct ForkGlanceSettingsView: View {
         ForkGlanceSettingsContent(state: ForkGlanceSettingsState(service), actions: .live)
     }
 
-    /// The « Dynamic Island » row (plan §11.6, §12.9): the island's settings.
-    /// The orchestrator adds `SettingsRouter.shared.notchModule = .glance`
-    /// here once the island's module exists (B4).
+    /// The « Dynamic Island » row (plan §11.6, §12.9): the island's settings,
+    /// on the Glance module.
     static func openIslandSettings() {
         SettingsRouter.shared.notchModule = .glance
         SettingsRouter.shared.request(FeatureSettingsDestination(.notch))
@@ -251,14 +250,13 @@ struct ForkGlanceSettingsContent: View {
         .padding(.vertical, 4)
     }
 
-    /// The line under the status: the last switch while active, the remedy
-    /// of a single screen in Screens mode.
+    /// The line under the status: the last switch while active. A single
+    /// screen in Screens mode has none: the status says it, « Passer en
+    /// mode Zones » under it is the remedy.
     private func detail(_ core: ForkGlanceStrings, _ locale: Locale, now: Date) -> String? {
         switch state.status {
         case .active, .waiting:
             return state.recentSwitches.first.map { core.lastSwitchLine($0.date, now: now, locale: locale) }
-        case .paused(.singleScreen, _):
-            return core.singleScreenHint
         default:
             return nil
         }

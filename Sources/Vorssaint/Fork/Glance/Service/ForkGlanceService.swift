@@ -1576,6 +1576,8 @@ final class ForkGlanceService: ObservableObject {
             calibrationActive = true
             calibrationProgress = nil
             resetPipeline()
+            // The gaze dot stops following during the assistant: it would stay put over its points.
+            ForkGlanceHalo.shared.moveGazeDot(to: nil)
             send(.calibrationStarted)
         }
         applyCamera()

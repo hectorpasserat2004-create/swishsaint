@@ -50,6 +50,9 @@ struct ForkGlanceDiagnosticsView: View {
     @State private var recording = false
     @State private var traceResult: Bool?
     @State private var reportCopied = false
+    /// The gaze dot over every display (plan §6.4): the service reads the
+    /// key again as it changes and shows or hides the dot.
+    @AppStorage(ForkDefaultsKey.glanceGazeDot) private var gazeDot = false
 
     init(live: ForkGlanceLive?, phase: ForkGlancePhase, layout: ForkGlanceDisplayLayout, zones: [ForkGlanceZone],
          currentZone: String?, lastSwitch: Date?, text: ForkGlanceSettingsStrings, core: ForkGlanceStrings,
@@ -83,6 +86,10 @@ struct ForkGlanceDiagnosticsView: View {
             }
             curves
             table
+            Toggle(text.showGazeDot, isOn: $gazeDot)
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .font(.caption)
             buttons
         }
         .padding(.vertical, 4)
