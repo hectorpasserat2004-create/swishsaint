@@ -660,6 +660,50 @@ enum ForkGlanceNotice: Sendable, Equatable {
     }
 }
 
+// MARK: - Surfaces
+
+/// The status line every surface reads (plan §9), without its words:
+/// `Pure/ForkGlancePresentation` makes it from the phase, the core strings
+/// (`Strings/ForkGlanceStrings`) say it.
+enum ForkGlanceStatusLine: Sendable, Equatable {
+    case off
+    case unavailable(ForkGlanceUnavailable)
+    case needsCalibration(ForkGlanceCalibrationNeed)
+    case calibrating(done: Int, total: Int)
+    case starting
+    /// « Actif · Zone gauche du LG »; nil before the first zone is known.
+    case active(zoneName: String?)
+    /// « En attente : vous tapez »: the first guard that holds.
+    case waiting(ForkGlanceGuard)
+    /// « Visage non détecté », shown after 3 s without a face.
+    case noFace
+    case away
+    /// A timed user pause carries its end; « jusqu'à reprise » and the
+    /// automatic pauses carry none.
+    case paused(ForkGlancePauseReason, until: Date?)
+}
+
+/// The pauses a person picks (tile, shortcut, Command Bar, section, page).
+enum ForkGlancePauseDuration: String, Sendable, Codable, CaseIterable {
+    case fifteenMinutes
+    case oneHour
+    case untilTomorrow
+    case untilResumed
+
+    /// When the pause ends; nil: until resumed. « Jusqu'à demain » ends at
+    /// the next local midnight.
+    func end(from now: Date, calendar: Calendar = .current) -> Date? {
+        switch self {
+        case .fifteenMinutes: return now.addingTimeInterval(15 * 60)
+        case .oneHour: return now.addingTimeInterval(60 * 60)
+        case .untilTomorrow:
+            let today = calendar.startOfDay(for: now)
+            return calendar.date(byAdding: .day, value: 1, to: today)
+        case .untilResumed: return nil
+        }
+    }
+}
+
 // MARK: - Injection (real in the service, stand-ins in the tests)
 
 protocol ForkGlanceClock {

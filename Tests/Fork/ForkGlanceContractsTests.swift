@@ -114,6 +114,15 @@ enum ForkGlanceContractsTests {
         let data = try? JSONEncoder().encode(calibration)
         suite.expect(data.flatMap { try? JSONDecoder().decode(ForkGlanceCalibration.self, from: $0) } == calibration,
                      "a calibration round-trips through JSON")
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Europe/Paris")!
+        let evening = Date(timeIntervalSince1970: 1_792_782_000) // 23/10/2026 21:00 in Paris
+        suite.expect(ForkGlancePauseDuration.fifteenMinutes.end(from: evening, calendar: calendar)
+                        == evening.addingTimeInterval(900)
+                        && ForkGlancePauseDuration.untilTomorrow.end(from: evening, calendar: calendar)
+                        == Date(timeIntervalSince1970: 1_792_792_800)
+                        && ForkGlancePauseDuration.untilResumed.end(from: evening, calendar: calendar) == nil,
+                     "a pause ends 15 min later, at the next local midnight, or when resumed")
         suite.expect(ForkGlanceCallPolicy.keepRunning.rawValue == "continue"
                         && ForkGlancePointerBehavior.auto.resolved(for: .zones) == .stay,
                      "the stored values keep the plan's spelling")
