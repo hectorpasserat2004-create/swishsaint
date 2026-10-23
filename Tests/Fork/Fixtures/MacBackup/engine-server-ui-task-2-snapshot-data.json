@@ -1,0 +1,55 @@
+{
+  "id": "2",
+  "startTime": "2026-10-22T16:28:29.234807+02:00",
+  "endTime": "2026-10-22T16:28:54.593802+02:00",
+  "kind": "Snapshot",
+  "description": "bench@bench-mac:/Users/bench/bench/data at 2026-10-22T16:28:29+02:00",
+  "status": "SUCCESS",
+  "progressInfo": "",
+  "counters": {
+    "Cached Bytes": {
+      "value": 0,
+      "units": "bytes",
+      "level": ""
+    },
+    "Cached Files": {
+      "value": 0,
+      "level": ""
+    },
+    "Errors": {
+      "value": 1,
+      "level": "error"
+    },
+    "Excluded Directories": {
+      "value": 0,
+      "level": ""
+    },
+    "Excluded Files": {
+      "value": 0,
+      "level": ""
+    },
+    "Hashed Bytes": {
+      "value": 107583965332,
+      "units": "bytes",
+      "level": ""
+    },
+    "Hashed Files": {
+      "value": 3004,
+      "level": ""
+    },
+    "Processed Bytes": {
+      "value": 107583965332,
+      "units": "bytes",
+      "level": ""
+    },
+    "Processed Files": {
+      "value": 3004,
+      "level": ""
+    },
+    "Uploaded Bytes": {
+      "value": 198561297,
+      "units": "bytes",
+      "level": ""
+    }
+  }
+}

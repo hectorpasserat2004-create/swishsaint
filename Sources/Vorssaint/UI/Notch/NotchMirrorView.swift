@@ -51,6 +51,7 @@ struct NotchMirrorView: View {
             case .music: NotchCapsuleMusicStrip(service: service, size: size, displayGeometry: geometry)
             case .keepAwake: NotchCapsuleKeepAwakeStrip(service: service, size: size, displayGeometry: geometry)
             case .meeting: ForkMeetingIslandStrip(service: service, size: size, displayGeometry: geometry) // FORK(notch-meeting5)
+            case .macBackup: ForkMacBackupIslandStrip(service: service, size: size, displayGeometry: geometry) // FORK(notch-macbackup5)
             }
         } else {
             switch activity {
@@ -62,6 +63,7 @@ struct NotchMirrorView: View {
             case .music: NotchMusicStrip(service: service, displayGeometry: mirror.strip)
             case .keepAwake: NotchKeepAwakeStrip(service: service, displayGeometry: mirror.strip)
             case .meeting: ForkMeetingIslandStrip(service: service, displayGeometry: mirror.strip) // FORK(notch-meeting5)
+            case .macBackup: ForkMacBackupIslandStrip(service: service, displayGeometry: mirror.strip) // FORK(notch-macbackup5)
             }
         }
     }

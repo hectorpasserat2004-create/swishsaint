@@ -1,0 +1,13 @@
+Count: 122
+Total: 946878887
+Average: 7761302
+Histogram:
+
+        0 between 0 and 10 (total 0)
+        1 between 10 and 100 (total 30)
+       22 between 100 and 1000 (total 3664)
+       54 between 1000 and 10000 (total 166766)
+        0 between 10000 and 100000 (total 0)
+        3 between 100000 and 1000000 (total 534793)
+        2 between 1000000 and 10000000 (total 6050233)
+       40 between 10000000 and 100000000 (total 940123401)

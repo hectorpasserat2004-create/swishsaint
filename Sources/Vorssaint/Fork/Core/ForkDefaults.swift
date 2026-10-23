@@ -172,6 +172,9 @@ enum ForkDefaultsKey {
     /// Whether Parakeet was already offered on this Mac at a launch with
     /// dictation on. Machine state: kept out of the settings backup.
     static let dictationParakeetOffered = "fork.dictation.parakeetOffered"
+    // Mac Backup (`fork.macbackup.*`): its keys, the registered ones and its
+    // machine state (repository, sources, profile, engine version, kit
+    // dates…) are declared in `Fork/MacBackup/Core/ForkMacBackupDefaults.swift`.
 }
 
 enum ForkDefaults {
@@ -235,7 +238,7 @@ enum ForkDefaults {
         ForkDefaultsKey.meetingsNudge: true,
         ForkDefaultsKey.meetingsLookback: false,
         ForkDefaultsKey.meetingsIslandAppointments: true,
-    ]
+    ].merging(ForkMacBackupDefaults.registered) { fork, _ in fork }
 
     /// Where each setting lived in the test builds made before the fork
     /// ("Vorssaint (Developer)"): a backup exported from one of them still

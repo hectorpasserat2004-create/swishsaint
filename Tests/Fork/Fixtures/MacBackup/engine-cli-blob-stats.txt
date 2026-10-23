@@ -1,0 +1,13 @@
+Count: 78
+Total: 212.7 MB
+Average: 2.7 MB
+Histogram:
+
+        0 between 0 B and 10 B (total 0 B)
+        1 between 10 B and 100 B (total 30 B)
+       25 between 100 B and 1 KB (total 10.3 KB)
+       40 between 1 KB and 10 KB (total 135.7 KB)
+        1 between 10 KB and 100 KB (total 77.3 KB)
+        2 between 100 KB and 1 MB (total 403.8 KB)
+        0 between 1 MB and 10 MB (total 0 B)
+        9 between 10 MB and 100 MB (total 212.1 MB)

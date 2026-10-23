@@ -186,6 +186,8 @@ private struct ForkUpdatesSection: View {
             row(message, system: "exclamationmark.triangle.fill", tint: .orange)
         case .waitingForMeeting:
             row(text.afterMeeting, system: "clock", tint: .secondary)
+        case .waitingForBackup:
+            row(text.afterBackup, system: "clock", tint: .secondary)
         }
     }
 

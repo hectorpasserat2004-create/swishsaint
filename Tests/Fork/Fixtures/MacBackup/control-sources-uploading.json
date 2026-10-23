@@ -1,0 +1,93 @@
+{
+  "localUsername": "bench",
+  "localHost": "bench-mac",
+  "multiUser": true,
+  "sources": [
+    {
+      "source": {
+        "host": "bench-mac",
+        "userName": "bench",
+        "path": "/Users/bench/bench/data"
+      },
+      "status": "IDLE",
+      "schedule": {
+        "manual": true,
+        "runMissed": true
+      },
+      "lastSnapshot": {
+        "id": "a9b5a00bafa892fba06c91da561aa2d7",
+        "source": {
+          "host": "bench-mac",
+          "userName": "bench",
+          "path": "/Users/bench/bench/data"
+        },
+        "description": "",
+        "startTime": "2026-10-22T14:28:29.236261Z",
+        "endTime": "2026-10-22T14:28:54.490302Z",
+        "stats": {
+          "totalSize": 107583965315,
+          "excludedTotalSize": 0,
+          "fileCount": 3052,
+          "cachedFiles": 0,
+          "nonCachedFiles": 3003,
+          "dirCount": 124,
+          "excludedFileCount": 0,
+          "excludedDirCount": 0,
+          "ignoredErrorCount": 0,
+          "errorCount": 1
+        },
+        "rootEntry": {
+          "name": "data",
+          "type": "d",
+          "mode": "0755",
+          "mtime": "2026-10-22T14:22:09.697986813Z",
+          "uid": 501,
+          "obj": "kf242c301993458e50f700ac51eaf0d6b",
+          "summ": {
+            "size": 107583965315,
+            "files": 3002,
+            "symlinks": 1,
+            "dirs": 124,
+            "maxTime": "2026-10-22T14:22:09.697968313Z",
+            "numFailed": 1,
+            "errors": [
+              {
+                "path": "unreadable/mode000.txt",
+                "error": "unable to open file: unable to open local file: open /Users/bench/bench/data/unreadable/mode000.txt: permission denied"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "source": {
+        "host": "bench-mac",
+        "userName": "bench",
+        "path": "/Users/bench/bench/data-throttle"
+      },
+      "status": "UPLOADING",
+      "schedule": {
+        "manual": true,
+        "runMissed": true
+      },
+      "upload": {
+        "cachedBytes": 0,
+        "hashedBytes": 335609856,
+        "uploadedBytes": 0,
+        "estimatedBytes": 419430400,
+        "cachedFiles": 0,
+        "hashedFiles": 0,
+        "excludedFiles": 0,
+        "excludedDirs": 0,
+        "errors": 0,
+        "ignoredErrors": 0,
+        "estimatedFiles": 1,
+        "directory": ".",
+        "lastErrorPath": "",
+        "lastError": ""
+      },
+      "currentTask": "3"
+    }
+  ]
+}

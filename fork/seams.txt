@@ -48,3 +48,35 @@ notch-meetings9    Sources/Vorssaint/Services/Notch/NotchService.swift         #
 notch-calendar-crm   Sources/Vorssaint/Services/Notch/NotchCalendarService.swift  # calendrier de l'île : chaque lecture reçoit les RDV du CRM (fusionnés, sans doublon) ; le compte à rebours et la tuile les voient aussi
 notch-calendar-crm2  Sources/Vorssaint/UI/Notch/NotchCalendarView.swift          # calendrier de l'île : la carte d'un RDV avec visio ou du CRM (Rejoindre, Copier le lien, menu) — hors de NotchCalendarEventRow, extrait par generate_sources.py
 notch-calendar-crm3  Sources/Vorssaint/UI/Settings/NotchSettings.swift          # calendrier de l'île : réglage « Afficher les RDV du CRM » dans Contenu › Calendrier (seulement avec un CRM importé)
+#
+# Sauvegarde du Mac (Fork/MacBackup/README.md). La page de réglages passe par settings4, le démarrage par bootstrap.
+# L'agent sans interface (main.swift, hors TEST_SOURCES) :
+macbackup-agent    Sources/Vorssaint/main.swift                                # sauvegarde du Mac : le mode sans interface --fork-backup-agent (l'agent lancé par launchd), après --uninstall
+# L'île (crochets injectés, Fork/Notch/README.md) et la Command Bar :
+notch-macbackups     Sources/Vorssaint/Services/Notch/NotchSupport.swift        # sauvegarde : section « Sauvegarde » de l'île (cas et crochets injectés : titre, résumé, disponibilité, hauteur) — ne nomme aucun type du fork (TEST_SOURCES)
+notch-macbackups2    Sources/Vorssaint/Services/Notch/NotchSupport.swift        # sauvegarde : symbole, raccourci ⌥⌘K et disponibilité de la section — ne nomme aucun type du fork (TEST_SOURCES)
+notch-macbackups3    Sources/Vorssaint/Services/Notch/NotchSupport.swift        # sauvegarde : hauteur de la page, compacte 180 pt ou spacieuse 264 pt, par le crochet (switch exhaustif)
+notch-macbackups4    Sources/Vorssaint/Core/NotchEditorStrings.swift            # sauvegarde : la ligne de la section dans l'onglet Contenu, par le crochet (TEST_SOURCES)
+notch-macbackups5    Sources/Vorssaint/UI/Notch/NotchView.swift                 # sauvegarde : la page de la section, et son titre par le crochet (title est extrait par generate_sources.py)
+notch-macbackups6    Sources/Vorssaint/UI/Settings/NotchContentEditor.swift     # sauvegarde : l'aperçu de la page et sa couleur (sarcelle) dans l'onglet Contenu
+notch-macbackups7    Sources/Vorssaint/UI/Settings/NotchSettings.swift          # sauvegarde : options de la section (Contenu), pas d'AppFeature, et lien vers sa page tant que la feature est coupée
+notch-macbackups8    Sources/Vorssaint/UI/Settings/NotchSettings.swift          # sauvegarde : carte « Sauvegarde du Mac » de l'onglet Activité (île fermée, aile droite, notices de fin)
+notch-macbackups9    Sources/Vorssaint/Services/Notch/NotchService.swift        # sauvegarde : un clic sur la notice d'une fin de sauvegarde ouvre la section
+notch-macbackup      Sources/Vorssaint/Services/Notch/NotchSupport.swift        # sauvegarde : activité « Sauvegarde » de l'île fermée (cas et crochets : titre, ordre, aile) — ne nomme aucun type du fork (TEST_SOURCES)
+notch-macbackup2     Sources/Vorssaint/Services/Notch/NotchSupport.swift        # sauvegarde : titre et page (la section) de l'activité — ne nomme aucun type du fork (TEST_SOURCES)
+notch-macbackup3     Sources/Vorssaint/Services/Notch/NotchService.swift        # sauvegarde : sa place parmi les activités (après les téléchargements, par le crochet : compactActivities est extrait) et ses ailes
+notch-macbackup8     Sources/Vorssaint/Services/Notch/NotchService.swift        # sauvegarde : la taille de sa capsule (switch exhaustif)
+notch-macbackup4     Sources/Vorssaint/UI/Notch/NotchView.swift                 # sauvegarde : bande « Sauvegarde » de l'île fermée (ailes et capsule)
+notch-macbackup5     Sources/Vorssaint/UI/Notch/NotchMirrorView.swift           # sauvegarde : la même bande sur les autres écrans (copies de l'île)
+notch-macbackup6     Sources/Vorssaint/UI/Notch/NotchTimerStrip.swift           # sauvegarde : l'activité n'est jamais compagne d'une autre (switch exhaustifs)
+notch-macbackup7     Sources/Vorssaint/UI/Notch/NotchCapsuleViews.swift         # sauvegarde : idem pour la capsule (switch exhaustif)
+notch-macbackup-tile   Sources/Vorssaint/Services/Notch/NotchSupport.swift      # sauvegarde : bouton « Sauvegarde » des contrôles de l'île (cas et disponibilité injectée) — ne nomme aucun type du fork (TEST_SOURCES)
+notch-macbackup-tile2  Sources/Vorssaint/Services/Notch/NotchSupport.swift      # sauvegarde : symbole, réglage requis (la section) et disponibilité du bouton — ne nomme aucun type du fork (TEST_SOURCES)
+notch-macbackup-tile3  Sources/Vorssaint/UI/Notch/NotchControlsView.swift       # sauvegarde : tuile et titre du bouton « Sauvegarde » dans les contrôles de l'île
+notch-macbackup-tile4  Sources/Vorssaint/Services/Notch/NotchService.swift      # sauvegarde : bouton rapide « Sauvegarde » → ouvre la section (jamais une sauvegarde, décision du 22/10)
+notch-macbackup-tile5  Sources/Vorssaint/UI/Settings/NotchSettings.swift        # sauvegarde : raison et lien du bouton tant que la Sauvegarde du Mac est coupée
+notch-macbackup-event  Sources/Vorssaint/Services/Notch/NotchSupport.swift      # sauvegarde : NotchEvent.backup (cas et crochet : clé, routage) — ne nomme aucun type du fork (TEST_SOURCES)
+notch-macbackup-event2 Sources/Vorssaint/Services/Notch/NotchSupport.swift      # sauvegarde : clé, priorité 1 et durée 6 s de NotchEvent.backup (switch exhaustifs)
+notch-macbackup-event3 Sources/Vorssaint/Services/Notch/NotchSupport.swift      # sauvegarde : routage de NotchEvent.backup par le crochet (switch exhaustif) — ne nomme aucun type du fork (TEST_SOURCES)
+command-bar-macbackup  Sources/Vorssaint/Services/CommandBar/CommandBarCatalog.swift  # sauvegarde : lignes de la Command Bar (sauvegarder, pause, reprendre, état, restaurer, vérifier, fenêtre, kit)
+

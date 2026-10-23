@@ -43,6 +43,7 @@ extension ForkFeature {
         case .trackpadGestures: return "gestures"
         case .dictation: return "dictation"
         case .meetings: return "meetings"
+        case .macBackup: return "macbackup"
         }
     }
 
@@ -68,6 +69,11 @@ extension ForkFeature {
             let meetings = ForkMeetingStrings.strings(language)
             return [text.meetingsSummary, meetings.searchKeywords, meetings.shortcutTitle, meetings.captureTitle,
                     meetings.libraryTitle]
+        case .macBackup:
+            let backup = ForkMacBackupStrings.strings(language)
+            return [text.macBackupSummary, backup.islandTitle, backup.restore, backup.openBackups,
+                    ForkMacBackupIslandStrings.strings(language).barKeywords,
+                    "backup", "kopia", "restore", "nas", "s3", "minio", "time machine"]
         }
     }
 }
@@ -140,6 +146,8 @@ struct ForkFeatureSettingsPage: View {
             ForkDictationSettingsSection(title: text.dictationTitle)
         case .meetings:
             ForkMeetingSettings()
+        case .macBackup:
+            ForkMacBackupSettingsView()
         }
     }
 }

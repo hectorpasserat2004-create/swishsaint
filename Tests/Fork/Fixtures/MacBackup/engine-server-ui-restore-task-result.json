@@ -1,0 +1,41 @@
+{
+  "id": "b",
+  "startTime": "2026-10-22T16:34:38.974528+02:00",
+  "endTime": "2026-10-22T16:35:01.639239+02:00",
+  "kind": "Restore",
+  "description": "Destination: /Users/bench/bench/restore/api/small",
+  "status": "SUCCESS",
+  "progressInfo": "",
+  "counters": {
+    "Ignored Errors": {
+      "value": 0,
+      "level": ""
+    },
+    "Restored Bytes": {
+      "value": 67715,
+      "units": "bytes",
+      "level": ""
+    },
+    "Restored Directories": {
+      "value": 121,
+      "level": ""
+    },
+    "Restored Files": {
+      "value": 3000,
+      "level": ""
+    },
+    "Restored Symlinks": {
+      "value": 0,
+      "level": ""
+    },
+    "Skipped Bytes": {
+      "value": 0,
+      "units": "bytes",
+      "level": ""
+    },
+    "Skipped Files": {
+      "value": 0,
+      "level": ""
+    }
+  }
+}

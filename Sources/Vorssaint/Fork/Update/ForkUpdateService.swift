@@ -45,6 +45,9 @@ final class ForkUpdateService: ObservableObject {
         /// A build to install once the meeting recording or finishing is
         /// saved (installing quits the app): no failure, said as a wait.
         case waitingForMeeting
+        /// A build to install once the Mac backup running ends (30 min at
+        /// most, then it is stopped with a checkpoint).
+        case waitingForBackup
     }
 
     @Published private(set) var state: State = .idle
@@ -100,7 +103,7 @@ final class ForkUpdateService: ObservableObject {
     ///     out, even one postponed, in an alert otherwise.
     func check(offering: Bool = false, reporting: Bool = false) {
         switch state {
-        case .checking, .downloading, .installing: return
+        case .checking, .downloading, .installing, .waitingForBackup: return
         default: break
         }
         guard let repository else {
@@ -418,6 +421,10 @@ final class ForkUpdateService: ObservableObject {
             waitForMeeting(candidate, install: true)
             return
         }
+        guard ForkMacBackupActivity.clearForUpdate(ready: { [weak self] in self?.backupEnded(candidate) }) else {
+            state = .waitingForBackup
+            return
+        }
         state = .downloading
         URLSession.shared.downloadTask(with: candidate.zipURL) { [weak self] location, response, _ in
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -434,16 +441,36 @@ final class ForkUpdateService: ObservableObject {
                     // A meeting may have started during the download.
                     guard !ForkMeetingActivity.isBusy else {
                         try? FileManager.default.removeItem(at: newApp.deletingLastPathComponent())
+                        ForkMacBackupActivity.updateAbandoned()
                         self.waitForMeeting(candidate, install: true)
+                        return
+                    }
+                    // A backup may have started during the download.
+                    guard ForkMacBackupActivity.clearForUpdate(ready: { [weak self] in
+                        self?.backupEnded(candidate)
+                    }) else {
+                        try? FileManager.default.removeItem(at: newApp.deletingLastPathComponent())
+                        self.state = .waitingForBackup
                         return
                     }
                     self.state = .installing
                     self.replaceRunningApp(with: newApp)
                 case .failure(let error):
+                    ForkMacBackupActivity.updateAbandoned()
                     self.state = .failed(error.message)
                 }
             }
         }.resume()
+    }
+
+    // MARK: - After the backup
+
+    /// Main thread. The backup ended (or was stopped after 30 min): the
+    /// install asked for goes on, unless something else took its place.
+    private func backupEnded(_ candidate: ForkUpdateSupport.Candidate) {
+        guard state == .waitingForBackup else { return }
+        state = .available(candidate)
+        install(candidate)
     }
 
     // MARK: - After the meeting
@@ -548,6 +575,7 @@ final class ForkUpdateService: ObservableObject {
         let destination = Bundle.main.bundleURL
         let parent = destination.deletingLastPathComponent()
         guard FileManager.default.isWritableFile(atPath: parent.path) else {
+            ForkMacBackupActivity.updateAbandoned()
             state = .failed(InstallError.location.message)
             return
         }
@@ -571,6 +599,7 @@ final class ForkUpdateService: ObservableObject {
         do {
             try process.run()
         } catch {
+            ForkMacBackupActivity.updateAbandoned()
             state = .failed(InstallError.location.message)
             return
         }

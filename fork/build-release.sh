@@ -119,6 +119,16 @@ for image in MenuBarIcon.png MenuBarIcon@2x.png BrandMark.png; do
     fi
 done
 
+# Sauvegarde du Mac : le plist de l'agent en arrière-plan (le même binaire, lancé avec --fork-backup-agent),
+# là où SMAppService.agent(plistName:) le cherche. Modèle : fork/macbackup-agent.plist (build.sh n'en sait rien).
+AGENT_PLIST="$APP/Contents/Library/LaunchAgents/$FORK_BUNDLE_ID.backup-agent.plist"
+mkdir -p "$(dirname "$AGENT_PLIST")"
+sed -e "s|__LABEL__|$FORK_BUNDLE_ID.backup-agent|g" -e "s|__BUNDLE_ID__|$FORK_BUNDLE_ID|g" \
+    -e "s|__EXECUTABLE__|$EXECUTABLE|g" fork/macbackup-agent.plist > "$AGENT_PLIST"
+plutil -convert xml1 "$AGENT_PLIST"
+plutil -lint -s "$AGENT_PLIST" || die "Plist de l'agent de sauvegarde invalide : $AGENT_PLIST"
+grep -q "__" "$AGENT_PLIST" && die "Plist de l'agent de sauvegarde incomplet : $AGENT_PLIST"
+
 xattr -cr "$APP" 2>/dev/null || true
 if [ "$ADHOC" = 1 ]; then
     SIGN="-"

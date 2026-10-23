@@ -1,0 +1,3 @@
+Listing blobs...
+Listed 122 blobs.
+{"processedObjectCount":0,"processedBytes":0,"readFileCount":0,"readBytes":0,"expectedTotalObjectCount":9401,"expectedTotalFileCount":9016,"expectedTotalBytes":538758551972}
