@@ -37,6 +37,10 @@ enum ForkGlanceContractsTests {
                         && values[ForkDefaultsKey.glanceIslandClosed] as? String == "paused"
                         && values[ForkDefaultsKey.glanceIdleOffStep] as? Int == 1,
                      "Martial's decisions of 23/10: Zones, Saver on battery, keep running in calls, halo, learning on, panes and their click off, island during a pause, off after 5 min")
+        suite.expect(ForkGlanceShortcuts.load(scratch(), role: .pause) == ForkGlanceShortcuts.pauseDefault
+                        && ForkGlanceShortcuts.load(scratch(), role: .recenter) == nil
+                        && ForkGlanceShortcuts.load(scratch(), role: .mode) == nil,
+                     "D6: Pause takes ⌃⌥⌘G by default, Recentrer and the mode have none")
         suite.expect(ForkGlanceNoticeKind.allCases.allSatisfy {
                          values[ForkDefaultsKey.glanceNotice($0)] as? Bool == ($0 != .recenter)
                      },

@@ -91,7 +91,8 @@ enum ForkGlanceDefaults {
             ForkDefaultsKey.glanceOnBattery: ForkGlanceBatteryPolicy.fallback.rawValue,
             ForkDefaultsKey.glancePauseInLowPower: true,
             ForkDefaultsKey.glanceDuringCalls: ForkGlanceCallPolicy.fallback.rawValue,
-            ForkDefaultsKey.glanceHotKeyPause: "",
+            // ⌃⌥⌘G, free of macOS and every official default (D6, checked by B1).
+            ForkDefaultsKey.glanceHotKeyPause: "control+option+command:5",
             ForkDefaultsKey.glanceHotKeyRecenter: "",
             ForkDefaultsKey.glanceHotKeyMode: "",
             ForkDefaultsKey.glanceIslandClosed: ForkGlanceIslandClosed.fallback.rawValue,

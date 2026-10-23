@@ -349,7 +349,10 @@ enum ForkGlanceServiceTests {
 
     private static func shortcutStorage(_ suite: TestSuite) {
         withDefaults("shortcut-storage") { defaults in
-            suite.expect(ForkGlanceShortcuts.load(defaults, role: .pause) == nil, "no shortcut until one is set")
+            ForkDefaults.register(defaults)
+            suite.expect(ForkGlanceShortcuts.load(defaults, role: .pause) == g
+                            && ForkGlanceShortcuts.load(defaults, role: .recenter) == nil,
+                         "Pause starts on ⌃⌥⌘G (D6), Recentrer on nothing until one is set")
             ForkGlanceShortcuts.save(g, defaults, role: .pause)
             suite.expect(defaults.string(forKey: ForkDefaultsKey.glanceHotKeyPause) == "control+option+command:5"
                             && ForkGlanceShortcuts.load(defaults, role: .pause) == g,

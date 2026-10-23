@@ -108,3 +108,4 @@ notch-glance-tile5   Sources/Vorssaint/UI/Settings/NotchSettings.swift          
 notch-glance-event   Sources/Vorssaint/Services/Notch/NotchSupport.swift        # focus au regard : NotchEvent.glance (cas et crochet : clé, routage) — ne nomme aucun type du fork (TEST_SOURCES)
 notch-glance-event2  Sources/Vorssaint/Services/Notch/NotchSupport.swift        # focus au regard : clé, priorité 1 et durée 4 s de NotchEvent.glance (switch exhaustifs)
 notch-glance-event3  Sources/Vorssaint/Services/Notch/NotchSupport.swift        # focus au regard : routage de NotchEvent.glance par le crochet (switch exhaustif) — ne nomme aucun type du fork (TEST_SOURCES)
+command-bar-glance   Sources/Vorssaint/Services/CommandBar/CommandBarCatalog.swift  # focus au regard : lignes de la Command Bar (pause, reprendre, recentrer, calibrer, modes, réglages)
