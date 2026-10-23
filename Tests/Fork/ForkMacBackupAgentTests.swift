@@ -1212,6 +1212,19 @@ enum ForkMacBackupAgentTests {
         tally.add(home + "/Library/c", weight: .library, eventID: 30)
         suite.expect(tally.summary == ForkMacBackupPendingSummary(total: 3, important: 1, weighted: 6.1),
                      "distinct paths counted once, weighted")
+        var paths = ForkMacBackupPendingChanges.Tally()
+        suite.expect(paths.changedPaths(since: 5) == nil, "no starting point: the changed paths are not known")
+        paths.clear(from: 100)
+        paths.add(home + "/Documents/a", weight: .important, eventID: 120)
+        suite.expect(paths.changedPaths(since: 110) == [home + "/Documents/a"] && paths.changedPaths(since: 90) == nil,
+                     "the paths are known since the stream's start, not before")
+        paths.reset(upTo: 130)
+        paths.add(home + "/Projects/b", weight: .ordinary, eventID: 140)
+        suite.expect(paths.changedPaths(since: 135) == [home + "/Projects/b"] && paths.changedPaths(since: 125) == nil,
+                     "a snapshot's reset forgets up to its start: a walk after it is refreshed, one before is walked again")
+        paths.lostPaths(at: 150)
+        suite.expect(paths.changedPaths(since: 145) == nil && paths.changedPaths(since: 155) != nil,
+                     "dropped events: a walk before them is walked again, one after is refreshed")
         tally.reset(upTo: 20)
         suite.expect(tally.summary.total == 1, "a complete snapshot clears what happened before its start only")
         suite.expect(ForkMacBackupPendingChanges.replayStart(saved: 100, current: 500) == 100

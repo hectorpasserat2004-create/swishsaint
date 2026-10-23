@@ -88,6 +88,8 @@ final class ForkMacBackupRunner {
     /// Each source's last full pre-scan walk, kept up to date with FSEvents
     /// (`prescan.json`).
     private var prescanCache = ForkMacBackupPrescanCache()
+    /// The walk running for « Préparation » (files examined, folder, start).
+    private var preparation: (progress: ForkMacBackupScanProgress, startedAt: Date)?
     private var prescanCancel: ForkMacBackupFlag?
     private var maintenanceCheckedAt: Date?
     private var reconciledAt: Date?
@@ -101,6 +103,8 @@ final class ForkMacBackupRunner {
     struct Dependencies {
         var makeEngine: (ForkMacBackupPaths, DispatchQueue) -> (engine: ForkMacBackupEngineDriving, secrets: ForkMacBackupSecrets)?
         var otherEngineWrites: (ForkMacBackupRepository, URL) -> Bool
+        /// The planner's clock: the wall clock, or a harness's shifted one.
+        var now: () -> Date = { Date() }
 
         static let live = Dependencies(
             makeEngine: { paths, queue in
@@ -113,6 +117,7 @@ final class ForkMacBackupRunner {
     }
 
     private let dependencies: Dependencies
+    private var clock: () -> Date { dependencies.now }
 
     init(host: Host, paths: ForkMacBackupPaths, bundleID: String, defaults: UserDefaults = .standard,
          dependencies: Dependencies = .live) {
@@ -166,22 +171,22 @@ final class ForkMacBackupRunner {
             }
             self.stopping = true
             self.prescanCancel?.set()
-            self.perform(self.machine.handle(.stop(reason), now: Date()))
-            self.waitUntilIdle(deadline: Date().addingTimeInterval(25)) {
+            self.perform(self.machine.handle(.stop(reason), now: self.clock()))
+            self.waitUntilIdle(deadline: self.clock().addingTimeInterval(25)) {
                 self.tearDown(reason: reason, completion: completion)
             }
         }
     }
 
     private func setUp() {
-        let now = Date()
+        let now = clock()
         running = true
         loadRecords(now: now)
         noteStart(now: now)
         wokeAt = now
 
         watch.onChange = { [weak self] in self?.conditionsChanged() }
-        watch.onWillSleep = { [weak self] in self?.timeline.append(.willSleep, at: Date()) }
+        watch.onWillSleep = { [weak self] in self?.timeline.append(.willSleep, at: self?.clock() ?? Date()) }
         watch.onDidWake = { [weak self] in self?.didWake() }
         watch.start()
         fsevents.onChange = { [weak self] _ in self?.scheduleEvaluate() }
@@ -230,7 +235,7 @@ final class ForkMacBackupRunner {
         signalSources = []
         watch.stop()
         fsevents.stop()
-        timeline.append(.agentStopped, at: Date())
+        timeline.append(.agentStopped, at: clock())
         publish(force: true)
         running = false
         stopping = false
@@ -252,7 +257,7 @@ final class ForkMacBackupRunner {
     }
 
     private func waitUntilIdle(deadline: Date, then: @escaping () -> Void) {
-        if !machine.isBusy || Date() >= deadline {
+        if !machine.isBusy || clock() >= deadline {
             then()
             return
         }
@@ -473,7 +478,7 @@ final class ForkMacBackupRunner {
         watch.probePeer(peer, timeout: settings.probeTimeout) { [weak self] online in
             guard let self else { return }
             self.peerProbeInFlight = false
-            self.peerCheckedAt = Date()
+            self.peerCheckedAt = self.clock()
             let changed = online != self.peerOnline
             self.peerOnline = online
             self.chain.peerOnline = online
@@ -488,7 +493,7 @@ final class ForkMacBackupRunner {
 
     private func evaluate() {
         guard running, !stopping else { return }
-        let now = Date()
+        let now = clock()
         makeEngineIfNeeded(now: now)
         refreshSlowConditions(now: now)
         perform(machine.handle(.limit(currentLimit(now: now)), now: now))
@@ -590,7 +595,7 @@ final class ForkMacBackupRunner {
         timer.schedule(wallDeadline: .now() + target.timeIntervalSince(now), leeway: .seconds(30))
         timer.setEventHandler { [weak self] in
             guard let self else { return }
-            self.perform(self.machine.handle(.tick, now: Date()))
+            self.perform(self.machine.handle(.tick, now: self.clock()))
             self.evaluate()
         }
         timer.resume()
@@ -614,7 +619,7 @@ final class ForkMacBackupRunner {
     }
 
     private func poll() {
-        let now = Date()
+        let now = clock()
         perform(machine.handle(.tick, now: now))
         if machine.isBackingUp, let extras, let source = machine.run?.current?.source {
             // The source's counters plus the bytes really sent (the task's
@@ -624,8 +629,8 @@ final class ForkMacBackupRunner {
                 switch result {
                 case .success(let live):
                     self.perform(self.machine.handle(.live(live?.status, uploaded: live?.uploadedBytes,
-                                                           taskID: live?.status.currentTask), now: Date()))
-                case .failure(let error): self.perform(self.machine.handle(.progressFailed(error), now: Date()))
+                                                           taskID: live?.status.currentTask), now: self.clock()))
+                case .failure(let error): self.perform(self.machine.handle(.progressFailed(error), now: self.clock()))
                 }
                 self.publish()
             }
@@ -633,8 +638,8 @@ final class ForkMacBackupRunner {
             engine.progress { [weak self] result in
                 guard let self else { return }
                 switch result {
-                case .success(let response): self.perform(self.machine.handle(.progress(response), now: Date()))
-                case .failure(let error): self.perform(self.machine.handle(.progressFailed(error), now: Date()))
+                case .success(let response): self.perform(self.machine.handle(.progress(response), now: self.clock()))
+                case .failure(let error): self.perform(self.machine.handle(.progressFailed(error), now: self.clock()))
                 }
                 self.publish()
             }
@@ -647,7 +652,7 @@ final class ForkMacBackupRunner {
     // MARK: Events
 
     private func conditionsChanged() {
-        let now = Date()
+        let now = clock()
         chain.network = {
             switch watch.network {
             case .available: return true
@@ -663,7 +668,7 @@ final class ForkMacBackupRunner {
     }
 
     private func didWake() {
-        let now = Date()
+        let now = clock()
         timeline.append(.didWake, at: now)
         wokeAt = now
         peerCheckedAt = nil
@@ -688,7 +693,7 @@ final class ForkMacBackupRunner {
     }
 
     private func apply(_ file: ForkMacBackupCommandFile) {
-        let now = Date()
+        let now = clock()
         switch file.command {
         case .reloadSettings:
             reloadSettings()
@@ -733,7 +738,7 @@ final class ForkMacBackupRunner {
             connectedKey = nil
         }
         engineTriedAt = engine == nil ? nil : engineTriedAt
-        perform(machine.handle(.configure(new), now: Date()))
+        perform(machine.handle(.configure(new), now: clock()))
         if !new.enabled {
             disabled()
             return
@@ -748,7 +753,7 @@ final class ForkMacBackupRunner {
 
     private func housekeeping() {
         guard running, !stopping else { return }
-        let now = Date()
+        let now = clock()
         timeline.forget(before: now.addingTimeInterval(-ForkMacBackupSlotTimeline.memory))
         // A new build installed in place: idle, the agent moves to it.
         if host == .agent, !machine.isBusy, let running = runningBuild, let installed = installedBuild(), installed != running {
@@ -773,14 +778,14 @@ final class ForkMacBackupRunner {
     /// `snapshot list` says what still exists (retention), at start and every 6 h.
     private func reconcileIfDue(force: Bool) {
         guard let engine, connectedKey != nil, !machine.isBusy else { return }
-        let now = Date()
+        let now = clock()
         if !force, let reconciledAt, now.timeIntervalSince(reconciledAt) < 6 * 3_600 { return }
         reconciledAt = now
         engine.listSnapshots(source: nil) { [weak self] result in
             guard let self, case .success(let manifests) = result else { return }
             self.proofs.reconcile(with: manifests, paths: self.settings.sources.map(\.path),
                                   identity: self.settings.repository?.clientIdentity, iCloud: self.settings.iCloud,
-                                  now: Date())
+                                  now: self.clock())
             self.saveProofs()
             self.publish()
             self.writeMissingFailureLists(manifests)
@@ -846,7 +851,7 @@ final class ForkMacBackupRunner {
     }
 
     private func feed(_ event: ForkMacBackupMachine.Event) {
-        perform(machine.handle(event, now: Date()))
+        perform(machine.handle(event, now: clock()))
         syncPolling()
         publish()
     }
@@ -920,7 +925,7 @@ final class ForkMacBackupRunner {
     }
 
     private func checkChain() {
-        let started = Date()
+        let started = clock()
         guard engine != nil, let repository = settings.repository else {
             feed(.chainChecked(.engineMissing, nodeID: settings.chain.first { $0.kind == .mac }?.id))
             return
@@ -956,8 +961,8 @@ final class ForkMacBackupRunner {
                     }
                     guard answered.setOnce() else { return }
                     self.chain.macReady = true
-                    self.chain.repository = .ok(latencyMs: Int(Date().timeIntervalSince(started) * 1_000))
-                    self.chain.checkedAt = Date()
+                    self.chain.repository = .ok(latencyMs: Int(self.clock().timeIntervalSince(started) * 1_000))
+                    self.chain.checkedAt = self.clock()
                     self.feed(.chainChecked(nil, nodeID: nil))
                 case .failure(let error):
                     if error == .notConnected { self.connectedKey = nil }
@@ -968,7 +973,7 @@ final class ForkMacBackupRunner {
     }
 
     private func chainFailed(_ error: ForkMacBackupEngineError, at date: Date) {
-        chain.checkedAt = Date()
+        chain.checkedAt = clock()
         switch error {
         case .wrongRepository:
             wrongRepository = true
@@ -1025,32 +1030,50 @@ final class ForkMacBackupRunner {
     private func prescan(_ source: ForkMacBackupSource, completion: @escaping (_ rules: [String], _ refusal: String?) -> Void) {
         let queue = self.queue
         let iCloud = settings.iCloud
+        let sparseExcluded = settings.sparseExcluded
         let home = NSHomeDirectory()
+        let now = clock()
         let fingerprint = ForkMacBackupPrescanPlan.fingerprint(source: source, iCloud: iCloud)
-        let changed = fsevents.changedPaths()
-        let cached = prescanCache.entries[source.path]
-        let choice = ForkMacBackupPrescanPlan.choose(cached: cached, fingerprint: fingerprint, now: Date(),
+        // The event the new walk (or refresh) starts at, taken BEFORE the
+        // list of changes: a change meanwhile is in the next refresh.
+        let startEvent = fsevents.currentEventID()
+        let cached = prescanCache.entry(for: source.path)
+        let changed = cached?.eventID.flatMap { fsevents.changedPaths(since: $0) }
+        let choice = ForkMacBackupPrescanPlan.choose(cached: cached, fingerprint: fingerprint, now: now,
                                                      onAC: watch.onAC, changesKnown: changed != nil)
         let cancel = ForkMacBackupFlag()
         prescanCancel = cancel
+        let progress = ForkMacBackupScanProgress()
+        preparation = (progress, now)
+        let clock = self.clock
         // Background: the walk's reads are throttled by macOS while the Mac is in use.
         DispatchQueue.global(qos: .background).async {
             let matcher = ForkMacBackupRunRules.matcher(for: source)
             let collectDataless = iCloud != .exclude
             var entry: ForkMacBackupPrescanCache.Entry?
             if choice == .reuse, let cached, let changed {
-                let changes = ForkMacBackupPrescanPlan.relativeChanges(changed, source: source.path)
-                    .map { ForkMacBackupPrescanPlan.probe($0, root: source.path) }
+                let relative = ForkMacBackupPrescanPlan.relativeChanges(changed, source: source.path)
+                var changes: [ForkMacBackupPrescanPlan.Change] = []
+                for (index, path) in relative.enumerated() {
+                    changes.append(ForkMacBackupPrescanPlan.probe(path, root: source.path))
+                    if index % 256 == 0 { progress.note(files: Int64(index + 1), folder: nil) }
+                }
+                progress.note(files: Int64(relative.count), folder: nil)
                 entry = ForkMacBackupPrescanPlan.refreshed(cached, changes: changes, matcher: matcher,
                                                            collectDataless: collectDataless)
+                entry?.eventID = startEvent
             } else {
                 let usage = ForkMacBackupContentScan.scan(root: URL(fileURLWithPath: source.path, isDirectory: true),
                                                           matcher: matcher, collectDataless: collectDataless,
-                                                          topFolders: 0, isCanceled: { cancel.isSet })
-                if !usage.canceled { entry = ForkMacBackupPrescanCache.Entry(date: Date(), fingerprint: fingerprint, usage: usage) }
+                                                          topFolders: 0, progress: progress, isCanceled: { cancel.isSet })
+                if !usage.canceled {
+                    entry = ForkMacBackupPrescanCache.Entry(date: clock(), fingerprint: fingerprint, usage: usage,
+                                                            eventID: startEvent)
+                }
             }
             let rules = entry.map { ForkMacBackupRunRules.extra(for: source, sparseImages: $0.sparseImages,
-                                                                dataless: $0.dataless, iCloud: iCloud, home: home) }
+                                                                dataless: $0.dataless, iCloud: iCloud, home: home,
+                                                                sparseExcluded: sparseExcluded) }
                 ?? ForkMacBackupRunRules.extra(for: source, sparseImages: [], dataless: [], iCloud: iCloud, home: home)
             var refusal: String?
             if iCloud == .materialize {
@@ -1060,8 +1083,9 @@ final class ForkMacBackupRunner {
             }
             queue.async { [weak self] in
                 guard let self else { return }
+                self.preparation = nil
                 if let entry {
-                    self.prescanCache.entries[source.path] = entry
+                    self.prescanCache.entries[ForkMacBackupSourcePath.normalized(source.path)] = entry
                     self.savePrescans()
                 }
                 completion(rules, refusal)
@@ -1082,7 +1106,7 @@ final class ForkMacBackupRunner {
     }
 
     private func runStarted(id: UUID) {
-        let now = Date()
+        let now = clock()
         timeline.append(.runStarted, at: now)
         book.runStarted(at: now, runID: id)
         watch.readPower(now: now)
@@ -1092,7 +1116,7 @@ final class ForkMacBackupRunner {
     }
 
     private func runEnded(_ summary: ForkMacBackupMachine.Summary) {
-        let now = Date()
+        let now = clock()
         timeline.append(.runEnded, at: now)
         watch.readPower(now: now)
         let start = runCostStart
@@ -1115,10 +1139,16 @@ final class ForkMacBackupRunner {
             append(slot, to: paths.slots)
         }
         if !summary.proofs.isEmpty {
-            // What the pre-scan measured is the run's real size on disk.
+            // What the pre-scan measured is the run's real size on disk: the
+            // walk's allocated bytes minus the sparse images left out. Without
+            // a walk, Kopia's own size stands (`diskBytes`), never 0.
             let measured = summary.proofs.map { proof -> ForkMacBackupSnapshotProof in
                 var proof = proof
-                if proof.incomplete == nil, let real = prescanCache.entries[proof.sourcePath]?.realBytes { proof.realBytes = real }
+                if proof.incomplete == nil, let entry = prescanCache.entry(for: proof.sourcePath),
+                   let source = settings.sources.first(where: { ForkMacBackupSourcePath.same($0.path, proof.sourcePath) }) {
+                    let real = ForkMacBackupRunRules.protectedBytes(entry, source: source, sparseExcluded: settings.sparseExcluded)
+                    if real > 0 { proof.realBytes = real }
+                }
                 return proof
             }
             proofs.record(measured, now: now)
@@ -1129,7 +1159,9 @@ final class ForkMacBackupRunner {
                 }
             }
             let protected = settings.sources.compactMap { proofs.last(of: $0.path)?.diskBytes }.reduce(0, +)
-            append(ForkMacBackupCapacitySample(kind: .real, bytes: protected, date: now, source: "snapshot"), to: paths.capacity)
+            if protected > 0 {
+                append(ForkMacBackupCapacitySample(kind: .real, bytes: protected, date: now, source: "snapshot"), to: paths.capacity)
+            }
         }
         if summary.bytesSent > 0 {
             append(ForkMacBackupCapacitySample(kind: .sent, bytes: summary.bytesSent, date: now, source: "run"),
@@ -1161,7 +1193,7 @@ final class ForkMacBackupRunner {
             }
             self.verifyHandle = engine.verify(level, progress: { [weak self] progress in
                 guard let self else { return }
-                self.perform(self.machine.handle(.verifyProgress(progress), now: Date()))
+                self.perform(self.machine.handle(.verifyProgress(progress), now: self.clock()))
             }, completion: { [weak self] result in
                 self?.verifyHandle = nil
                 self?.feed(.verifyFinished(result))
@@ -1171,7 +1203,7 @@ final class ForkMacBackupRunner {
 
     private func verifyEnded(level: ForkMacBackupVerifyLevel, trigger: ForkMacBackupTrigger, start: Date,
                              result: ForkMacBackupEngineResult<ForkMacBackupVerifyReport>) {
-        let now = Date()
+        let now = clock()
         var record = ForkMacBackupRunRecord(kind: .verify, trigger: trigger, start: start, end: now, outcome: .failed,
                                             verifyLevel: level)
         switch result {
@@ -1198,17 +1230,23 @@ final class ForkMacBackupRunner {
     // MARK: Publishing
 
     private func presentation(now: Date) -> ForkMacBackupPresentation {
-        ForkMacBackupPresenter.presentation(machine, context: .init(settings: settings, proofs: proofs, chain: chain,
-                                                                    pendingChanges: fsevents.summary?.total, runs: runs,
-                                                                    repositoryBytes: repositoryBytes,
-                                                                    repositoryMeasuredAt: repositoryMeasuredAt),
-                                            now: now)
+        let walk = preparation.map { running -> ForkMacBackupPresentation.Preparation in
+            let reading = running.progress.reading
+            return ForkMacBackupPresentation.Preparation(files: reading.files, folder: reading.folder,
+                                                         startedAt: running.startedAt)
+        }
+        return ForkMacBackupPresenter.presentation(machine, context: .init(settings: settings, proofs: proofs, chain: chain,
+                                                                           pendingChanges: fsevents.summary?.total, runs: runs,
+                                                                           repositoryBytes: repositoryBytes,
+                                                                           repositoryMeasuredAt: repositoryMeasuredAt,
+                                                                           preparation: walk),
+                                                   now: now)
     }
 
     /// Writes `state.json` (atomic, 0600) and posts the notification, at the
     /// cadence the lease asks for.
     private func publish(force: Bool = false) {
-        let now = Date()
+        let now = clock()
         let current = presentation(now: now)
         let leaseDate = (try? FileManager.default.attributesOfItem(atPath: paths.viewerLease.path))?[.modificationDate] as? Date
         guard ForkMacBackupAgentIPCSupport.shouldPublish(current, last: lastPresentation, lastWrittenAt: lastWrittenAt,

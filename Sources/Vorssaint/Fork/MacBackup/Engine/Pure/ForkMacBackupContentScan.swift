@@ -153,11 +153,23 @@ enum ForkMacBackupContentScan {
     /// left: real sizes, the biggest folders, the sparse disk images and,
     /// with `collectDataless`, the cloud-only entries. `topFolders`: how
     /// many folders per depth.
+    /// `progress`: told every few hundred entries (files examined, the
+    /// top-level folder).
     static func scan(root: URL, matcher: ForkMacBackupIgnoreMatcher = .init(rules: []), collectDataless: Bool = false,
-                     topFolders: Int = 10, isCanceled: () -> Bool = { false }) -> ForkMacBackupDiskUsage {
+                     topFolders: Int = 10, progress: ForkMacBackupScanProgress? = nil,
+                     isCanceled: () -> Bool = { false }) -> ForkMacBackupDiskUsage {
         var usage = ForkMacBackupDiskUsage()
         var byFolder: [String: (bytes: Int64, files: Int64)] = [:]
+        var examined: Int64 = 0
         let walked = walk(root: root, isCanceled: isCanceled) { entry in
+            if let progress {
+                if !entry.isDirectory { examined += 1 }
+                if entry.depth == 1, entry.isDirectory {
+                    progress.note(files: examined, folder: entry.name)
+                } else if examined % 512 == 0 {
+                    progress.note(files: examined, folder: nil)
+                }
+            }
             if matcher.excludes(entry.relativePath, isDirectory: entry.isDirectory) {
                 usage.excludedEntries += 1
                 if !entry.isDirectory { usage.excludedAllocatedBytes += entry.allocatedBytes }
@@ -199,6 +211,7 @@ enum ForkMacBackupContentScan {
         }
         usage.unreadable = walked.unreadable
         usage.canceled = walked.canceled
+        progress?.note(files: examined, folder: nil)
         let all = byFolder.map { ForkMacBackupDiskUsage.Folder(relativePath: $0.key, allocatedBytes: $0.value.bytes,
                                                                 files: $0.value.files) }
         for depth in 1...2 {

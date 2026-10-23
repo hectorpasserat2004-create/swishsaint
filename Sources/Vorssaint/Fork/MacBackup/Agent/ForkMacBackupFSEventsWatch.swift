@@ -21,12 +21,11 @@ final class ForkMacBackupFSEventsWatch {
     /// Events were dropped, or there is no starting point yet: unknown
     /// until the next complete snapshot.
     private var unknown = false
+    /// Events were really dropped (not merely no starting point yet).
+    private var dropped = false
     /// The replay of the history since the saved event has ended (true
     /// when there is none to replay).
     private var historyDone = false
-    /// The changed paths cover everything since the last complete snapshot's
-    /// start: false after a count that restarted clean from unknown.
-    private var pathsComplete = true
     private var savedAt: Date = .distantPast
 
     init(queue: DispatchQueue, fileURL: URL) {
@@ -43,13 +42,13 @@ final class ForkMacBackupFSEventsWatch {
     /// nil when not counted.
     var summary: ForkMacBackupPendingSummary? { unknown ? nil : tally.summary }
 
-    /// Every file seen changed since the start of the last complete
-    /// snapshot (absolute paths, the sources' rules applied), for the
-    /// pre-scan's refresh; nil when the list is not whole: events dropped,
-    /// the history still replaying, or past the path cap.
-    func changedPaths() -> [String]? {
-        guard !unknown, historyDone, pathsComplete, tally.overflowCount == 0 else { return nil }
-        return Array(tally.entries.keys)
+    /// Every file seen changed since `eventID` (absolute paths, the
+    /// sources' rules applied), for the pre-scan's refresh of a walk made
+    /// at that event; nil when the list may miss one: events dropped or
+    /// past the path cap since then, or the history still replaying.
+    func changedPaths(since eventID: UInt64) -> [String]? {
+        guard stream != nil, historyDone else { return nil }
+        return tally.changedPaths(since: eventID)
     }
 
     /// (Re)starts the stream on `sources`. On `queue`.
@@ -60,10 +59,13 @@ final class ForkMacBackupFSEventsWatch {
             ForkMacBackupPendingChanges.Filter(source: $0, extraRules: extraRules[$0.path] ?? [], home: home,
                                                ignoredPrefixes: ignoredPrefixes)
         }
-        tally.clear()
         let current = FSEventsGetCurrentEventId()
         let since = ForkMacBackupPendingChanges.replayStart(saved: file.sinceEventID, current: current)
+        // The replay rebuilds every path since the saved start; without one,
+        // the paths are known from now on.
+        tally.clear(from: since ?? current)
         unknown = since == nil
+        dropped = false
         historyDone = since == nil
         guard !sources.isEmpty else { return }
         var context = FSEventStreamContext(version: 0, info: Unmanaged.passUnretained(self).toOpaque(),
@@ -81,6 +83,8 @@ final class ForkMacBackupFSEventsWatch {
                                                 since ?? FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
                                                 5.0, flags) else {
             unknown = true
+            dropped = true
+            tally.clear(from: nil)
             return
         }
         FSEventStreamSetDispatchQueue(created, queue)
@@ -88,6 +92,8 @@ final class ForkMacBackupFSEventsWatch {
             FSEventStreamInvalidate(created)
             FSEventStreamRelease(created)
             unknown = true
+            dropped = true
+            tally.clear(from: nil)
             return
         }
         stream = created
@@ -113,15 +119,15 @@ final class ForkMacBackupFSEventsWatch {
     /// before it; the count starts again from there.
     func completeSnapshot(startedAt eventID: UInt64, date: Date) {
         tally.reset(upTo: eventID)
-        if unknown {
+        if unknown && dropped {
             // A fresh start point: what happened during the run stays unknown
-            // (dropped events), so the count starts clean from the run's start.
-            tally.clear()
-            unknown = false
-            pathsComplete = false
-        } else {
-            pathsComplete = true
+            // (dropped events), so the count starts clean from now.
+            tally.clear(from: FSEventsGetCurrentEventId())
         }
+        // Without a starting point only, the stream saw everything since it
+        // started: the changes after the run's start are the count.
+        unknown = false
+        dropped = false
         file.sinceEventID = eventID
         file.since = date
         save(force: true)
@@ -137,6 +143,8 @@ final class ForkMacBackupFSEventsWatch {
                        | kFSEventStreamEventFlagKernelDropped | kFSEventStreamEventFlagEventIdsWrapped
                        | kFSEventStreamEventFlagRootChanged) != 0 {
                 unknown = true
+                dropped = true
+                tally.lostPaths(at: ids[index])
                 continue
             }
             if flag & kFSEventStreamEventFlagHistoryDone != 0 {

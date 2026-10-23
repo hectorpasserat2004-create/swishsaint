@@ -109,12 +109,18 @@ enum ForkMacBackupPendingChanges {
         private(set) var entries: [String: Entry] = [:]
         /// Past the cap, changes are counted without their path.
         private(set) var overflow: [Weight: Int] = [:]
+        /// The event from which `entries` holds EVERY changed path (the
+        /// pre-scan's refresh needs the whole list since its last walk or
+        /// refresh); nil: from nowhere yet. Moves forward at each loss:
+        /// dropped events, a path past the cap, a clear, a reset.
+        private(set) var pathsKnownSince: UInt64?
 
         mutating func add(_ path: String, weight: Weight, eventID: UInt64) {
             if entries[path] != nil || entries.count < ForkMacBackupAgentTuning.pendingPathCap {
                 entries[path] = Entry(weight: weight, eventID: eventID)
             } else {
                 overflow[weight, default: 0] += 1
+                lostPaths(at: eventID)
             }
         }
 
@@ -123,11 +129,27 @@ enum ForkMacBackupPendingChanges {
         mutating func reset(upTo eventID: UInt64) {
             entries = entries.filter { $0.value.eventID > eventID }
             overflow = [:]
+            if let known = pathsKnownSince { pathsKnownSince = max(known, eventID) }
         }
 
-        mutating func clear() {
+        /// Everything forgotten; `eventID`: the event the list starts again from.
+        mutating func clear(from eventID: UInt64? = nil) {
             entries = [:]
             overflow = [:]
+            pathsKnownSince = eventID
+        }
+
+        /// Paths were missed up to `eventID` (events dropped, the cap).
+        mutating func lostPaths(at eventID: UInt64) {
+            pathsKnownSince = max(pathsKnownSince ?? eventID, eventID)
+        }
+
+        /// Every path changed after `eventID` (and those changed a little
+        /// before: FSEvents delivers late, a superset costs an `lstat` each),
+        /// or nil when the list may miss one (a loss since then, no start yet).
+        func changedPaths(since eventID: UInt64) -> [String]? {
+            guard let known = pathsKnownSince, known <= eventID else { return nil }
+            return entries.keys.sorted()
         }
 
         /// Changes counted without their path (past `pendingPathCap`).

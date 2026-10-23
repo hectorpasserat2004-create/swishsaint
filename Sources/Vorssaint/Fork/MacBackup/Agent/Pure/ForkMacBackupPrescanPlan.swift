@@ -20,10 +20,15 @@ struct ForkMacBackupPrescanCache: Codable, Equatable {
         var datalessBytes: Int64
         /// Allocated bytes of what the source keeps, at the walk.
         var realBytes: Int64
+        /// The FSEvents event at the start of the walk or of its last
+        /// refresh: the next refresh needs every change since (nil: an
+        /// older cache, walked again).
+        var eventID: UInt64?
 
-        init(date: Date, fingerprint: String, usage: ForkMacBackupDiskUsage) {
+        init(date: Date, fingerprint: String, usage: ForkMacBackupDiskUsage, eventID: UInt64? = nil) {
             self.date = date
             self.fingerprint = fingerprint
+            self.eventID = eventID
             sparseImages = usage.sparseImages
             dataless = usage.dataless
             datalessBytes = usage.datalessBytes

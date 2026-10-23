@@ -100,12 +100,17 @@ enum ForkMacBackupIslandRules {
 
     /// The right wing: the percentage or the time left, as chosen
     /// (`ForkMacBackupPresentation.compactValue`); while no share is honest
-    /// (scanning), the real bytes read so far; else an ellipsis, never a
+    /// (scanning), the real bytes read so far, or while preparing the files
+    /// examined; else an ellipsis, never a
     /// guess nor a word too long for the wing.
     static func reading(_ state: ForkMacBackupPresentation, text: ForkMacBackupStrings, locale: Locale,
                         reading: ForkMacBackupReading, finishing: Bool) -> String {
         if finishing || state.phase == .concluding { return ForkMacBackupFormat.percent(1, locale: locale) }
         if state.fraction != nil { return state.compactValue(text, locale: locale, reading: reading) }
+        // « Préparation »: the files the walk examined (« 1,2 M »).
+        if state.phase == .preparing, let files = state.preparation?.files, files > 0 {
+            return ForkMacBackupFormat.count(files, locale: locale)
+        }
         if let share = share(state) { return ForkMacBackupFormat.percent(share, locale: locale) }
         if let bytes = state.progress?.bytesDone, bytes > 0 { return ForkMacBackupFormat.bytes(bytes, locale: locale) }
         return "…"

@@ -21,6 +21,64 @@ enum ForkMacBackupCoreTests {
         strings(suite)
         headlines(suite)
         staleAgent(suite)
+        preparation(suite)
+        sourcePaths(suite)
+    }
+
+    /// « Préparation » says what it does (fix of 23/10): a home folder's walk
+    /// took minutes behind « Préparation… » and « Zéro ko ».
+    private static func preparation(_ suite: TestSuite) {
+        let state = ForkMacBackupPresentation.preview(.preparing, now: now)
+        let fr = ForkMacBackupStrings.strings(.fr)
+        let french = locale("fr_FR", twelveHour: false)
+        let line = state.progressLine(fr, locale: french) ?? ""
+        suite.expect(line.contains("1,2") && line.contains("fichiers examinés") && line.contains("Documents")
+                        && line.contains("3") && !line.lowercased().contains("ko"),
+                     "while preparing: files examined, the folder walked, the time spent, never « Zéro ko »: \(line)")
+        suite.expect(state.compactValue(fr, locale: french).count <= 8 && state.compactValue(fr, locale: french).contains("1,2"),
+                     "the closed island reads the files examined (« 1,2 M »): \(state.compactValue(fr, locale: french))")
+        var uploading = state
+        uploading.phase = .uploading
+        suite.expect(uploading.preparationLine(fr, locale: french) == nil, "no preparation line once Kopia runs")
+        suite.expect(roundTrips(state) && state.settled(agentAlive: false).preparation == nil,
+                     "the walk's progress survives the state file, and goes with a dead agent")
+        suite.expect(ForkMacBackupFormat.count(312, locale: french) == "312"
+                        && ForkMacBackupFormat.count(1_234_567, locale: french).hasPrefix("1,2"),
+                     "counts are compact")
+        let progress = ForkMacBackupScanProgress()
+        progress.note(files: 10, folder: "Library")
+        progress.note(files: 20, folder: nil)
+        suite.expect(progress.reading.files == 20 && progress.reading.folder == "Library", "the walk's progress keeps its folder")
+    }
+
+    /// One canonical form of a source path, at every boundary.
+    private static func sourcePaths(_ suite: TestSuite) {
+        let decoded = try? ForkMacBackupJSON.decoder.decode([ForkMacBackupSource].self, from: Data(
+            "[{\"path\":\"/Users/test/\",\"presets\":[\"trash\",\"future\"]}]".utf8))
+        suite.expect(decoded?.first?.path == "/Users/test" && decoded?.first?.presets == [.trash]
+                        && decoded?.first?.customRules == [],
+                     "a stored source is read canonical, an unknown preset skipped, missing rules empty")
+        var source = ForkMacBackupSource(path: "/Volumes/Photos/")
+        suite.expect(source.path == "/Volumes/Photos", "a new source is canonical")
+        source.path = "/Volumes/Other//"
+        suite.expect(source.path == "/Volumes/Other", "and stays so when its path changes")
+        let split = ForkMacBackupSourcePath.split(["/Users/test", "/Users/test/src", "/Volumes/QNAP", "/Users/test/Music"],
+                                                  configured: ["/Users/test/"])
+        suite.expect(split.current == ["/Users/test"] && split.former == ["/Users/test/src", "/Volumes/QNAP", "/Users/test/Music"],
+                     "this Mac's former sources (old tests) are told apart from the configured ones")
+        suite.expect(ForkMacBackupSourcePath.split(["/a"], configured: []).current == ["/a"], "nothing configured: all current")
+        let suiteName = "fork.macbackup.tests.migrate"
+        if let defaults = UserDefaults(suiteName: suiteName) {
+            defaults.removePersistentDomain(forName: suiteName)
+            defaults.set("[{\"customRules\":[],\"path\":\"/Users/test/\",\"presets\":[\"trash\"]}]",
+                         forKey: ForkDefaultsKey.macBackupSources)
+            let first = ForkMacBackupDefaults.migrate(defaults)
+            let second = ForkMacBackupDefaults.migrate(defaults)
+            let stored = defaults.string(forKey: ForkDefaultsKey.macBackupSources) ?? ""
+            suite.expect(first == [ForkDefaultsKey.macBackupSources] && second.isEmpty && !stored.contains("test\\/\""),
+                         "the stored sources are migrated once at launch: \(stored)")
+            defaults.removePersistentDomain(forName: suiteName)
+        }
     }
 
     // MARK: Helpers
@@ -349,7 +407,7 @@ enum ForkMacBackupCoreTests {
         let closed = ForkMacBackupPresentation.Scenario.allCases.filter {
             ForkMacBackupPresentation.preview($0, now: now).phase.showsInClosedIsland
         }
-        suite.expect(Set(closed) == [.running42, .scanning, .restoring, .verifying],
+        suite.expect(Set(closed) == [.running42, .preparing, .scanning, .restoring, .verifying],
                      "the closed island shows only a backup, a restore or a verification running (decision 2)")
         var two = ForkMacBackupPresentation.preview(.protected, now: now)
         let old = ForkMacBackupPresentation.SnapshotSummary(manifestID: "k0", date: now.addingTimeInterval(-86_400),

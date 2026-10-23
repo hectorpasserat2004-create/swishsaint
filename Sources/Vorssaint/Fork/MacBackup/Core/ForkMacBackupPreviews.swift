@@ -10,6 +10,8 @@ extension ForkMacBackupPresentation {
     enum Scenario: String, CaseIterable {
         case protected
         case running42
+        /// The walk before a backup on a big home folder (fix of 23/10).
+        case preparing
         case scanning
         case waitingPower
         case paused
@@ -63,6 +65,11 @@ extension ForkMacBackupPresentation {
             state.progress = Progress(bytesDone: 1_302_000_000, bytesTotal: 3_100_000_000, bytesUploaded: 1_250_000_000,
                                       files: 18_204, filesTotal: 41_000, bytesPerSecond: 18_000_000, eta: 120,
                                       currentPath: home + "/Documents/Castral/closing/pronic.com/devis.pdf")
+        case .preparing:
+            state.phase = .preparing
+            state.sources[0].state = .running
+            state.progress = Progress()
+            state.preparation = Preparation(files: 1_234_567, folder: "Documents", startedAt: now.addingTimeInterval(-185))
         case .scanning:
             state.phase = .scanning
             state.sources[0].state = .running

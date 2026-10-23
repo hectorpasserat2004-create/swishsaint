@@ -258,6 +258,9 @@ struct ForkMacBackupHealthView: View {
                 }
                 Text(engineLine)
                 Text(presentation.headline(shared, language: model.language, locale: locale, now: model.now()))
+                if let line = presentation.preparationLine(shared, locale: locale) {
+                    Text(line).monospacedDigit()
+                }
             }
             .font(.callout)
             .foregroundStyle(.secondary)

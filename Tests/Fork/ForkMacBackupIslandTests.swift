@@ -121,7 +121,7 @@ enum ForkMacBackupIslandTests {
                      "nothing to read yet: an ellipsis, never a word too long for the wing")
         let fits = AppLanguage.allCases.allSatisfy { language in
             let words = ForkMacBackupStrings.strings(language)
-            return [ForkMacBackupPresentation.Scenario.running42, .scanning, .restoring, .verifying].allSatisfy { scenario in
+            return [ForkMacBackupPresentation.Scenario.running42, .preparing, .scanning, .restoring, .verifying].allSatisfy { scenario in
                 ForkMacBackupReading.allCases.allSatisfy { reading in
                     ForkMacBackupIslandRules.reading(.preview(scenario, now: now), text: words,
                                                      locale: Locale(identifier: language.rawValue),
