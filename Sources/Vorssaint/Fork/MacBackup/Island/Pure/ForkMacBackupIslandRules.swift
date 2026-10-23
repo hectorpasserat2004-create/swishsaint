@@ -274,7 +274,11 @@ enum ForkMacBackupIslandRules {
             formatter.doesRelativeDateFormatting = true
             // « Dernière : aujourd’hui à 10:04 », « Last: today at 10:04 ».
             formatter.formattingContext = .middleOfSentence
-            return formatter.string(from: date)
+            // The relative words follow the real clock: move the date by as
+            // many days as `now` is from today, so they follow `now` instead.
+            let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: now),
+                                               to: calendar.startOfDay(for: Date())).day ?? 0
+            return formatter.string(from: calendar.date(byAdding: .day, value: days, to: date) ?? date)
         }
         return ForkMacBackupFormat.dayAndTime(date, locale: locale, timeZone: calendar.timeZone)
     }

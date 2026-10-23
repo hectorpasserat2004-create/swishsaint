@@ -542,7 +542,7 @@ enum ForkMacBackupLiveServices {
                                                    kopia: (try? Data(contentsOf: kopiaURL)).flatMap(ForkMacBackupKopiaClientConfig.parse),
                                                    missing: configData == nil)
             if withSecrets, reading.config != nil {
-                let keychain = ForkMeetingKeychain(service: ForkMacBackupBranConfig.keychainService, timeout: 90)
+                let keychain = ForkMeetingKeychain(service: ForkMacBackupBranConfig.keychainService, file: nil, timeout: 90)
                 if case .found(let data) = keychain.read(ForkMacBackupBranConfig.passwordAccount) {
                     reading.repositoryPassword = String(data: data, encoding: .utf8)
                 }
