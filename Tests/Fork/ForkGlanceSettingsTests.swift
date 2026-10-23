@@ -8,7 +8,9 @@ import Foundation
 enum ForkGlanceSettingsTests {
     static func run(_ suite: TestSuite) {
         ForkGlanceStringsTests.mirrorChecks(suite, "ForkGlanceSettingsStrings", ForkGlanceSettingsStrings.strings,
-                                            sameInFrench: sameInFrench)
+                                            sameInFrench: sameInFrench,
+                                            untranslated: ["islandTitle", "frameRateValue", "extraEntryValue", "visionValue",
+                                                           "appsTitle", "rowPhase", "privacyTitle"])
         modes(suite)
         calibration(suite)
         mapZones(suite)

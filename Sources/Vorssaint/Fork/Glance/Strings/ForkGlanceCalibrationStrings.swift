@@ -363,7 +363,7 @@ extension ForkGlanceCalibrationStrings {
         welcomeBody: "Tournez la tête vers une partie de vos écrans\u{00A0}: la dernière fenêtre utilisée à cet endroit reçoit le clavier, avant même votre première frappe.",
         privacyNothingStored: "Aucune image n’est enregistrée\u{00A0}: chacune est analysée en mémoire, puis jetée.",
         privacyOnDevice: "Tout reste sur ce Mac\u{00A0}: rien n’est envoyé, personne n’est reconnu.",
-        privacyPause: "Mettez en pause à tout moment, depuis l’île, la Command Bar ou un raccourci.",
+        privacyPause: "Mettez en pause à tout moment, depuis l’île, la Barre de commande ou un raccourci.",
         welcomeCost: "Coût visé\u{00A0}: environ %@ d’un cœur. La caméra s’éteint quand vous ne touchez plus à rien, et son voyant vert reste allumé tant qu’elle tourne.",
         welcomeDuration: "Environ %@, assis comme d’habitude.",
         permissionsTitle: "Deux autorisations",

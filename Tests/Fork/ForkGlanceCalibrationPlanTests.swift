@@ -400,7 +400,8 @@ enum ForkGlanceCalibrationPlanTests {
 
     private static func strings(_ suite: TestSuite) {
         ForkGlanceStringsTests.mirrorChecks(suite, "ForkGlanceCalibrationStrings", ForkGlanceCalibrationStrings.strings,
-                                            sameInFrench: ["gaugeDistance", "modeLabel", "zoneCountOne", "zoneCountMany"])
+                                            sameInFrench: ["gaugeDistance", "modeLabel", "zoneCountOne", "zoneCountMany"],
+                                            untranslated: [])
         let fr = ForkGlanceCalibrationStrings.fr, en = ForkGlanceCalibrationStrings.enUS
         let frenchLocale = Locale(identifier: "fr_FR")
         suite.expect(fr.instruction == "Tournez la tête naturellement vers chaque point."

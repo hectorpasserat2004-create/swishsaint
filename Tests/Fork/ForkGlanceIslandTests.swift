@@ -244,7 +244,7 @@ enum ForkGlanceIslandTests {
         let fieldCount = ForkGlanceStringsTests.fields(ForkGlanceIslandStrings.enUS).count
         suite.expect(every.count == fieldCount, "the 28-character check covers every island field (\(fieldCount))")
         ForkGlanceStringsTests.mirrorChecks(suite, "ForkGlanceIslandStrings", ForkGlanceIslandStrings.strings,
-                                            island: every)
+                                            island: every, untranslated: [])
         suite.expect(ForkGlanceIslandStrings.fr.sectionSummary == "Le clavier suit votre regard",
                      "the Content tab's line in French")
         let core = ForkGlanceStrings.strings(.fr)
