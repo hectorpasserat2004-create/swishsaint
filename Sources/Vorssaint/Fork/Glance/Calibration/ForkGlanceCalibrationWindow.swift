@@ -120,6 +120,7 @@ struct ForkGlanceCalibrationView: View {
         }
         .frame(width: ForkGlanceCalibrationWindowController.size.width,
                height: ForkGlanceCalibrationWindowController.size.height)
+        .background(Color(nsColor: .windowBackgroundColor))
         .environment(\.locale, session.locale)
     }
 
@@ -194,11 +195,6 @@ struct ForkGlanceCalibrationView: View {
             if session.step != .done {
                 Button(text.cancel) { session.cancel() }
                     .keyboardShortcut(.cancelAction)
-            }
-            if let line = session.runLine {
-                Text(line)
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
             }
             Spacer()
             if session.canGoBack {
