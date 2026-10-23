@@ -10,12 +10,24 @@ import Foundation
 enum ForkGlance {
     static var isEnabled: Bool { UserDefaults.standard.bool(forKey: ForkDefaultsKey.glanceEnabled) }
 
-    /// At launch, whatever the switch says.
-    static func start() {}
+    /// At launch, whatever the switch says: the service hooks its callbacks,
+    /// then syncs once the launch is done.
+    static func start() {
+        ForkGlanceService.shared.start()
+    }
 
-    /// The switch moved (its page, the Extras page, a settings import).
-    static func sync() {}
+    /// The switch moved (its page, the Extras page, a settings import): the
+    /// window history the zones read (seam `glance-mru`), the service, and
+    /// the island's section, tile and activity.
+    static func sync() {
+        precondition(Thread.isMainThread)
+        ForkGlanceWindowIndex.syncTracker()
+        ForkGlanceService.shared.sync()
+        ForkGlanceIsland.sync()
+    }
 
     /// Before Accessibility is revoked or the app quits: stop acting on windows.
-    static func suspend() {}
+    static func suspend() {
+        ForkGlanceService.shared.suspend()
+    }
 }
