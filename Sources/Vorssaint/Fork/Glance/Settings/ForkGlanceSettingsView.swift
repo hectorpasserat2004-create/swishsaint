@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Martial
 
+import AppKit
 import SwiftUI
 
 /// The Glance Focus page (Extras › Focus au regard, plan §12), inside the
@@ -295,12 +296,17 @@ struct ForkGlanceSettingsContent: View {
         }
     }
 
+    /// Yellow reads poorly on the light page: orange there, yellow in the dark.
+    static let warning = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? .systemYellow : .systemOrange
+    })
+
     static func color(_ tint: ForkGlancePresentation.Tint) -> Color {
         switch tint {
         case .active: return .accentColor
         case .idle: return .secondary
         case .paused: return .orange
-        case .warning: return .yellow
+        case .warning: return warning
         case .error: return .red
         }
     }
@@ -312,7 +318,7 @@ struct ForkGlanceSettingsContent: View {
         switch state.phase {
         case .needsCalibration(let need):
             Section {
-                ForkGlanceBanner(symbol: "viewfinder", color: .yellow, title: core.calibrationNeed(need),
+                ForkGlanceBanner(symbol: "viewfinder", color: Self.warning, title: core.calibrationNeed(need),
                                  caption: text.calibrationCaption) {
                     Button(core.calibrateEllipsis) { actions.openCalibration(need == .firstTime ? .full : .recalibrate) }
                         .buttonStyle(.borderedProminent)
@@ -340,7 +346,7 @@ struct ForkGlanceSettingsContent: View {
         }
         if state.driftSuggested && state.phase != .off {
             Section {
-                ForkGlanceBanner(symbol: "exclamationmark.bubble.fill", color: .yellow, title: core.noticeDrift,
+                ForkGlanceBanner(symbol: "exclamationmark.bubble.fill", color: Self.warning, title: core.noticeDrift,
                                  caption: text.driftCaption) {
                     Button(core.recalibrate) { actions.openCalibration(.recalibrate) }
                 }
@@ -382,7 +388,7 @@ struct ForkGlanceSettingsContent: View {
                 }
             }
             // The yellow banner above already offers « Calibrer… » while the phase waits for one.
-            if calibration != nil || state.profile != nil || !waitsForCalibration {
+            if calibration != nil || !waitsForCalibration {
                 HStack(spacing: 8) {
                     if calibration == nil {
                         if !waitsForCalibration {
@@ -395,18 +401,22 @@ struct ForkGlanceSettingsContent: View {
                         Button(core.test) { actions.openCalibration(.test) }
                     }
                     Spacer(minLength: 8)
-                    if let profile = state.profile {
+                    // A profile never calibrated holds nothing worth deleting.
+                    if let profile = state.profile, calibration != nil {
                         Button(text.deleteProfile, role: .destructive) { pendingDelete = profile }
                     }
                 }
                 .controlSize(.small)
                 .padding(.leading, settingsRowTextInset)
             }
-            Text(text.calibrationCaption)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.leading, settingsRowTextInset)
+            // The banner above already says it while the phase waits for a calibration.
+            if !waitsForCalibration {
+                Text(text.calibrationCaption)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, settingsRowTextInset)
+            }
             if !others.isEmpty {
                 DisclosureGroup {
                     ForEach(others) { profile in
@@ -869,6 +879,8 @@ private struct ForkGlanceStepRow: View {
                     Text(title)
                 }
                 .labelsHidden()
+                // VoiceOver reads the step's value (« 1,2 s »), not its index.
+                .accessibilityValue(ForkGlanceSettingsRules.stepValue(tuning, step: step, locale: locale, never: never) ?? "")
                 Text(high ?? ForkGlanceSettingsRules.stepValue(tuning, step: last, locale: locale, never: never) ?? "")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -931,17 +943,19 @@ private struct ForkGlanceShortcutRow: View {
                     captureAction: { save($0) })
                     .frame(width: 140)
                     .accessibilityLabel(label)
-                if shortcut != nil {
-                    Button {
-                        save(nil)
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .help(text.shortcutRemove)
-                    .accessibilityLabel(text.shortcutRemove)
+                // Its place is kept without a shortcut, so the three fields line up.
+                Button {
+                    save(nil)
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
                 }
+                .buttonStyle(.plain)
+                .help(text.shortcutRemove)
+                .accessibilityLabel(text.shortcutRemove)
+                .opacity(shortcut == nil ? 0 : 1)
+                .disabled(shortcut == nil)
+                .accessibilityHidden(shortcut == nil)
             }
             if let warning {
                 Label(warning, systemImage: "exclamationmark.triangle.fill")

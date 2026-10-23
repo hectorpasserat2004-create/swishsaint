@@ -121,6 +121,8 @@ struct ForkGlanceOverlayContent: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    static let captionWidth: CGFloat = 360
+
     /// The dot is on this display.
     private var holdsDot: Bool { frame?.target.displayUUID == display.uuid }
 
@@ -162,8 +164,11 @@ struct ForkGlanceOverlayContent: View {
     private func dot(_ frame: ForkGlanceOverlayFrame, size: CGSize) -> some View {
         let local = CGPoint(x: frame.target.point.x - display.frame.minX, y: frame.target.point.y - display.frame.minY)
         let look = ForkGlanceDotLook.at(frame.stage, progress: frame.progress, reduceMotion: reduceMotion)
-        // The caption goes below the dot, above it in the lower half.
+        // The caption goes below the dot, above it in the lower half, and
+        // slides sideways to stay on the display near its left or right edge.
         let below = local.y < size.height * 0.6
+        let half = Self.captionWidth / 2 + 16
+        let slide = max(0, half - local.x) + min(0, size.width - half - local.x)
         return ZStack {
             ForkGlanceTargetDot(look: look)
                 .accessibilityLabel(text.dotLabel)
@@ -171,9 +176,9 @@ struct ForkGlanceOverlayContent: View {
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(.white.opacity(frame.isRetry ? 1 : 0.85))
                 .multilineTextAlignment(.center)
-                .frame(width: 360)
+                .frame(width: Self.captionWidth)
                 .fixedSize(horizontal: false, vertical: true)
-                .offset(y: below ? 56 : -56)
+                .offset(x: slide, y: below ? 56 : -56)
                 .opacity(frame.isPaused ? 0 : 1)
         }
         .position(clamped(local, in: size))

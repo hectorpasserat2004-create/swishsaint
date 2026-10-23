@@ -46,6 +46,7 @@ struct ForkGlanceValidationView: View {
         Section {
             ForkGlanceLayoutMap(layout: session.layout, zones: zones, splits: session.splits)
                 .frame(height: 130)
+                .frame(maxWidth: .infinity)
         }
         if session.isRunning || session.fitting || session.problem != nil {
             Section {

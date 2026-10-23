@@ -60,7 +60,7 @@ struct ForkGlanceFramingView: View {
             if let layer = session.previewLayer {
                 ForkGlanceFramingPreview(previewLayer: layer, observation: session.observation)
                     .id(ObjectIdentifier(layer))
-            } else if session.receiving || session.isPreview {
+            } else if session.receiving {
                 // No live image to draw on (the renders): the frame alone, mirrored.
                 if let box = Self.mirroredBox(session.observation, in: size) {
                     Image(systemName: "person.fill")
