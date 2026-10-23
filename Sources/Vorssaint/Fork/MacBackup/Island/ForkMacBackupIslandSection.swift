@@ -252,11 +252,19 @@ struct ForkMacBackupIslandSection: View {
         }
     }
 
-    /// « Dernière : aujourd’hui 10:04 ●●○○ ».
+    /// « Dernière : aujourd’hui 10:04 ●●○○ », « · partielle » in orange
+    /// when that snapshot missed files (the last complete one has its own
+    /// line).
     @ViewBuilder private func lastLine(_ state: ForkMacBackupPresentation, now: Date) -> some View {
         if let last = state.lastBackup {
             HStack(spacing: 6) {
                 caption(String(format: text.lastBackup, ForkMacBackupIslandRules.when(last.date, now: now, locale: locale)))
+                if last.failures > 0 {
+                    Text(ForkMacBackupAgentHealthStrings.strings(l10n.language).partialMark)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.orange.opacity(0.85))
+                        .lineLimit(1)
+                }
                 ForkMacBackupIslandProofLadder(level: last.level)
             }
         } else {
@@ -315,6 +323,11 @@ struct ForkMacBackupIslandSection: View {
     /// The card's own button, on its right: the one thing the state asks.
     @ViewBuilder private func heroAction(_ state: ForkMacBackupPresentation, top: ForkMacBackupIslandRules.Top) -> some View {
         switch top {
+        case .waiting(.noDiskAccess):
+            // The one thing that helps: give the access back.
+            ForkMacBackupIslandButton(title: text.remedyPermission) {
+                service.perform { Permissions.shared.openFullDiskAccessSettings() }
+            }
         case .waiting:
             ForkMacBackupIslandButton(title: text.backUpAnyway) { send(.backUpNow) }
         case .paused:
