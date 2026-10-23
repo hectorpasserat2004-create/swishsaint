@@ -259,4 +259,5 @@ installée ni piloté l'interface. La recette se fait après la mise à jour en 
 - garde `menuOrOverview` (menus des autres apps au niveau 101, Mission Control, sélection de capture) ;
 - panneaux par app : Terminal et Xcode probables ; iTerm2, Ghostty, JetBrains à mesurer ; kitty, WezTerm, Warp, Zed
   probablement rien (dessin GPU, un seul élément) ; VS Code, Cursor, Windsurf jamais essayés (voir §3) ;
-- le point du regard sur tous les écrans (`fork.glance.gazeDot`) n'a pas d'interrupteur dans la page : seulement la clé.
+- le point du regard sur tous les écrans (`fork.glance.gazeDot`) : interrupteur dans le diagnostic, affichage réel à
+  vérifier en recette.
