@@ -499,12 +499,15 @@ final class ForkMacBackupRunner {
         if !machine.isBusy {
             let conditions = conditions()
             let lastBackup = proofs.lastBackup(paths: settings.sources.map(\.path))
-            for record in book.sweep(now: now, lastBackup: lastBackup, settings: settings, onAC: conditions.onAC,
+            let lastRunEnd = ForkMacBackupRunRecord.lastProtectingEnd(runs)
+            let lastProtected = [lastBackup, lastRunEnd].compactMap { $0 }.max()
+            for record in book.sweep(now: now, lastBackup: lastProtected, settings: settings, onAC: conditions.onAC,
                                      calendar: calendar, timeline: timeline) {
                 append(record, to: paths.slots)
             }
             var input = ForkMacBackupPlanner.Input(now: now, calendar: calendar, settings: settings, conditions: conditions,
-                                                   lastBackup: lastBackup, lastClosedDue: book.lastClosedDue,
+                                                   lastBackup: lastBackup, lastRunEnd: lastRunEnd,
+                                                   lastClosedDue: book.lastClosedDue,
                                                    openSlotDue: book.open?.due, pending: fsevents.summary,
                                                    retryAt: machine.retryAt, interrupted: machine.interrupted,
                                                    wokeAt: wokeAt, manual: manualRequest)
@@ -719,7 +722,7 @@ final class ForkMacBackupRunner {
             // A source's cached walk stays only while its rules and the iCloud
             // mode match (`ForkMacBackupPrescanPlan.fingerprint`); a removed
             // source's is forgotten.
-            let kept = Set(new.sources.map(\.path))
+            let kept = Set(new.sources.map { ForkMacBackupSourcePath.normalized($0.path) })
             prescanCache.entries = prescanCache.entries.filter { kept.contains($0.key) }
             savePrescans()
             restartFSEvents()
@@ -894,6 +897,7 @@ final class ForkMacBackupRunner {
             // « Sauvegarder maintenant » and the first backup after the setup
             // at normal priority, the planner's other runs as chosen.
             let firstBackup = proofs.lastBackup(paths: settings.sources.map(\.path)) == nil
+                && ForkMacBackupRunRecord.lastProtectingEnd(runs) == nil
             extras?.priority = settings.enginePriority(for: trigger, firstBackup: firstBackup)
             runStarted(id: id)
         case .runEnded(let summary):

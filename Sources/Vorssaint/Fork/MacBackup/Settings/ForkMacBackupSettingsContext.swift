@@ -147,6 +147,7 @@ final class ForkMacBackupSettingsContext: ObservableObject {
     // MARK: Machine state
 
     func reloadMachineState() {
+        if !isPreview { ForkMacBackupDefaults.migrate(defaults) }
         repository = decode(ForkMacBackupRepository.self, ForkDefaultsKey.macBackupRepository)
         profile = defaults.data(forKey: ForkDefaultsKey.macBackupProfile).flatMap(ForkMacBackupProfile.decode)
             ?? defaults.string(forKey: ForkDefaultsKey.macBackupProfile).flatMap { ForkMacBackupProfile.decode(Data($0.utf8)) }
@@ -271,6 +272,7 @@ final class ForkMacBackupSettingsContext: ObservableObject {
     }
 
     func addSource(_ path: String) {
+        let path = ForkMacBackupSourcePath.normalized(path)
         var list = effectiveSources
         guard !list.contains(where: { $0.path == path }) else { return }
         list.append(ForkMacBackupSource(path: path, presets: presets, customRules: customRules))
@@ -278,7 +280,7 @@ final class ForkMacBackupSettingsContext: ObservableObject {
     }
 
     func removeSource(_ path: String) {
-        let list = effectiveSources.filter { $0.path != path }
+        let list = effectiveSources.filter { !ForkMacBackupSourcePath.same($0.path, path) }
         guard !list.isEmpty else { return }
         saveSources(list)
     }

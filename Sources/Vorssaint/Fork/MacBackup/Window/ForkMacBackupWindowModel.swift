@@ -900,7 +900,7 @@ final class ForkMacBackupWindowModel: ObservableObject {
         guard let source = ForkMacBackupFileVerdict.source(of: path, in: sources),
               let relative = ForkMacBackupFolderPath.relative(path, to: source.path),
               ForkMacBackupIgnoreMatcher(rules: source.ignoreRules).excludingRule(for: relative, isDirectory: isDirectory) == nil,
-              let key = localSources.first(where: { $0.path == source.path }),
+              let key = localSources.first(where: { ForkMacBackupSourcePath.same($0.path, source.path) }),
               let snapshot = snapshots[key]?.last, let root = snapshot.rootObjectID, let engine else {
             finish(nil, engine != nil && !localSources.isEmpty)
             return

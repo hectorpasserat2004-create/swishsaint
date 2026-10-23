@@ -205,6 +205,8 @@ struct ForkMacBackupAgentSettings: Equatable {
     var retention: ForkMacBackupRetention
     var repository: ForkMacBackupRepository?
     var sources: [ForkMacBackupSource]
+    /// Sparse disk images left out by name (absolute paths).
+    var sparseExcluded: Set<String>
     var profile: ForkMacBackupProfile?
     var priority: Priority
     /// No progress for this long: the watchdog cancels and retries.
@@ -292,9 +294,13 @@ struct ForkMacBackupAgentSettings: Equatable {
         // source: an imported settings backup restores these two keys only.
         let storedPresets = value(ForkDefaultsKey.macBackupPresets) as? String
         let storedRules = value(ForkDefaultsKey.macBackupRules) as? String
-        sources = (json([ForkMacBackupSource].self, ForkDefaultsKey.macBackupSources) ?? []).map {
-            $0.applying(presets: storedPresets, rules: storedRules)
-        }
+        // Canonical paths (decoding normalizes them); two spellings of one
+        // folder are one source.
+        var seenPaths = Set<String>()
+        sources = (json([ForkMacBackupSource].self, ForkDefaultsKey.macBackupSources) ?? [])
+            .filter { seenPaths.insert($0.path).inserted }
+            .map { $0.applying(presets: storedPresets, rules: storedRules) }
+        sparseExcluded = Set(ForkMacBackupSparsePolicy.parse(lookup(ForkDefaultsKey.macBackupSparseExcluded) as? String))
         profile = json(ForkMacBackupProfile.self, ForkDefaultsKey.macBackupProfile)
         priority = Priority(rawValue: string(ForkDefaultsKey.macBackupPriority)) ?? .low
         watchdog = TimeInterval(int(ForkDefaultsKey.macBackupWatchdogMinutes, 2...240, fallback: 10) * 60)
