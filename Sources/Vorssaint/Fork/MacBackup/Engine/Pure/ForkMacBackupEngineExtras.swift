@@ -127,12 +127,3 @@ struct ForkMacBackupMaintenanceInfo: Equatable {
     }
 }
 
-/// Source paths as Kopia names them: absolute, no trailing « / » (but the
-/// root itself).
-enum ForkMacBackupSourcePath {
-    static func normalized(_ path: String) -> String {
-        var path = path
-        while path.count > 1, path.hasSuffix("/") { path.removeLast() }
-        return path
-    }
-}

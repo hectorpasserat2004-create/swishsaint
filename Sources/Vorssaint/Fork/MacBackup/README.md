@@ -4,8 +4,10 @@ Feature du fork « Sauvegarde du Mac » (en : *Mac Backup*) : Kopia v0.23.1 vers
 n'importe quel S3), même app fermée, état en direct dans l'île, restauration depuis la fenêtre « Sauvegardes ».
 Plan : `PLAN-sauvegarde-mac.md` (hors dépôt) ; **les décisions de Martial du 22/10 priment** :
 
-1. tailles **réelles** partout (`totalFileAllocatedSize`) ; disques virtuels creux (≥ 10 Go écrits à moins de moitié)
-   **exclus par défaut**, jamais supprimés ni redimensionnés ;
+1. tailles **réelles** partout (`totalFileAllocatedSize`) ; disques virtuels creux (≥ 10 Go écrits à moins de moitié) :
+   seuls ceux de Docker Desktop et d'Apple Container (recréables) sont **exclus par défaut** ; tout autre (un clone de VM,
+   le disque d'un serveur) est de vraies données, **sauvegardé** sauf « Laisser de côté » sur ce fichier
+   (`fork.macbackup.sparse.excluded`, `ForkMacBackupSparsePolicy`, correctif du 23/10) ; jamais supprimés ni redimensionnés ;
 2. l'état ne vit que **dans la section de l'île, à la demande** ; l'île fermée ne montre qu'une sauvegarde, une
    restauration ou une vérification **en cours** (`ForkMacBackupPhase.showsInClosedIsland`) ;
 3. **aucune alerte hors de la section** : seules des notices dans l'île, à la fin d'une sauvegarde (terminée, partielle, échouée)
@@ -66,7 +68,16 @@ règles Kopia, aussi celle de « Ce fichier est-il sauvegardé ? ») : images cr
 deviennent des règles du run (`ForkMacBackupRunRules`), et la taille réelle va dans la preuve (`realBytes`, `diskBytes`).
 Un parcours complet coûte cher (mesuré le 22/10 : 2,4 M fichiers, 2,5 à 3,5 min, 2 min de CPU) : il est gardé dans
 `prescan.json` un jour (une semaine sur batterie) et rafraîchi avant chaque run par un `lstat` des seuls fichiers que
-FSEvents a vus changer (`ForkMacBackupPrescanPlan`) ; sans liste complète (événements perdus), on reparcourt.
+FSEvents a vus changer depuis l'événement du dernier parcours ou rafraîchissement (`Entry.eventID`,
+`Tally.pathsKnownSince`, `ForkMacBackupPrescanPlan`) ; sans liste complète depuis (événements perdus, plafond), on
+reparcourt. Pendant le parcours, « Préparation » dit ce qu'il fait (`ForkMacBackupPresentation.Preparation` : fichiers
+examinés, dossier, durée), jusque dans l'île fermée (« 1,2 M »).
+Chemins des sources : **une seule forme** (`ForkMacBackupSourcePath.normalized`, celle de Kopia, sans « / » final),
+appliquée au décodage des sources, à l'import Bran, aux clés du pré-scan, aux preuves, à la capacité, aux sources de
+Kopia et aux racines FSEvents ; `ForkMacBackupDefaults.migrate` réécrit au lancement une valeur d'avant (build 2331 :
+« /Users/x/ » d'un import Bran faisait rater toutes les preuves au planificateur, d'où des sauvegardes en boucle).
+Filet du rythme Automatique (`ForkMacBackupPlanner`) : jamais deux sauvegardes à moins d'une heure, comptée depuis la fin
+du dernier run complet ou partiel de `runs.jsonl` (`lastRunEnd`), quoi que disent les preuves ; chaque run écrit son créneau.
 iCloud : chaque enfant Kopia naît avec la politique `IOPOL_TYPE_VFS_MATERIALIZE_DATALESS_FILES` voulue
 (`ForkMacBackupDatalessPolicy`) : OFF partout (un fichier absent du Mac échoue en EDEADLK, classé « iCloud seulement »),
 ON pour le seul serveur du mode « Tout télécharger avant », refusé (`localSpace`) si l'espace libre ne couvre pas le
@@ -105,7 +116,7 @@ Réglages de la personne (Bool/Int/String, exportés) : rythme, alimentation, r�
 sauvegarde anticipée, iCloud, préréglages, règles, rétention, vérifications, notifications, île, et pour l'agent
 `fork.macbackup.priority` et `fork.macbackup.timeout.{watchdogMinutes,repositorySeconds,probeSeconds}`.
 État de la machine (jamais enregistré ni exporté, `machineKeys`) : dépôt, sources, profil, adaptateurs, version du
-moteur, dates et empreinte du kit, profils connus, import Bran.
+moteur, dates et empreinte du kit, profils connus, import Bran, disques creux laissés de côté.
 
 ## 5. Interrupteur
 

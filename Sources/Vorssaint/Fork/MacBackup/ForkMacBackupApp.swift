@@ -13,6 +13,7 @@ enum ForkMacBackupApp {
     /// At launch. The island's hooks are set whatever the switch says (they
     /// answer « unavailable » while it is off), like the Meetings section.
     static func start() {
+        ForkMacBackupDefaults.migrate(.standard)
         ForkMacBackupIsland.start()
         ForkMacBackupStatusModel.shared.sync()
         ForkMacBackupAgentLink.start()

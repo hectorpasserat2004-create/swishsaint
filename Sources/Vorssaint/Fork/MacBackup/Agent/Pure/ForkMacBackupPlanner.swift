@@ -71,6 +71,11 @@ enum ForkMacBackupPlanner {
         var conditions: ForkMacBackupConditions
         /// The end of the last backup that left a snapshot (complete or partial).
         var lastBackup: Date?
+        /// The end of the last backup RUN that ended complete or partial, as
+        /// `runs.jsonl` records it: the safety net of the Automatic rhythm,
+        /// whatever the proofs say (build 2331 matched no proof to a source
+        /// saved as « /Users/me/ » and backed up in a loop).
+        var lastRunEnd: Date?
         /// The due date of the last slot already written to the ledger.
         var lastClosedDue: Date?
         /// The slot being worked on, when one is open: its due date stays put.
@@ -87,14 +92,15 @@ enum ForkMacBackupPlanner {
 
         init(now: Date, calendar: Calendar, settings: ForkMacBackupAgentSettings,
              conditions: ForkMacBackupConditions = ForkMacBackupConditions(), lastBackup: Date? = nil,
-             lastClosedDue: Date? = nil, openSlotDue: Date? = nil, pending: ForkMacBackupPendingSummary? = nil,
-             retryAt: Date? = nil, interrupted: ForkMacBackupTrigger? = nil, wokeAt: Date? = nil,
-             manual: ForkMacBackupTrigger? = nil) {
+             lastRunEnd: Date? = nil, lastClosedDue: Date? = nil, openSlotDue: Date? = nil,
+             pending: ForkMacBackupPendingSummary? = nil, retryAt: Date? = nil, interrupted: ForkMacBackupTrigger? = nil,
+             wokeAt: Date? = nil, manual: ForkMacBackupTrigger? = nil) {
             self.now = now
             self.calendar = calendar
             self.settings = settings
             self.conditions = conditions
             self.lastBackup = lastBackup
+            self.lastRunEnd = lastRunEnd
             self.lastClosedDue = lastClosedDue
             self.openSlotDue = openSlotDue
             self.pending = pending
@@ -103,6 +109,10 @@ enum ForkMacBackupPlanner {
             self.wokeAt = wokeAt
             self.manual = manual
         }
+
+        /// The last backup as the planner counts it: the newest of the
+        /// proofs' and the run journal's.
+        var lastProtected: Date? { [lastBackup, lastRunEnd].compactMap { $0 }.max() }
     }
 
     enum Decision: Equatable {
@@ -152,6 +162,13 @@ enum ForkMacBackupPlanner {
         if let retryAt = input.retryAt, retryAt > now {
             return .idle(next: retryAt)
         }
+        // Automatic never starts two backups less than the minimum gap
+        // apart, whatever else it believes (a source its proofs do not
+        // match, a slot not written).
+        if settings.scheduleMode == .auto, let end = input.lastRunEnd {
+            let earliest = end.addingTimeInterval(ForkMacBackupAgentTuning.autoMinInterval)
+            if now < earliest { return .idle(next: earliest) }
+        }
 
         let due = input.openSlotDue ?? currentDue(input)
         let early = earlyTrigger(input)
@@ -162,7 +179,8 @@ enum ForkMacBackupPlanner {
                 if let reason = blockingReason(input, forced: false, manual: false) {
                     return .wait(reason: reason, due: nil, recheck: recheck(reason, now: now), forcedAt: nil)
                 }
-                return .run(trigger: early, due: nil)
+                // Automatic's runs are its slots: each one is written.
+                return .run(trigger: early, due: settings.scheduleMode == .auto ? now : nil)
             }
             return .idle(next: due)
         }
@@ -174,7 +192,7 @@ enum ForkMacBackupPlanner {
             if now < catchUp { return .idle(next: catchUp) }
             trigger = .catchUp
         }
-        if settings.scheduleMode == .auto, let pending = input.pending, pending.total == 0, input.lastBackup != nil {
+        if settings.scheduleMode == .auto, let pending = input.pending, pending.total == 0, input.lastProtected != nil {
             return .nothingToDo(due: due, next: due.addingTimeInterval(settings.autoMaxInterval(onAC: input.conditions.onAC)))
         }
         let forcedAt = due.addingTimeInterval(settings.forceAfter)
@@ -192,7 +210,7 @@ enum ForkMacBackupPlanner {
     /// option of the manual rhythms. nil otherwise.
     static func earlyTrigger(_ input: Input) -> ForkMacBackupTrigger? {
         guard let pending = input.pending else { return nil }
-        let sinceLast = input.lastBackup.map { input.now.timeIntervalSince($0) } ?? .infinity
+        let sinceLast = input.lastProtected.map { input.now.timeIntervalSince($0) } ?? .infinity
         guard sinceLast >= ForkMacBackupAgentTuning.autoMinInterval else { return nil }
         switch input.settings.scheduleMode {
         case .auto:
@@ -210,7 +228,7 @@ enum ForkMacBackupPlanner {
     /// written and after the last backup. nil: never (no time set).
     static func currentDue(_ input: Input) -> Date? {
         let settings = input.settings
-        let reference = [input.lastBackup, input.lastClosedDue].compactMap { $0 }.max()
+        let reference = [input.lastProtected, input.lastClosedDue].compactMap { $0 }.max()
         switch settings.scheduleMode {
         case .auto:
             guard let reference else { return input.now }

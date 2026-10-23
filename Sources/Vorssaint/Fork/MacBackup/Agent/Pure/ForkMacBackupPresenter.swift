@@ -162,10 +162,14 @@ enum ForkMacBackupPresenter {
         var runs: [ForkMacBackupRunRecord]
         var repositoryBytes: Int64?
         var repositoryMeasuredAt: Date?
+        /// The pre-scan's walk, while one runs.
+        var preparation: ForkMacBackupPresentation.Preparation?
 
         init(settings: ForkMacBackupAgentSettings, proofs: ForkMacBackupProofStore = ForkMacBackupProofStore(),
              chain: ForkMacBackupChainProbe = ForkMacBackupChainProbe(), pendingChanges: Int? = nil,
-             runs: [ForkMacBackupRunRecord] = [], repositoryBytes: Int64? = nil, repositoryMeasuredAt: Date? = nil) {
+             runs: [ForkMacBackupRunRecord] = [], repositoryBytes: Int64? = nil, repositoryMeasuredAt: Date? = nil,
+             preparation: ForkMacBackupPresentation.Preparation? = nil) {
+            self.preparation = preparation
             self.settings = settings
             self.proofs = proofs
             self.chain = chain
@@ -208,7 +212,7 @@ enum ForkMacBackupPresenter {
             rhythm = .automatic(about: ForkMacBackupCostSupport.automaticInterval(context.runs, now: now))
         }
         let lastSent = context.runs.last { $0.kind == .backup && $0.outcome != .nothingToDo }?.bytesSent
-        let protectedSizes = settings.sources.compactMap { context.proofs.last(of: $0.path)?.diskBytes }
+        let protectedSizes = settings.sources.compactMap { context.proofs.last(of: $0.path)?.diskBytes }.filter { $0 > 0 }
         let capacity = ForkMacBackupPresentation.Capacity(
             protectedBytes: protectedSizes.isEmpty ? nil : protectedSizes.reduce(0, +),
             lastSentBytes: lastSent, repositoryBytes: context.repositoryBytes, nasFreeBytes: nil,
@@ -230,6 +234,7 @@ enum ForkMacBackupPresenter {
         return ForkMacBackupPresentation(
             phase: phase,
             progress: machine.progress(now: now),
+            preparation: phase == .preparing ? context.preparation : nil,
             sources: enabled ? sources : [],
             pendingChanges: enabled ? context.pendingChanges : nil,
             chain: enabled ? context.chain.statuses(settings.chain) : [],

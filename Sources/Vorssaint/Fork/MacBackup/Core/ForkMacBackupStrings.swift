@@ -40,6 +40,8 @@ struct ForkMacBackupStrings {
     let concluding: String
     /// While the time left is not stable yet.
     let calculating: String
+    /// `%@`: a compact count, « 1,2 M » (island).
+    let preparingExamined: String
     /// `%@`: a duration.
     let remaining: String
     let finished: String
@@ -158,6 +160,8 @@ struct ForkMacBackupStrings {
     let repositorySize: String
     let freeSpace: String
     let unknown: String
+    /// A size or a cost not measured yet: known once a backup ran (island).
+    let afterFirstBackup: String
     /// `%@` × 3: a duration, a battery percentage, a size.
     let costLine: String
 
@@ -231,6 +235,7 @@ extension ForkMacBackupStrings {
         slowed: "Slowed down · %@",
         concluding: "Checking…",
         calculating: "calculating…",
+        preparingExamined: "%@ files examined",
         remaining: "%@ left",
         finished: "Mac backed up",
         partialOne: "Partial · 1 file",
@@ -324,6 +329,7 @@ extension ForkMacBackupStrings {
         repositorySize: "Repository: %@",
         freeSpace: "%@ free",
         unknown: "unknown",
+        afterFirstBackup: "After the first backup",
         costLine: "Average backup: %@ · %@ of battery · %@ sent"
     )
 
@@ -343,6 +349,7 @@ extension ForkMacBackupStrings {
         slowed: "Ralentie · %@",
         concluding: "Contrôle…",
         calculating: "calcul…",
+        preparingExamined: "%@ fichiers examinés",
         remaining: "reste %@",
         finished: "Mac sauvegardé",
         partialOne: "Partielle · 1 fichier",
@@ -436,6 +443,7 @@ extension ForkMacBackupStrings {
         repositorySize: "Dépôt\u{00A0}: %@",
         freeSpace: "%@ libres",
         unknown: "inconnu",
+        afterFirstBackup: "Après la première sauvegarde",
         costLine: "Sauvegarde moyenne\u{00A0}: %@ · %@ de batterie · %@ envoyés"
     )
 
@@ -455,6 +463,7 @@ extension ForkMacBackupStrings {
         slowed: "Desacelerado · %@",
         concluding: "Finalizando…",
         calculating: "calculando…",
+        preparingExamined: "%@ arquivos examinados",
         remaining: "faltam %@",
         finished: "Backup do Mac feito",
         partialOne: "Parcial · 1 arquivo",
@@ -548,6 +557,7 @@ extension ForkMacBackupStrings {
         repositorySize: "Repositório: %@",
         freeSpace: "%@ livres",
         unknown: "desconhecido",
+        afterFirstBackup: "Após o primeiro backup",
         costLine: "Backup médio: %@ · %@ de bateria · %@ enviados"
     )
 
@@ -567,6 +577,7 @@ extension ForkMacBackupStrings {
         slowed: "Yavaşlatıldı · %@",
         concluding: "Tamamlanıyor…",
         calculating: "hesaplanıyor…",
+        preparingExamined: "%@ dosya incelendi",
         remaining: "%@ kaldı",
         finished: "Mac yedeklendi",
         partialOne: "Kısmi · 1 dosya",
@@ -660,6 +671,7 @@ extension ForkMacBackupStrings {
         repositorySize: "Depo: %@",
         freeSpace: "%@ boş",
         unknown: "bilinmiyor",
+        afterFirstBackup: "İlk yedeklemeden sonra",
         costLine: "Ortalama yedekleme: %@ · %@ pil · %@ gönderildi"
     )
 
@@ -679,6 +691,7 @@ extension ForkMacBackupStrings {
         slowed: "Замедлено · %@",
         concluding: "Завершение…",
         calculating: "расчёт…",
+        preparingExamined: "Проверено файлов: %@",
         remaining: "осталось %@",
         finished: "Копия Mac готова",
         partialOne: "Частично · %d файл",
@@ -772,6 +785,7 @@ extension ForkMacBackupStrings {
         repositorySize: "Репозиторий: %@",
         freeSpace: "Свободно: %@",
         unknown: "неизвестно",
+        afterFirstBackup: "После первой копии",
         costLine: "Средняя копия: %@ · %@ заряда · отправлено %@"
     )
 
@@ -791,6 +805,7 @@ extension ForkMacBackupStrings {
         slowed: "Ralentizada · %@",
         concluding: "Finalizando…",
         calculating: "calculando…",
+        preparingExamined: "%@ archivos examinados",
         remaining: "quedan %@",
         finished: "Copia del Mac hecha",
         partialOne: "Parcial · 1 archivo",
@@ -884,6 +899,7 @@ extension ForkMacBackupStrings {
         repositorySize: "Repositorio: %@",
         freeSpace: "%@ libres",
         unknown: "desconocido",
+        afterFirstBackup: "Tras la primera copia",
         costLine: "Copia media: %@ · %@ de batería · %@ enviados"
     )
 
@@ -903,6 +919,7 @@ extension ForkMacBackupStrings {
         slowed: "Spomalené · %@",
         concluding: "Dokončovanie…",
         calculating: "počíta sa…",
+        preparingExamined: "Preskúmané súbory: %@",
         remaining: "zostáva %@",
         finished: "Mac zálohovaný",
         partialOne: "Čiastočná · 1 súbor",
@@ -996,6 +1013,7 @@ extension ForkMacBackupStrings {
         repositorySize: "Repozitár: %@",
         freeSpace: "Voľné: %@",
         unknown: "neznáme",
+        afterFirstBackup: "Po prvej zálohe",
         costLine: "Priemerná záloha: %@ · %@ batérie · odoslané %@"
     )
 
@@ -1015,6 +1033,7 @@ extension ForkMacBackupStrings {
         slowed: "Verlangsamt · %@",
         concluding: "Abschließen…",
         calculating: "berechnen…",
+        preparingExamined: "%@ Dateien geprüft",
         remaining: "noch %@",
         finished: "Mac gesichert",
         partialOne: "Teilweise · 1 Datei",
@@ -1108,6 +1127,7 @@ extension ForkMacBackupStrings {
         repositorySize: "Repository-Größe: %@",
         freeSpace: "%@ frei",
         unknown: "unbekannt",
+        afterFirstBackup: "Nach dem ersten Backup",
         costLine: "Durchschnittliche Sicherung: %@ · %@ Batterie · %@ gesendet"
     )
 
@@ -1127,6 +1147,7 @@ extension ForkMacBackupStrings {
         slowed: "Rallentato · %@",
         concluding: "Conclusione…",
         calculating: "calcolo…",
+        preparingExamined: "%@ file esaminati",
         remaining: "%@ rimanenti",
         finished: "Backup del Mac eseguito",
         partialOne: "Parziale · 1 file",
@@ -1220,6 +1241,7 @@ extension ForkMacBackupStrings {
         repositorySize: "Archivio: %@",
         freeSpace: "%@ liberi",
         unknown: "sconosciuto",
+        afterFirstBackup: "Dopo il primo backup",
         costLine: "Backup medio: %@ · %@ di batteria · %@ inviati"
     )
 
@@ -1239,6 +1261,7 @@ extension ForkMacBackupStrings {
         slowed: "減速中 · %@",
         concluding: "仕上げ中…",
         calculating: "計算中…",
+        preparingExamined: "%@ 個のファイルを確認",
         remaining: "残り %@",
         finished: "Macをバックアップしました",
         partialOne: "一部のみ · 1ファイル",
@@ -1332,6 +1355,7 @@ extension ForkMacBackupStrings {
         repositorySize: "リポジトリ：%@",
         freeSpace: "空き %@",
         unknown: "不明",
+        afterFirstBackup: "初回バックアップ後",
         costLine: "平均バックアップ：%@ · バッテリー %@ · 送信 %@"
     )
 
@@ -1351,6 +1375,7 @@ extension ForkMacBackupStrings {
         slowed: "감속됨 · %@",
         concluding: "마무리 중…",
         calculating: "계산 중…",
+        preparingExamined: "파일 %@개 확인",
         remaining: "%@ 남음",
         finished: "Mac 백업 완료",
         partialOne: "일부 · 파일 1개",
@@ -1444,6 +1469,7 @@ extension ForkMacBackupStrings {
         repositorySize: "저장소: %@",
         freeSpace: "%@ 사용 가능",
         unknown: "알 수 없음",
+        afterFirstBackup: "첫 백업 후",
         costLine: "평균 백업: %@ · 배터리 %@ · %@ 전송"
     )
 
@@ -1463,6 +1489,7 @@ extension ForkMacBackupStrings {
         slowed: "Сповільнено · %@",
         concluding: "Завершення…",
         calculating: "обчислення…",
+        preparingExamined: "Перевірено файлів: %@",
         remaining: "залишилось %@",
         finished: "Копію Mac створено",
         partialOne: "Частково · %d файл",
@@ -1556,6 +1583,7 @@ extension ForkMacBackupStrings {
         repositorySize: "Репозиторій: %@",
         freeSpace: "Вільно: %@",
         unknown: "невідомо",
+        afterFirstBackup: "Після першої копії",
         costLine: "Середня копія: %@ · %@ заряду · надіслано %@"
     )
 
@@ -1575,6 +1603,7 @@ extension ForkMacBackupStrings {
         slowed: "已减速 · %@",
         concluding: "正在收尾…",
         calculating: "正在计算…",
+        preparingExamined: "已检查 %@ 个文件",
         remaining: "剩余 %@",
         finished: "Mac 已备份",
         partialOne: "部分完成 · 1 个文件",
@@ -1668,6 +1697,7 @@ extension ForkMacBackupStrings {
         repositorySize: "存储库：%@",
         freeSpace: "可用 %@",
         unknown: "未知",
+        afterFirstBackup: "首次备份后",
         costLine: "平均每次备份：%@ · 电池 %@ · 发送 %@"
     )
 
@@ -1687,6 +1717,7 @@ extension ForkMacBackupStrings {
         slowed: "已減速 · %@",
         concluding: "正在收尾…",
         calculating: "正在計算…",
+        preparingExamined: "已檢查 %@ 個檔案",
         remaining: "剩餘 %@",
         finished: "Mac 已備份",
         partialOne: "部分完成 · 1 個檔案",
@@ -1780,6 +1811,7 @@ extension ForkMacBackupStrings {
         repositorySize: "儲存庫：%@",
         freeSpace: "可用 %@",
         unknown: "未知",
+        afterFirstBackup: "首次備份後",
         costLine: "平均每次備份：%@ · 電池 %@ · 傳送 %@"
     )
 
@@ -1799,6 +1831,7 @@ extension ForkMacBackupStrings {
         slowed: "已減速 · %@",
         concluding: "正在收尾…",
         calculating: "正在計算…",
+        preparingExamined: "已檢查 %@ 個檔案",
         remaining: "剩餘 %@",
         finished: "Mac 已備份",
         partialOne: "部分完成 · 1 個檔案",
@@ -1892,6 +1925,7 @@ extension ForkMacBackupStrings {
         repositorySize: "儲存庫：%@",
         freeSpace: "可用 %@",
         unknown: "未知",
+        afterFirstBackup: "首次備份後",
         costLine: "平均每次備份：%@ · 電池 %@ · 傳送 %@"
     )
 }

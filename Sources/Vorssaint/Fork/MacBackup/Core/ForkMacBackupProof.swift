@@ -154,7 +154,7 @@ struct ForkMacBackupSnapshotProof: Codable, Equatable {
          cloudOnly: [String] = [], unnamedFailureCount: Int = 0, incomplete: String? = nil, verifiedAt: Date? = nil,
          verifiedPercent: Double? = nil, restoreTestedAt: Date? = nil) {
         self.manifestID = manifestID
-        self.sourcePath = sourcePath
+        self.sourcePath = ForkMacBackupSourcePath.normalized(sourcePath)
         self.startTime = startTime
         self.endTime = endTime
         self.level = level

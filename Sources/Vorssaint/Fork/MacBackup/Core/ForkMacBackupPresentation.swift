@@ -54,6 +54,23 @@ struct ForkMacBackupPresentation: Codable, Equatable {
         }
     }
 
+    /// « Préparation »: the walk of the sources before a backup (their
+    /// real size, sparse images, cloud-only files), which may take minutes
+    /// on a big home folder.
+    struct Preparation: Codable, Equatable {
+        /// Files examined so far.
+        var files: Int64
+        /// The top-level folder being walked (« Documents »), relative.
+        var folder: String?
+        var startedAt: Date
+
+        init(files: Int64 = 0, folder: String? = nil, startedAt: Date) {
+            self.files = files
+            self.folder = folder
+            self.startedAt = startedAt
+        }
+    }
+
     /// One snapshot, as a line shows it.
     struct SnapshotSummary: Codable, Equatable {
         var manifestID: String
@@ -189,6 +206,8 @@ struct ForkMacBackupPresentation: Codable, Equatable {
 
     var phase: ForkMacBackupPhase
     var progress: Progress?
+    /// The walk in progress while `phase` is `.preparing`.
+    var preparation: Preparation?
     var sources: [SourceStatus]
     /// Files changed since the last complete snapshot (FSEvents), nil when
     /// not counted.
@@ -203,12 +222,14 @@ struct ForkMacBackupPresentation: Codable, Equatable {
     var slowDown: Bool
     var updatedAt: Date
 
-    init(phase: ForkMacBackupPhase, progress: Progress? = nil, sources: [SourceStatus] = [], pendingChanges: Int? = nil,
+    init(phase: ForkMacBackupPhase, progress: Progress? = nil, preparation: Preparation? = nil,
+         sources: [SourceStatus] = [], pendingChanges: Int? = nil,
          chain: [ChainStatus] = [], nextRun: Date? = nil, rhythm: Rhythm = .automatic(about: nil),
          capacity: Capacity = Capacity(), cost: Cost? = nil, lastError: ErrorLine? = nil, slowDown: Bool = false,
          updatedAt: Date = Date()) {
         self.phase = phase
         self.progress = progress
+        self.preparation = preparation
         self.sources = sources
         self.pendingChanges = pendingChanges
         self.chain = chain
@@ -233,6 +254,7 @@ struct ForkMacBackupPresentation: Codable, Equatable {
         var settled = self
         settled.phase = .ready(next: nextRun)
         settled.progress = nil
+        settled.preparation = nil
         return settled
     }
 
@@ -326,6 +348,9 @@ struct ForkMacBackupPresentation: Codable, Equatable {
     /// The closed island's right wing and the tile: « 42 % », « 2 min », or
     /// « calcul… » while there is nothing honest to show.
     func compactValue(_ text: ForkMacBackupStrings, locale: Locale, reading: ForkMacBackupReading = .percent) -> String {
+        if phase == .preparing, let preparation, preparation.files > 0 {
+            return ForkMacBackupFormat.count(preparation.files, locale: locale)
+        }
         switch reading {
         case .remaining:
             if let eta = progress?.eta { return ForkMacBackupFormat.duration(eta, locale: locale) }
@@ -336,8 +361,21 @@ struct ForkMacBackupPresentation: Codable, Equatable {
         return text.calculating
     }
 
-    /// « 1,3 Go / 3,1 Go · 18 Mo/s · reste 2 min » (section, window).
+    /// « 1,2 M fichiers examinés · Documents · 3 min » while the sources
+    /// are walked before a backup; nil in any other phase.
+    func preparationLine(_ text: ForkMacBackupStrings, locale: Locale) -> String? {
+        guard phase == .preparing, let preparation else { return nil }
+        var parts = [String(format: text.preparingExamined, ForkMacBackupFormat.count(preparation.files, locale: locale))]
+        if let folder = preparation.folder, !folder.isEmpty { parts.append(folder) }
+        let elapsed = updatedAt.timeIntervalSince(preparation.startedAt)
+        if elapsed >= 1 { parts.append(ForkMacBackupFormat.duration(elapsed, locale: locale)) }
+        return parts.joined(separator: " · ")
+    }
+
+    /// « 1,3 Go / 3,1 Go · 18 Mo/s · reste 2 min » (section, window); while
+    /// preparing, what the walk did (never « Zéro ko » for minutes).
     func progressLine(_ text: ForkMacBackupStrings, locale: Locale) -> String? {
+        if let line = preparationLine(text, locale: locale) { return line }
         guard let progress else { return nil }
         var parts: [String] = []
         let done = ForkMacBackupFormat.bytes(progress.bytesDone, locale: locale)

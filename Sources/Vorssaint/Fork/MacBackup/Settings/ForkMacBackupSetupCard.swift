@@ -179,7 +179,9 @@ struct ForkMacBackupSetupCard: View {
                 EmptyView()
             }
         case .repository:
-            action(text.connect, prominent: prominent) { open(.wizard(.choose)) }
+            // The connection's test needs the engine: installed first.
+            action(text.connect, prominent: prominent && setup.done.contains(.engine)) { open(.wizard(.choose)) }
+                .disabled(!setup.done.contains(.engine))
         case .kit:
             action(text.kitCreate, prominent: prominent) { open(.kit) }
                 .disabled(context.repository == nil)

@@ -10,6 +10,8 @@ import UniformTypeIdentifiers
 /// then the kit.
 struct ForkMacBackupWizard: View {
     @StateObject private var model: ForkMacBackupWizardModel
+    /// The engine's download, followed live: the test needs it installed.
+    @ObservedObject private var engineStore: ForkMacBackupEngineStore
     let open: (ForkMacBackupSheet?) -> Void
 
     @ObservedObject private var l10n = L10n.shared
@@ -22,12 +24,14 @@ struct ForkMacBackupWizard: View {
     init(context: ForkMacBackupSettingsContext, start: ForkMacBackupWizardStart,
          open: @escaping (ForkMacBackupSheet?) -> Void) {
         _model = StateObject(wrappedValue: ForkMacBackupWizardModel(context: context, start: start))
+        _engineStore = ObservedObject(wrappedValue: context.engineStore)
         self.open = open
     }
 
     /// For renders: a model already in a given state.
     init(model: ForkMacBackupWizardModel) {
         _model = StateObject(wrappedValue: model)
+        _engineStore = ObservedObject(wrappedValue: model.context.engineStore)
         open = { _ in }
     }
 
@@ -397,13 +401,16 @@ struct ForkMacBackupWizard: View {
         }
 
         Section {
+            if !engineInstalled {
+                engineRow
+            }
             HStack {
                 Button {
                     model.test()
                 } label: {
                     Label(text.testConnection, systemImage: "bolt.horizontal.circle")
                 }
-                .disabled(!model.canTest)
+                .disabled(!model.canTest || !engineInstalled)
                 if model.testing {
                     ProgressView().controlSize(.small)
                 }
@@ -460,6 +467,52 @@ struct ForkMacBackupWizard: View {
                 }
             } header: {
                 Text(text.thisRepository)
+            }
+        }
+    }
+
+    private var engineInstalled: Bool {
+        if case .installed = model.context.engineState { return true }
+        return false
+    }
+
+    /// The engine is not installed yet: installed from here, its progress
+    /// shown in place (the test would only say « Moteur non installé »).
+    private var engineRow: some View {
+        let state = model.context.engineState
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                Label(shared.waitEngine, systemImage: "shippingbox")
+                    .font(.callout.weight(.medium))
+                Spacer()
+                switch state {
+                case .downloading:
+                    Button(text.cancel) { model.context.engineStore.cancel() }
+                        .controlSize(.small)
+                case .verifying:
+                    ProgressView().controlSize(.small)
+                case .failed:
+                    Button(text.tryAgain) { model.context.engineStore.install() }
+                default:
+                    Button(text.stepEngine) { model.context.engineStore.install() }
+                        .buttonStyle(.borderedProminent)
+                        .tint(ForkMacBackupStyle.accent)
+                }
+            }
+            switch state {
+            case .downloading(let progress):
+                ProgressView(value: progress)
+                    .tint(ForkMacBackupStyle.accent)
+                ForkMacBackupCaption(String(format: text.engineDownloading, ForkMacBackupFormat.percent(progress, locale: locale)))
+            case .verifying:
+                ForkMacBackupCaption(text.engineVerifying)
+            case .failed(let message):
+                Label(message.isEmpty ? text.engineFailed : message, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            default:
+                ForkMacBackupCaption(text.stepEngineCaption)
             }
         }
     }

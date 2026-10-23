@@ -20,10 +20,15 @@ struct ForkMacBackupPrescanCache: Codable, Equatable {
         var datalessBytes: Int64
         /// Allocated bytes of what the source keeps, at the walk.
         var realBytes: Int64
+        /// The FSEvents event at the start of the walk or of its last
+        /// refresh: the next refresh needs every change since (nil: an
+        /// older cache, walked again).
+        var eventID: UInt64?
 
-        init(date: Date, fingerprint: String, usage: ForkMacBackupDiskUsage) {
+        init(date: Date, fingerprint: String, usage: ForkMacBackupDiskUsage, eventID: UInt64? = nil) {
             self.date = date
             self.fingerprint = fingerprint
+            self.eventID = eventID
             sparseImages = usage.sparseImages
             dataless = usage.dataless
             datalessBytes = usage.datalessBytes
@@ -45,11 +50,24 @@ struct ForkMacBackupPrescanCache: Codable, Equatable {
 
     func encoded() -> Data? { try? ForkMacBackupJSON.encoder.encode(self) }
 
-    /// A newer format is ignored (walked again), never misread.
+    /// A newer format is ignored (walked again), never misread. Keys are
+    /// read in canonical form (build 2331 saved « /Users/me/ »).
     static func decode(_ data: Data) -> ForkMacBackupPrescanCache? {
-        guard let cache = try? ForkMacBackupJSON.decoder.decode(ForkMacBackupPrescanCache.self, from: data),
+        guard var cache = try? ForkMacBackupJSON.decoder.decode(ForkMacBackupPrescanCache.self, from: data),
               cache.formatVersion <= formatVersion else { return nil }
+        var entries: [String: Entry] = [:]
+        for (path, entry) in cache.entries {
+            let key = ForkMacBackupSourcePath.normalized(path)
+            if let kept = entries[key], kept.date >= entry.date { continue }
+            entries[key] = entry
+        }
+        cache.entries = entries
         return cache
+    }
+
+    /// The entry of a source, whatever form its path takes.
+    func entry(for path: String) -> Entry? {
+        entries[ForkMacBackupSourcePath.normalized(path)]
     }
 }
 
