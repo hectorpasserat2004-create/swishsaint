@@ -68,13 +68,20 @@ enum ForkMacBackupCapacitySupport {
                        days: Int = 90) -> [ForkMacBackupCapacitySample] {
         let start = now.addingTimeInterval(-Double(days) * 86_400)
         return samples.filter { $0.kind == kind && $0.date >= start && $0.date <= now.addingTimeInterval(3_600) }
+            .filter { !isUnmeasured($0) }
             .sorted { $0.date < $1.date }
     }
 
-    /// The newest sample of `kind`; nil: « inconnu ».
+    /// The newest sample of `kind`; nil: not measured yet.
     static func latest(_ samples: [ForkMacBackupCapacitySample], kind: ForkMacBackupCapacitySample.Kind)
         -> ForkMacBackupCapacitySample? {
-        samples.filter { $0.kind == kind }.max { $0.date < $1.date }
+        samples.filter { $0.kind == kind && !isUnmeasured($0) }.max { $0.date < $1.date }
+    }
+
+    /// A real size of 0 is a size never measured (build 2331 wrote one for
+    /// a source it could not match): never shown as « Zéro ko ».
+    static func isUnmeasured(_ sample: ForkMacBackupCapacitySample) -> Bool {
+        sample.kind == .real && sample.bytes <= 0
     }
 
     /// Months until the free space is used at the repository's growth

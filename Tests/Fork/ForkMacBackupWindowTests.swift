@@ -474,6 +474,11 @@ enum ForkMacBackupWindowTests {
     }
 
     private static func capacity(_ suite: TestSuite) {
+        suite.expect(ForkMacBackupCapacitySupport.latest([
+            ForkMacBackupCapacitySample(kind: .real, bytes: 333_000_000_000, date: now.addingTimeInterval(-7_200), source: "snapshot"),
+            ForkMacBackupCapacitySample(kind: .real, bytes: 0, date: now.addingTimeInterval(-60), source: "snapshot"),
+        ], kind: .real)?.bytes == 333_000_000_000,
+                     "a real size of 0 (build 2331, a source not matched) is never shown as « Zéro ko »")
         func sample(_ kind: ForkMacBackupCapacitySample.Kind, _ daysAgo: Double, _ bytes: Int64) -> ForkMacBackupCapacitySample {
             ForkMacBackupCapacitySample(kind: kind, bytes: bytes, date: now.addingTimeInterval(-daysAgo * 86_400), source: "x")
         }

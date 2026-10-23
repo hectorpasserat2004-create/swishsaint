@@ -160,6 +160,8 @@ struct ForkMacBackupStrings {
     let repositorySize: String
     let freeSpace: String
     let unknown: String
+    /// A size or a cost not measured yet: known once a backup ran (island).
+    let afterFirstBackup: String
     /// `%@` × 3: a duration, a battery percentage, a size.
     let costLine: String
 
@@ -327,6 +329,7 @@ extension ForkMacBackupStrings {
         repositorySize: "Repository: %@",
         freeSpace: "%@ free",
         unknown: "unknown",
+        afterFirstBackup: "After the first backup",
         costLine: "Average backup: %@ · %@ of battery · %@ sent"
     )
 
@@ -440,6 +443,7 @@ extension ForkMacBackupStrings {
         repositorySize: "Dépôt\u{00A0}: %@",
         freeSpace: "%@ libres",
         unknown: "inconnu",
+        afterFirstBackup: "Après la première sauvegarde",
         costLine: "Sauvegarde moyenne\u{00A0}: %@ · %@ de batterie · %@ envoyés"
     )
 
@@ -553,6 +557,7 @@ extension ForkMacBackupStrings {
         repositorySize: "Repositório: %@",
         freeSpace: "%@ livres",
         unknown: "desconhecido",
+        afterFirstBackup: "Após o primeiro backup",
         costLine: "Backup médio: %@ · %@ de bateria · %@ enviados"
     )
 
@@ -666,6 +671,7 @@ extension ForkMacBackupStrings {
         repositorySize: "Depo: %@",
         freeSpace: "%@ boş",
         unknown: "bilinmiyor",
+        afterFirstBackup: "İlk yedeklemeden sonra",
         costLine: "Ortalama yedekleme: %@ · %@ pil · %@ gönderildi"
     )
 
@@ -779,6 +785,7 @@ extension ForkMacBackupStrings {
         repositorySize: "Репозиторий: %@",
         freeSpace: "Свободно: %@",
         unknown: "неизвестно",
+        afterFirstBackup: "После первой копии",
         costLine: "Средняя копия: %@ · %@ заряда · отправлено %@"
     )
 
@@ -892,6 +899,7 @@ extension ForkMacBackupStrings {
         repositorySize: "Repositorio: %@",
         freeSpace: "%@ libres",
         unknown: "desconocido",
+        afterFirstBackup: "Tras la primera copia",
         costLine: "Copia media: %@ · %@ de batería · %@ enviados"
     )
 
@@ -1005,6 +1013,7 @@ extension ForkMacBackupStrings {
         repositorySize: "Repozitár: %@",
         freeSpace: "Voľné: %@",
         unknown: "neznáme",
+        afterFirstBackup: "Po prvej zálohe",
         costLine: "Priemerná záloha: %@ · %@ batérie · odoslané %@"
     )
 
@@ -1118,6 +1127,7 @@ extension ForkMacBackupStrings {
         repositorySize: "Repository-Größe: %@",
         freeSpace: "%@ frei",
         unknown: "unbekannt",
+        afterFirstBackup: "Nach dem ersten Backup",
         costLine: "Durchschnittliche Sicherung: %@ · %@ Batterie · %@ gesendet"
     )
 
@@ -1231,6 +1241,7 @@ extension ForkMacBackupStrings {
         repositorySize: "Archivio: %@",
         freeSpace: "%@ liberi",
         unknown: "sconosciuto",
+        afterFirstBackup: "Dopo il primo backup",
         costLine: "Backup medio: %@ · %@ di batteria · %@ inviati"
     )
 
@@ -1344,6 +1355,7 @@ extension ForkMacBackupStrings {
         repositorySize: "リポジトリ：%@",
         freeSpace: "空き %@",
         unknown: "不明",
+        afterFirstBackup: "初回バックアップ後",
         costLine: "平均バックアップ：%@ · バッテリー %@ · 送信 %@"
     )
 
@@ -1457,6 +1469,7 @@ extension ForkMacBackupStrings {
         repositorySize: "저장소: %@",
         freeSpace: "%@ 사용 가능",
         unknown: "알 수 없음",
+        afterFirstBackup: "첫 백업 후",
         costLine: "평균 백업: %@ · 배터리 %@ · %@ 전송"
     )
 
@@ -1570,6 +1583,7 @@ extension ForkMacBackupStrings {
         repositorySize: "Репозиторій: %@",
         freeSpace: "Вільно: %@",
         unknown: "невідомо",
+        afterFirstBackup: "Після першої копії",
         costLine: "Середня копія: %@ · %@ заряду · надіслано %@"
     )
 
@@ -1683,6 +1697,7 @@ extension ForkMacBackupStrings {
         repositorySize: "存储库：%@",
         freeSpace: "可用 %@",
         unknown: "未知",
+        afterFirstBackup: "首次备份后",
         costLine: "平均每次备份：%@ · 电池 %@ · 发送 %@"
     )
 
@@ -1796,6 +1811,7 @@ extension ForkMacBackupStrings {
         repositorySize: "儲存庫：%@",
         freeSpace: "可用 %@",
         unknown: "未知",
+        afterFirstBackup: "首次備份後",
         costLine: "平均每次備份：%@ · 電池 %@ · 傳送 %@"
     )
 
@@ -1909,6 +1925,7 @@ extension ForkMacBackupStrings {
         repositorySize: "儲存庫：%@",
         freeSpace: "可用 %@",
         unknown: "未知",
+        afterFirstBackup: "首次備份後",
         costLine: "平均每次備份：%@ · 電池 %@ · 傳送 %@"
     )
 }
