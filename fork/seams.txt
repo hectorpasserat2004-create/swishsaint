@@ -80,3 +80,6 @@ notch-macbackup-event2 Sources/Vorssaint/Services/Notch/NotchSupport.swift      
 notch-macbackup-event3 Sources/Vorssaint/Services/Notch/NotchSupport.swift      # sauvegarde : routage de NotchEvent.backup par le crochet (switch exhaustif) — ne nomme aucun type du fork (TEST_SOURCES)
 command-bar-macbackup  Sources/Vorssaint/Services/CommandBar/CommandBarCatalog.swift  # sauvegarde : lignes de la Command Bar (sauvegarder, pause, reprendre, état, restaurer, vérifier, fenêtre, kit)
 
+
+# Focus au regard (Fork/Glance/README.md). La page de réglages passe par settings4, le démarrage par bootstrap.
+glance-mru         Sources/Vorssaint/Services/Switcher/WindowUseTracker.swift  # focus au regard : le traqueur de fenêtres récentes tourne aussi quand Focus au regard est activé (forkDemand posé par ForkGlanceWindowIndex.start, décision D4 du 23/10)
