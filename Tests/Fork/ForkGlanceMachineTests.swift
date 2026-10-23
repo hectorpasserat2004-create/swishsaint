@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Martial
 
+import CoreGraphics
 import Foundation
 
 /// Suite `fork-glance-machine` — A5: the decision machine (plan §7, §17.1).
@@ -118,6 +119,8 @@ enum ForkGlanceMachineTests {
         availability(suite)
         calibration(suite)
         focusResults(suite)
+        inputRules(suite)
+        menuWindows(suite)
     }
 
     private static func startup(_ suite: TestSuite) {
@@ -495,6 +498,79 @@ enum ForkGlanceMachineTests {
             again += driver.machine.handle(.gaze(gaze(.zone(right))), now: 3 + Double(step) / 12)
         }
         suite.expect(again.contains(.focus(zone: right)), "after looking away from it, the zone may be tried again")
+    }
+
+    // MARK: The input watch's rules (Pure/ForkGlanceInputRules)
+
+    private static func inputRules(_ suite: TestSuite) {
+        let rules = ForkGlanceInputRules.self
+        suite.expect(rules.isGlancePointer(at: 10.1, from: 10, until: 10.3),
+                     "a pointer event inside Glance's warp window is Glance's own")
+        suite.expect(!rules.isGlancePointer(at: 9.9, from: 10, until: 10.3)
+                     && !rules.isGlancePointer(at: 10.4, from: 10, until: 10.3),
+                     "a pointer event before or after the warp window is the person's")
+        suite.expect(!rules.isGlancePointer(at: 0, from: 0, until: 0),
+                     "before any warp, no pointer event is Glance's")
+        suite.expect(rules.isRealClick(sourcePID: 0, userData: 0, ownPID: 42),
+                     "a hardware click (no poster, no marker) is the person's")
+        suite.expect(!rules.isRealClick(sourcePID: 42, userData: 0, ownPID: 42),
+                     "a click this app posted never teaches the model")
+        suite.expect(!rules.isRealClick(sourcePID: 0, userData: rules.syntheticClickMarker, ownPID: 42),
+                     "the panes' fallback click, marked, never teaches the model")
+        suite.expect(!rules.isRealClick(sourcePID: 77, userData: 0x1234, ownPID: 42),
+                     "a click another program posted with a marker is not the person's")
+    }
+
+    private static func window(pid: Int32, layer: Int, owner: String = "App", alpha: Double = 1,
+                               _ rect: CGRect) -> [String: Any] {
+        [kCGWindowOwnerPID as String: NSNumber(value: pid), kCGWindowLayer as String: layer,
+         kCGWindowOwnerName as String: owner, kCGWindowAlpha as String: alpha,
+         kCGWindowBounds as String: rect.dictionaryRepresentation as NSDictionary]
+    }
+
+    private static func menuWindows(_ suite: TestSuite) {
+        let rules = ForkGlanceMenuWindows.self
+        let own: pid_t = 42
+        let lg = CGSize(width: 3440, height: 1440)
+        let sizes = [lg, CGSize(width: 1728, height: 1117)]
+        let full = CGRect(origin: .zero, size: lg)
+        var asked: [pid_t] = []
+        func hit(_ windows: [[String: Any]], ids: [pid_t: String] = [:]) -> ForkGlanceMenuWindows.Hit? {
+            rules.hit(in: windows, ownPID: own, displaySizes: sizes) { pid in
+                asked.append(pid)
+                return ids[pid] ?? ""
+            }
+        }
+        let menu = CGRect(x: 100, y: 30, width: 220, height: 300)
+        suite.expect(hit([window(pid: 7, layer: rules.menuLayer, menu)]) == .menu,
+                     "another app's menu (layer 101) holds the menu guard")
+        suite.expect(hit([window(pid: own, layer: rules.menuLayer, menu)]) == nil,
+                     "this app's own menus and tooltips never count (its menus come from NSMenu)")
+        suite.expect(hit([window(pid: 7, layer: rules.menuLayer, alpha: 0, menu)]) == nil,
+                     "a transparent window at the menu layer is no menu")
+        suite.expect(hit([window(pid: 7, layer: rules.menuLayer, CGRect(x: 0, y: 0, width: 1, height: 1))]) == nil,
+                     "a one-point sliver at the menu layer is no menu")
+        suite.expect(hit([window(pid: 9, layer: 18, owner: "Dock", full)]) == .overview,
+                     "Dock's window covering a display at layer 18 is Mission Control")
+        suite.expect(hit([window(pid: 9, layer: 18, owner: "Dock", CGRect(x: 0, y: 1300, width: 900, height: 80))]) == nil,
+                     "Dock's own strip, not covering a display, is no overview")
+        suite.expect(hit([window(pid: 9, layer: 19, owner: "WindowManager", full)]) == .overview,
+                     "WindowManager's display-wide window at layer 19 is the overview of recent macOS")
+        suite.expect(hit([window(pid: 9, layer: 18, owner: "WindowManager", full)]) == nil,
+                     "Show Desktop's layer 18 stays out")
+        asked = []
+        suite.expect(hit([window(pid: 11, layer: 25, owner: "screencaptureui", full)],
+                         ids: [11: rules.screenshotBundleID]) == .screenshot,
+                     "screencaptureui covering a display is a screenshot selection")
+        suite.expect(asked == [11], "the bundle id is asked only for the window that covers a display")
+        suite.expect(hit([window(pid: 11, layer: 0, full)], ids: [11: rules.screenshotBundleID]) == nil,
+                     "a window at layer 0, even of screencaptureui, is an ordinary window")
+        asked = []
+        suite.expect(hit([window(pid: 12, layer: 3, full)], ids: [12: "com.example.player"]) == nil,
+                     "another app's full-display window above layer 0 is no guard")
+        suite.expect(hit([window(pid: 7, layer: 0, menu), window(pid: 7, layer: rules.menuLayer, menu)]) == .menu,
+                     "the list is read to the end: a menu behind an ordinary window still counts")
+        suite.expect(hit([]) == nil && rules.bounds(of: [:]) == .zero, "no window, no guard; no bounds, a zero rect")
     }
 
     static func change<Value>(_ value: Value, _ alter: (inout Value) -> Void) -> Value {
