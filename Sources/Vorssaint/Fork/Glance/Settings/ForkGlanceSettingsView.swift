@@ -159,10 +159,14 @@ struct ForkGlanceSettingsContent: View {
     @AppStorage(DefaultsKey.focusFollowsMouseEnabled) private var focusFollowsMouse = false
     @State private var diagnosticsOpen: Bool
     @State private var pendingDelete: ForkGlanceProfile?
+    /// The renders' curves; the live page starts them empty.
+    private let diagnosticsHistory: ForkGlanceCurveHistory?
 
-    init(state: ForkGlanceSettingsState, actions: ForkGlanceSettingsActions, diagnosticsOpen: Bool = false) {
+    init(state: ForkGlanceSettingsState, actions: ForkGlanceSettingsActions, diagnosticsOpen: Bool = false,
+         diagnosticsHistory: ForkGlanceCurveHistory? = nil) {
         self.state = state
         self.actions = actions
+        self.diagnosticsHistory = diagnosticsHistory
         _diagnosticsOpen = State(initialValue: diagnosticsOpen)
     }
 
@@ -376,22 +380,27 @@ struct ForkGlanceSettingsContent: View {
                     ForkGlanceGradeBadge(score: score, core: core, locale: locale)
                 }
             }
-            HStack(spacing: 8) {
-                if calibration == nil {
-                    Button(core.calibrateEllipsis) { actions.openCalibration(.full) }
-                        .buttonStyle(.borderedProminent)
-                } else {
-                    Button(core.calibrateEllipsis) { actions.openCalibration(.recalibrate) }
-                    Button(core.quickRecenter) { actions.openCalibration(.quickRecenter) }
-                    Button(core.test) { actions.openCalibration(.test) }
+            // The yellow banner above already offers « Calibrer… » while the phase waits for one.
+            if calibration != nil || state.profile != nil || !waitsForCalibration {
+                HStack(spacing: 8) {
+                    if calibration == nil {
+                        if !waitsForCalibration {
+                            Button(core.calibrateEllipsis) { actions.openCalibration(.full) }
+                                .buttonStyle(.borderedProminent)
+                        }
+                    } else {
+                        Button(core.calibrateEllipsis) { actions.openCalibration(.recalibrate) }
+                        Button(core.quickRecenter) { actions.openCalibration(.quickRecenter) }
+                        Button(core.test) { actions.openCalibration(.test) }
+                    }
+                    Spacer(minLength: 8)
+                    if let profile = state.profile {
+                        Button(text.deleteProfile, role: .destructive) { pendingDelete = profile }
+                    }
                 }
-                Spacer(minLength: 8)
-                if let profile = state.profile {
-                    Button(text.deleteProfile, role: .destructive) { pendingDelete = profile }
-                }
+                .controlSize(.small)
+                .padding(.leading, settingsRowTextInset)
             }
-            .controlSize(.small)
-            .padding(.leading, settingsRowTextInset)
             Text(text.calibrationCaption)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -434,6 +443,11 @@ struct ForkGlanceSettingsContent: View {
                 }
             }
         }
+    }
+
+    private var waitsForCalibration: Bool {
+        if case .needsCalibration = state.phase { return true }
+        return false
     }
 
     /// « Calibré le 23 oct. 2026 · Tête et yeux », or « Pas encore calibré ».
@@ -722,7 +736,9 @@ struct ForkGlanceSettingsContent: View {
                     ForkGlanceDiagnosticsView(live: state.live, phase: state.phase, layout: state.layout,
                                               zones: state.zones, currentZone: state.currentZone,
                                               lastSwitch: state.recentSwitches.first?.date, text: text, core: core,
-                                              locale: locale, actions: actions.diagnostics, zoneName: state.zoneName)
+                                              locale: locale, actions: actions.diagnostics,
+                                              history: diagnosticsHistory ?? ForkGlanceCurveHistory(),
+                                              zoneName: state.zoneName)
                 }
             } label: {
                 VStack(alignment: .leading, spacing: 2) {
