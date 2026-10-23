@@ -10,7 +10,7 @@ import Foundation
 enum ForkGlanceStringsTests {
     static func run(_ suite: TestSuite) {
         mirrorChecks(suite, "ForkGlanceStrings", ForkGlanceStrings.strings,
-                     island: island, sameInFrench: sameInFrench)
+                     island: island, sameInFrench: sameInFrench, untranslated: untranslated)
         names(suite)
         statusLines(suite)
         tileReadings(suite)
@@ -38,9 +38,14 @@ enum ForkGlanceStringsTests {
     /// their placeholder, the French typography, no straight apostrophe,
     /// and the French really written (only the `sameInFrench` labels may
     /// match the English).
+    ///
+    /// `untranslated` checks the thirteen other languages the same way: a
+    /// field that reads as the English in one of them fails unless it is
+    /// listed (a brand, a unit, a word both languages share). nil leaves
+    /// them unchecked, for a struct whose translations are still to come.
     static func mirrorChecks<Strings>(_ suite: TestSuite, _ name: String, _ strings: (AppLanguage) -> Strings,
                                       island: [KeyPath<Strings, String>] = [], sameInFrench: Set<String> = [],
-                                      sample: String = "MacBook") {
+                                      untranslated: Set<String>? = nil, sample: String = "MacBook") {
         let languages = AppLanguage.allCases
         suite.expect(languages.count == 15, "\(name) speaks the app's fifteen languages")
         let english = fields(strings(.enUS))
@@ -80,8 +85,19 @@ enum ForkGlanceStringsTests {
         suite.expect(loose.isEmpty, "\(name)'s French uses no-break spaces, typographic apostrophes, no capital after « · »: \(loose)")
         let straight = languages.flatMap { fields(strings($0)).map(\.1) }.filter { $0.contains("'") }
         suite.expect(straight.isEmpty, "no \(name) text uses a straight apostrophe: \(straight)")
-        let untranslated = french.filter { englishByLabel[$0.0] == $0.1 && !sameInFrench.contains($0.0) }.map(\.0)
-        suite.expect(untranslated.isEmpty, "every \(name) text is written in French, none left in English: \(untranslated)")
+        let leftInEnglish = french.filter { englishByLabel[$0.0] == $0.1 && !sameInFrench.contains($0.0) }.map(\.0)
+        suite.expect(leftInEnglish.isEmpty, "every \(name) text is written in French, none left in English: \(leftInEnglish)")
+
+        guard let untranslated else { return }
+        let unknown = untranslated.filter { englishByLabel[$0] == nil }.sorted()
+        suite.expect(unknown.isEmpty, "\(name)'s untranslated list names only its own fields: \(unknown)")
+        var stillEnglish: [String] = []
+        for language in languages where language != .enUS && language != .fr {
+            stillEnglish += fields(strings(language))
+                .filter { englishByLabel[$0.0] == $0.1 && !untranslated.contains($0.0) }
+                .map { "\(language.rawValue).\($0.0)" }
+        }
+        suite.expect(stillEnglish.isEmpty, "every \(name) text is translated in every language, none left in English: \(stillEnglish)")
     }
 
     /// A template as shown: each `%@` or `%n$@` filled with `sample`, each
@@ -177,6 +193,10 @@ enum ForkGlanceStringsTests {
 
     /// French words that are the English ones too.
     private static let sameInFrench: Set<String> = ["builtInDisplay", "modeZones", "feedbackHalo", "pause"]
+
+    /// Words the other languages share with the English: the built-in
+    /// display's name, and « Halo » (German, Spanish, Portuguese).
+    private static let untranslated: Set<String> = ["builtInDisplay", "feedbackHalo"]
 
     private static func names(_ suite: TestSuite) {
         suite.expect(zip(languages, all).allSatisfy { $0.1.featureTitle == ForkExtrasStrings.strings($0.0).glanceTitle },
