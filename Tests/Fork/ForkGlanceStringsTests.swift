@@ -350,12 +350,18 @@ enum ForkGlanceStringsTests {
         suite.expect(english.windowZoneName(app: "Safari") == "Safari window",
                      "a window zone is named by its app")
         let lg = ForkGlanceDisplay(uuid: "LG", name: "LG HDR WQHD", frame: .zero)
-        let macBook = ForkGlanceDisplay(uuid: "MB", name: "Built-in Retina Display", frame: .zero, isBuiltIn: true)
+        let macBook = ForkGlanceDisplay(uuid: "MB", name: "Built-in Retina Display", frame: .zero, isBuiltIn: true,
+                                        hasNotch: true)
+        let iMac = ForkGlanceDisplay(uuid: "IM", name: "iMac", frame: .zero,
+                                     millimeters: CGSize(width: 597, height: 336), isBuiltIn: true)
         let dellA = ForkGlanceDisplay(uuid: "A", name: "DELL U2720Q", frame: .zero)
         let dellB = ForkGlanceDisplay(uuid: "B", name: "DELL P2422H", frame: .zero)
         suite.expect(french.displayShortName(lg, among: [lg, macBook]) == "LG"
                         && french.displayShortName(macBook, among: [lg, macBook]) == "MacBook",
                      "a display is called by its brand, the built-in one MacBook")
+        suite.expect(french.displayShortName(iMac, among: [iMac, lg]) == "iMac"
+                        && french.zoneName(.left, display: french.displayShortName(iMac, among: [iMac, lg])) == "Zone gauche de l’iMac",
+                     "an iMac’s built-in display keeps its own name, never MacBook")
         suite.expect(french.displayShortName(dellA, among: [dellA, dellB]) == "DELL U2720Q"
                         && french.displayShortName(dellA, among: [dellA, macBook]) == "DELL",
                      "two displays of one brand keep their whole names")

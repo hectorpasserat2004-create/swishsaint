@@ -494,11 +494,12 @@ extension ForkGlanceStrings {
         fillName(zoneWindowApp, app)
     }
 
-    /// How a display is called in a zone's name: the built-in one
-    /// « MacBook », another its name's first word (« LG » for « LG HDR
-    /// WQHD »), or its whole name when another display starts alike.
+    /// How a display is called in a zone's name: a laptop's built-in panel
+    /// « MacBook » (`ForkGlanceProfiles.isLaptopPanel`: never an iMac's),
+    /// another its name's first word (« LG » for « LG HDR WQHD »), or its
+    /// whole name when another display starts alike.
     func displayShortName(_ display: ForkGlanceDisplay, among displays: [ForkGlanceDisplay]) -> String {
-        if display.isBuiltIn { return builtInDisplay }
+        if ForkGlanceProfiles.isLaptopPanel(display) { return builtInDisplay }
         let name = display.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let first = Self.firstWord(name), !first.isEmpty else { return name }
         let alike = displays.filter { $0.uuid != display.uuid && !$0.isBuiltIn && Self.firstWord($0.name) == first }
