@@ -60,6 +60,9 @@ struct ForkGlanceCalibrationStrings {
     let gaugeLight: String
     let gaugeDistance: String
     let gaugeFacing: String
+    /// A gauge's value, read aloud: green, or not yet.
+    let gaugeGood: String
+    let gaugeLow: String
     let adviceNoFace: String
     let adviceSeveralFaces: String
     let adviceMoreLight: String
@@ -87,6 +90,9 @@ struct ForkGlanceCalibrationStrings {
     let quickBody: String
     /// `%1$@`: the points, `%2$@`: a duration, « 29 points · environ 1 min ».
     let pointsSummary: String
+    /// Under a minute (the quick recenter): `%1$@`: the points, `%2$@`: the
+    /// seconds, « 6 points · environ 15 s ».
+    let pointsSummarySeconds: String
     let keySpace: String
     let keyEscape: String
     let keyDelete: String
@@ -215,10 +221,16 @@ extension ForkGlanceCalibrationStrings {
         ForkGlanceStrings.fill(welcomeDuration, ForkGlanceStrings.timeLeft(seconds, locale: locale))
     }
 
-    /// « 29 points · environ 1 min ».
+    /// « 29 points · environ 1 min »; under a minute once rounded up to
+    /// 5 s, the seconds, « 6 points · environ 15 s » (a quick recenter).
     func pointsLine(_ count: Int, locale: Locale) -> String {
-        ForkGlanceStrings.fill(pointsSummary, "\(max(0, count))",
-                               ForkGlanceStrings.timeLeft(ForkGlanceCalibrationPlan.duration(points: count), locale: locale))
+        let points = "\(max(0, count))"
+        let duration = ForkGlanceCalibrationPlan.duration(points: count)
+        let seconds = max(5, Int((duration / 5).rounded(.up)) * 5)
+        guard seconds >= 60 else {
+            return ForkGlanceStrings.fill(pointsSummarySeconds, points, seconds.formatted(.number.locale(locale)))
+        }
+        return ForkGlanceStrings.fill(pointsSummary, points, ForkGlanceStrings.timeLeft(duration, locale: locale))
     }
 
     /// « Point 12 sur 29 », the point under way (from 1).
@@ -282,6 +294,8 @@ extension ForkGlanceCalibrationStrings {
         gaugeLight: "Light",
         gaugeDistance: "Distance",
         gaugeFacing: "Facing",
+        gaugeGood: "OK",
+        gaugeLow: "Needs fixing",
         adviceNoFace: "Bring your face into the picture.",
         adviceSeveralFaces: "Only one person in front of the camera, please.",
         adviceMoreLight: "A little more light on your face.",
@@ -303,6 +317,7 @@ extension ForkGlanceCalibrationStrings {
         pointsBody: "Points light up on each display. Turn your head naturally toward each one: there is nothing to click.",
         quickBody: "One point in the middle of each zone, to fix a slight drift without calibrating again.",
         pointsSummary: "%1$@ points · about %2$@",
+        pointsSummarySeconds: "%1$@ points · about %2$@ s",
         keySpace: "Space: pause",
         keyEscape: "Esc: cancel",
         keyDelete: "Delete: previous point again",
@@ -377,6 +392,8 @@ extension ForkGlanceCalibrationStrings {
         gaugeLight: "Lumière",
         gaugeDistance: "Distance",
         gaugeFacing: "De face",
+        gaugeGood: "Correct",
+        gaugeLow: "À corriger",
         adviceNoFace: "Placez votre visage dans l’image.",
         adviceSeveralFaces: "Une seule personne devant la caméra, s’il vous plaît.",
         adviceMoreLight: "Un peu plus de lumière de face.",
@@ -398,6 +415,7 @@ extension ForkGlanceCalibrationStrings {
         pointsBody: "Des points s’allument sur chaque écran. Tournez la tête naturellement vers chacun\u{00A0}: aucun clic à faire.",
         quickBody: "Un point au centre de chaque zone, pour corriger un léger décalage sans tout recalibrer.",
         pointsSummary: "%1$@ points · environ %2$@",
+        pointsSummarySeconds: "%1$@ points · environ %2$@\u{00A0}s",
         keySpace: "Espace\u{00A0}: pause",
         keyEscape: "Échap\u{00A0}: annuler",
         keyDelete: "Supprimer\u{00A0}: refaire le point précédent",
@@ -472,6 +490,8 @@ extension ForkGlanceCalibrationStrings {
         gaugeLight: "Luz",
         gaugeDistance: "Distância",
         gaugeFacing: "De frente",
+        gaugeGood: "Bom",
+        gaugeLow: "A corrigir",
         adviceNoFace: "Coloque o rosto na imagem.",
         adviceSeveralFaces: "Só uma pessoa diante da câmera, por favor.",
         adviceMoreLight: "Um pouco mais de luz no rosto.",
@@ -493,6 +513,7 @@ extension ForkGlanceCalibrationStrings {
         pointsBody: "Pontos acendem em cada tela. Vire a cabeça naturalmente para cada um: não é preciso clicar em nada.",
         quickBody: "Um ponto no centro de cada zona, para corrigir um leve desvio sem calibrar tudo de novo.",
         pointsSummary: "%1$@ pontos · cerca de %2$@",
+        pointsSummarySeconds: "%1$@ pontos · cerca de %2$@ s",
         keySpace: "Espaço: pausar",
         keyEscape: "Esc: cancelar",
         keyDelete: "Apagar: refazer o ponto anterior",
@@ -567,6 +588,8 @@ extension ForkGlanceCalibrationStrings {
         gaugeLight: "Işık",
         gaugeDistance: "Mesafe",
         gaugeFacing: "Karşıdan",
+        gaugeGood: "Uygun",
+        gaugeLow: "Düzeltilmeli",
         adviceNoFace: "Yüzünüzü görüntünün içine getirin.",
         adviceSeveralFaces: "Lütfen kameranın önünde yalnızca bir kişi olsun.",
         adviceMoreLight: "Yüzünüze biraz daha ışık.",
@@ -588,6 +611,7 @@ extension ForkGlanceCalibrationStrings {
         pointsBody: "Her ekranda noktalar yanar. Başınızı doğal biçimde her birine çevirin: tıklamanız gereken bir şey yok.",
         quickBody: "Her bölgenin ortasında bir nokta: baştan kalibrasyon yapmadan küçük bir kaymayı düzeltmek için.",
         pointsSummary: "%1$@ nokta · yaklaşık %2$@",
+        pointsSummarySeconds: "%1$@ nokta · yaklaşık %2$@ sn",
         keySpace: "Boşluk: duraklat",
         keyEscape: "Esc: vazgeç",
         keyDelete: "Sil: önceki noktayı yinele",
@@ -662,6 +686,8 @@ extension ForkGlanceCalibrationStrings {
         gaugeLight: "Свет",
         gaugeDistance: "Расстояние",
         gaugeFacing: "Анфас",
+        gaugeGood: "В норме",
+        gaugeLow: "Нужно исправить",
         adviceNoFace: "Поместите лицо в кадр.",
         adviceSeveralFaces: "Пожалуйста, только один человек перед камерой.",
         adviceMoreLight: "Немного больше света на лицо.",
@@ -683,6 +709,7 @@ extension ForkGlanceCalibrationStrings {
         pointsBody: "На каждом экране загораются точки. Естественно поворачивайте голову к каждой: нажимать ничего не нужно.",
         quickBody: "По одной точке в центре каждой зоны, чтобы исправить небольшое смещение без новой калибровки.",
         pointsSummary: "Точек: %1$@ · около %2$@",
+        pointsSummarySeconds: "Точек: %1$@ · около %2$@ с",
         keySpace: "Пробел: пауза",
         keyEscape: "Esc: отменить",
         keyDelete: "Delete: повторить предыдущую точку",
@@ -757,6 +784,8 @@ extension ForkGlanceCalibrationStrings {
         gaugeLight: "Luz",
         gaugeDistance: "Distancia",
         gaugeFacing: "De frente",
+        gaugeGood: "Correcto",
+        gaugeLow: "Por corregir",
         adviceNoFace: "Pon la cara dentro de la imagen.",
         adviceSeveralFaces: "Solo una persona delante de la cámara, por favor.",
         adviceMoreLight: "Un poco más de luz en la cara.",
@@ -778,6 +807,7 @@ extension ForkGlanceCalibrationStrings {
         pointsBody: "Se encienden puntos en cada pantalla. Gira la cabeza con naturalidad hacia cada uno: no hay que hacer clic en nada.",
         quickBody: "Un punto en el centro de cada zona, para corregir una ligera desviación sin volver a calibrar.",
         pointsSummary: "%1$@ puntos · alrededor de %2$@",
+        pointsSummarySeconds: "%1$@ puntos · alrededor de %2$@ s",
         keySpace: "Espacio: pausa",
         keyEscape: "Esc: cancelar",
         keyDelete: "Eliminar: repetir el punto anterior",
@@ -852,6 +882,8 @@ extension ForkGlanceCalibrationStrings {
         gaugeLight: "Svetlo",
         gaugeDistance: "Vzdialenosť",
         gaugeFacing: "Spredu",
+        gaugeGood: "V poriadku",
+        gaugeLow: "Treba upraviť",
         adviceNoFace: "Dajte tvár do záberu.",
         adviceSeveralFaces: "Pred kamerou, prosím, iba jedna osoba.",
         adviceMoreLight: "Trochu viac svetla na tvár.",
@@ -873,6 +905,7 @@ extension ForkGlanceCalibrationStrings {
         pointsBody: "Na každej obrazovke sa rozsvietia body. Prirodzene otočte hlavu ku každému: netreba nič klikať.",
         quickBody: "Jeden bod v strede každej zóny na opravu mierneho posunu bez novej kalibrácie.",
         pointsSummary: "Počet bodov: %1$@ · približne %2$@",
+        pointsSummarySeconds: "Počet bodov: %1$@ · približne %2$@ s",
         keySpace: "Medzerník: pauza",
         keyEscape: "Esc: zrušiť",
         keyDelete: "Delete: zopakovať predchádzajúci bod",
@@ -947,6 +980,8 @@ extension ForkGlanceCalibrationStrings {
         gaugeLight: "Licht",
         gaugeDistance: "Abstand",
         gaugeFacing: "Frontal",
+        gaugeGood: "In Ordnung",
+        gaugeLow: "Korrigieren",
         adviceNoFace: "Bring dein Gesicht ins Bild.",
         adviceSeveralFaces: "Bitte nur eine Person vor der Kamera.",
         adviceMoreLight: "Etwas mehr Licht auf dein Gesicht.",
@@ -968,6 +1003,7 @@ extension ForkGlanceCalibrationStrings {
         pointsBody: "Auf jedem Bildschirm leuchten Punkte auf. Dreh den Kopf ganz natürlich zu jedem: Du musst nichts klicken.",
         quickBody: "Ein Punkt in der Mitte jeder Zone, um eine leichte Abweichung ohne neue Kalibrierung zu korrigieren.",
         pointsSummary: "%1$@ Punkte · etwa %2$@",
+        pointsSummarySeconds: "%1$@ Punkte · etwa %2$@ Sek.",
         keySpace: "Leertaste: Pause",
         keyEscape: "Esc: Abbrechen",
         keyDelete: "Rückschritt: letzten Punkt wiederholen",
@@ -1042,6 +1078,8 @@ extension ForkGlanceCalibrationStrings {
         gaugeLight: "Luce",
         gaugeDistance: "Distanza",
         gaugeFacing: "Di fronte",
+        gaugeGood: "Corretto",
+        gaugeLow: "Da correggere",
         adviceNoFace: "Porta il viso nell’immagine.",
         adviceSeveralFaces: "Una sola persona davanti alla fotocamera, per favore.",
         adviceMoreLight: "Un po’ più di luce sul viso.",
@@ -1063,6 +1101,7 @@ extension ForkGlanceCalibrationStrings {
         pointsBody: "Su ogni schermo si accendono dei punti. Gira la testa con naturalezza verso ognuno: non c’è niente da cliccare.",
         quickBody: "Un punto al centro di ogni zona, per correggere un leggero scostamento senza ricalibrare tutto.",
         pointsSummary: "%1$@ punti · circa %2$@",
+        pointsSummarySeconds: "%1$@ punti · circa %2$@ s",
         keySpace: "Spazio: pausa",
         keyEscape: "Esc: annulla",
         keyDelete: "Elimina: rifai il punto precedente",
@@ -1137,6 +1176,8 @@ extension ForkGlanceCalibrationStrings {
         gaugeLight: "明るさ",
         gaugeDistance: "距離",
         gaugeFacing: "正面",
+        gaugeGood: "良好",
+        gaugeLow: "要調整",
         adviceNoFace: "顔を映像の中に入れてください。",
         adviceSeveralFaces: "カメラの前には1人だけにしてください。",
         adviceMoreLight: "顔にもう少し光を当ててください。",
@@ -1158,6 +1199,7 @@ extension ForkGlanceCalibrationStrings {
         pointsBody: "各画面に点が表示されます。それぞれに自然に顔を向けてください。クリックは不要です。",
         quickBody: "各ゾーンの中央に1点ずつ。最初からやり直さずに、わずかなずれを補正します。",
         pointsSummary: "%1$@ポイント・約%2$@",
+        pointsSummarySeconds: "%1$@ポイント・約%2$@秒",
         keySpace: "スペース：一時停止",
         keyEscape: "Esc：キャンセル",
         keyDelete: "Delete：前の点をやり直す",
@@ -1232,6 +1274,8 @@ extension ForkGlanceCalibrationStrings {
         gaugeLight: "조명",
         gaugeDistance: "거리",
         gaugeFacing: "정면",
+        gaugeGood: "양호",
+        gaugeLow: "조정 필요",
         adviceNoFace: "얼굴이 영상 안에 들어오게 하세요.",
         adviceSeveralFaces: "카메라 앞에는 한 사람만 있어 주세요.",
         adviceMoreLight: "얼굴에 빛을 조금 더 비춰 주세요.",
@@ -1253,6 +1297,7 @@ extension ForkGlanceCalibrationStrings {
         pointsBody: "각 화면에 점이 켜집니다. 자연스럽게 각 점으로 고개를 돌리세요. 클릭할 필요는 없습니다.",
         quickBody: "각 영역 가운데에 점 하나씩. 처음부터 다시 보정하지 않고 약간의 어긋남을 바로잡습니다.",
         pointsSummary: "점 %1$@개 · 약 %2$@",
+        pointsSummarySeconds: "점 %1$@개 · 약 %2$@초",
         keySpace: "스페이스: 일시 정지",
         keyEscape: "Esc: 취소",
         keyDelete: "Delete: 이전 점 다시 하기",
@@ -1327,6 +1372,8 @@ extension ForkGlanceCalibrationStrings {
         gaugeLight: "Світло",
         gaugeDistance: "Відстань",
         gaugeFacing: "Анфас",
+        gaugeGood: "Гаразд",
+        gaugeLow: "Треба виправити",
         adviceNoFace: "Помістіть обличчя в кадр.",
         adviceSeveralFaces: "Будь ласка, лише одна людина перед камерою.",
         adviceMoreLight: "Трохи більше світла на обличчя.",
@@ -1348,6 +1395,7 @@ extension ForkGlanceCalibrationStrings {
         pointsBody: "На кожному екрані спалахують точки. Природно повертайте голову до кожної: нічого натискати не треба.",
         quickBody: "По одній точці в центрі кожної зони, щоб виправити невеликий зсув без нового калібрування.",
         pointsSummary: "Точок: %1$@ · близько %2$@",
+        pointsSummarySeconds: "Точок: %1$@ · близько %2$@ с",
         keySpace: "Пробіл: пауза",
         keyEscape: "Esc: скасувати",
         keyDelete: "Delete: повторити попередню точку",
@@ -1422,6 +1470,8 @@ extension ForkGlanceCalibrationStrings {
         gaugeLight: "光线",
         gaugeDistance: "距离",
         gaugeFacing: "正对",
+        gaugeGood: "良好",
+        gaugeLow: "需调整",
         adviceNoFace: "请让脸进入画面。",
         adviceSeveralFaces: "请只让一个人在摄像头前。",
         adviceMoreLight: "脸上的光线再亮一点。",
@@ -1443,6 +1493,7 @@ extension ForkGlanceCalibrationStrings {
         pointsBody: "每块屏幕上会亮起圆点。自然地把头转向每个点：无需点按任何东西。",
         quickBody: "每个区域中央一个点，无需重新校准即可修正轻微偏移。",
         pointsSummary: "%1$@ 个点 · 约 %2$@",
+        pointsSummarySeconds: "%1$@ 个点 · 约 %2$@ 秒",
         keySpace: "空格键：暂停",
         keyEscape: "Esc：取消",
         keyDelete: "Delete：重做上一个点",
@@ -1517,6 +1568,8 @@ extension ForkGlanceCalibrationStrings {
         gaugeLight: "光線",
         gaugeDistance: "距離",
         gaugeFacing: "正對",
+        gaugeGood: "良好",
+        gaugeLow: "需調整",
         adviceNoFace: "請讓臉進入畫面。",
         adviceSeveralFaces: "請只讓一個人在相機前。",
         adviceMoreLight: "臉上的光線再亮一點。",
@@ -1538,6 +1591,7 @@ extension ForkGlanceCalibrationStrings {
         pointsBody: "每個螢幕上會亮起圓點。自然地把頭轉向每個點：不需要點按任何東西。",
         quickBody: "每個區域中央一個點，不必重新校正即可修正輕微偏移。",
         pointsSummary: "%1$@ 個點 · 約 %2$@",
+        pointsSummarySeconds: "%1$@ 個點 · 約 %2$@ 秒",
         keySpace: "空白鍵：暫停",
         keyEscape: "Esc：取消",
         keyDelete: "Delete：重做上一個點",
@@ -1612,6 +1666,8 @@ extension ForkGlanceCalibrationStrings {
         gaugeLight: "光線",
         gaugeDistance: "距離",
         gaugeFacing: "正對",
+        gaugeGood: "良好",
+        gaugeLow: "需調整",
         adviceNoFace: "請讓臉進入畫面。",
         adviceSeveralFaces: "請只讓一個人在相機前。",
         adviceMoreLight: "臉上的光線再亮一點。",
@@ -1633,6 +1689,7 @@ extension ForkGlanceCalibrationStrings {
         pointsBody: "每個螢幕上會亮起圓點。自然地把頭轉向每個點：不需要點按任何東西。",
         quickBody: "每個區域中央一個點，不必重新校正即可修正輕微偏移。",
         pointsSummary: "%1$@ 個點 · 約 %2$@",
+        pointsSummarySeconds: "%1$@ 個點 · 約 %2$@ 秒",
         keySpace: "空白鍵：暫停",
         keyEscape: "Esc：取消",
         keyDelete: "Delete：重做上一個點",

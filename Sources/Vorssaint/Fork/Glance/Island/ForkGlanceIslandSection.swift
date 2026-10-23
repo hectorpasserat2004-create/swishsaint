@@ -164,10 +164,6 @@ struct ForkGlanceIslandSection: View {
         }
         switch band.pause {
         case .menu: pauseMenu
-        case .resume:
-            NotchIconButton(symbol: "eyes", title: core.resume) {
-                act { ForkGlanceService.shared.resume(from: .island) }
-            }
         case .none: EmptyView()
         }
         if band.settings {
@@ -248,7 +244,7 @@ struct ForkGlanceIslandSection: View {
                                  action: calibrate(.recalibrate))
         case .layoutMoved:
             // The same displays moved a little: a quick recenter is enough (plan §8.6, the page's banner).
-            return BannerContent(symbol: "display.2", title: core.needNewLayout, button: core.quickRecenter, warning: true,
+            return BannerContent(symbol: "display.2", title: text.layoutMovedTitle, button: core.quickRecenter, warning: true,
                                  action: calibrate(.quickRecenter))
         case .calibrate(let need):
             return BannerContent(symbol: "viewfinder", title: core.calibrationNeed(need), button: core.calibrate,

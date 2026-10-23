@@ -196,11 +196,11 @@ enum ForkGlanceIslandRules {
         }
     }
 
-    /// The pause control in the top row.
+    /// The pause control in the top row; a pause the person chose has its
+    /// Reprendre in the pause banner.
     enum PauseControl: Equatable {
         /// « Pause ▾ »: 15 min, 1 h, until tomorrow, until resumed.
         case menu
-        case resume
         case none
     }
 
@@ -220,7 +220,8 @@ enum ForkGlanceIslandRules {
         case .unavailable: return Band(modes: false, recenter: false, pause: .none, settings: true)
         case .needsCalibration: return Band(modes: true, recenter: false, pause: .none, settings: true)
         case .calibrating: return Band(modes: false, recenter: false, pause: .none, settings: true)
-        case .paused(.user): return Band(modes: true, recenter: false, pause: .resume, settings: true)
+        // The pause banner holds Reprendre: the top row does not repeat it.
+        case .paused(.user): return Band(modes: true, recenter: false, pause: .none, settings: true)
         case .paused: return Band(modes: true, recenter: false, pause: .menu, settings: true)
         case .watching: return Band(modes: true, recenter: true, pause: .menu, settings: true)
         }

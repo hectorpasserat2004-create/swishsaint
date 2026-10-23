@@ -112,7 +112,7 @@ struct ForkGlanceFramingView: View {
             Spacer(minLength: 0)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityValue(good ? session.official.permissionGranted : session.official.permissionMissing)
+        .accessibilityValue(good ? session.text.gaugeGood : session.text.gaugeLow)
     }
 
     @ViewBuilder

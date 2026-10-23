@@ -483,6 +483,12 @@ enum ForkGlanceStringsTests {
         suite.expect(ForkGlanceStrings.timeLeft(0, locale: frenchLocale) == "1\u{00A0}min"
                         && ForkGlanceStrings.timeLeft(.infinity, locale: frenchLocale) == "1\u{00A0}min",
                      "a countdown never reads zero or nonsense")
+        // The assistant's line, here beside the countdown it shares.
+        let assistant = ForkGlanceCalibrationStrings.fr
+        suite.expect(assistant.pointsLine(6, locale: frenchLocale) == "6 points · environ 15\u{00A0}s"
+                        && ForkGlanceCalibrationStrings.enUS.pointsLine(6, locale: englishLocale) == "6 points · about 15 s"
+                        && assistant.pointsLine(29, locale: frenchLocale) == "29 points · environ 1\u{00A0}min",
+                     "a quick recenter says its seconds, rounded up to five, a full calibration its minutes")
         suite.expect(french.calibrationScoreLine(0.97, date: now.addingTimeInterval(-3 * 86_400), now: now, locale: frenchLocale)
                         == "Calibrage 97\u{00A0}% · il y a 3\u{00A0}j",
                      "the score line says how old the calibration is")
