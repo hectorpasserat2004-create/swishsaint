@@ -21,6 +21,7 @@ struct ForkGlanceSettingsView: View {
     /// The orchestrator adds `SettingsRouter.shared.notchModule = .glance`
     /// here once the island's module exists (B4).
     static func openIslandSettings() {
+        SettingsRouter.shared.notchModule = .glance
         SettingsRouter.shared.request(FeatureSettingsDestination(.notch))
     }
 }
@@ -377,7 +378,7 @@ struct ForkGlanceSettingsContent: View {
                 }
                 Spacer(minLength: 8)
                 if let score = ForkGlanceSettingsRules.score(calibration) {
-                    ForkGlanceGradeBadge(score: score, core: core, locale: locale)
+                    ForkGlanceSettingsGradeBadge(score: score, core: core, locale: locale)
                 }
             }
             // The yellow banner above already offers « Calibrer… » while the phase waits for one.
@@ -419,7 +420,7 @@ struct ForkGlanceSettingsContent: View {
                             }
                             Spacer(minLength: 8)
                             if let score = ForkGlanceSettingsRules.score(profile.calibration) {
-                                ForkGlanceGradeBadge(score: score, core: core, locale: locale)
+                                ForkGlanceSettingsGradeBadge(score: score, core: core, locale: locale)
                             }
                             Button {
                                 pendingDelete = profile
@@ -791,7 +792,7 @@ private struct ForkGlanceBanner<Buttons: View>: View {
 }
 
 /// « Excellente · 97 % » in the grade's color.
-private struct ForkGlanceGradeBadge: View {
+private struct ForkGlanceSettingsGradeBadge: View {
     let score: Double
     let core: ForkGlanceStrings
     let locale: Locale
