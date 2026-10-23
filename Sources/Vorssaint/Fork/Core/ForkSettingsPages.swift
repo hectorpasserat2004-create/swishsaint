@@ -44,6 +44,7 @@ extension ForkFeature {
         case .dictation: return "dictation"
         case .meetings: return "meetings"
         case .macBackup: return "macbackup"
+        case .glanceFocus: return "glance-focus"
         }
     }
 
@@ -74,6 +75,8 @@ extension ForkFeature {
             return [text.macBackupSummary, backup.islandTitle, backup.restore, backup.openBackups,
                     ForkMacBackupIslandStrings.strings(language).barKeywords,
                     "backup", "kopia", "restore", "nas", "s3", "minio", "time machine"]
+        case .glanceFocus:
+            return [text.glanceSummary, "glance", "gaze", "head", "camera", "focus", "webcam"]
         }
     }
 }
@@ -148,6 +151,8 @@ struct ForkFeatureSettingsPage: View {
             ForkMeetingSettings()
         case .macBackup:
             ForkMacBackupSettingsView()
+        case .glanceFocus:
+            ForkGlanceSettingsView()
         }
     }
 }

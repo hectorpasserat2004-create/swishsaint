@@ -94,6 +94,7 @@ struct NotchEditorStrings {
         case .watch: return watchSummary
         case .meetings: return NotchModule.meetingsHooks.summary() // FORK(notch-meetings4)
         case .macBackup: return NotchModule.macBackupHooks.summary() // FORK(notch-macbackups4)
+        case .glance: return NotchModule.glanceHooks.summary() // FORK(notch-glance4)
         }
     }
 }

@@ -240,6 +240,7 @@ struct NotchView: View {
             case .keepAwake: NotchCapsuleKeepAwakeStrip(service: service, size: size)
             case .meeting: ForkMeetingIslandStrip(service: service, size: size) // FORK(notch-meeting4)
             case .macBackup: ForkMacBackupIslandStrip(service: service, size: size) // FORK(notch-macbackup4)
+            case .glance: ForkGlanceIslandStrip(service: service, size: size) // FORK(notch-glance-activity4)
             }
         } else {
             // Handed down, the wings stay as they were drawn while a strip
@@ -256,6 +257,7 @@ struct NotchView: View {
             case .keepAwake: NotchKeepAwakeStrip(service: service, displayGeometry: geometry)
             case .meeting: ForkMeetingIslandStrip(service: service, displayGeometry: geometry) // FORK(notch-meeting4)
             case .macBackup: ForkMacBackupIslandStrip(service: service, displayGeometry: geometry) // FORK(notch-macbackup4)
+            case .glance: ForkGlanceIslandStrip(service: service, displayGeometry: geometry) // FORK(notch-glance-activity4)
             }
         }
     }
@@ -606,6 +608,7 @@ struct NotchView: View {
             case .watch: NotchWatchView(size: pageSize)
             case .meetings: ForkMeetingIslandSection(service: service, size: pageSize) // FORK(notch-meetings5)
             case .macBackup: ForkMacBackupIslandSection(service: service, size: pageSize) // FORK(notch-macbackups5)
+            case .glance: ForkGlanceIslandSection(service: service, size: pageSize) // FORK(notch-glance5)
             }
         }
     }
@@ -843,6 +846,7 @@ extension NotchModule: PanelOrderItem {
         case .watch: return FeatureStrings.notchWatch(language).title
         case .meetings: return Self.meetingsHooks.title(language) // FORK(notch-meetings5)
         case .macBackup: return Self.macBackupHooks.title(language) // FORK(notch-macbackups5)
+        case .glance: return Self.glanceHooks.title(language) // FORK(notch-glance5)
         }
     }
 }

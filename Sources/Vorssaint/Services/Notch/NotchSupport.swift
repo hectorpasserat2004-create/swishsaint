@@ -12,6 +12,8 @@ enum NotchModule: String, CaseIterable, Identifiable {
     static var meetingsHooks: (title: (AppLanguage) -> String, summary: () -> String, isAvailable: (UserDefaults) -> Bool) = ({ _ in "" }, { "" }, { _ in false }) // FORK(notch-meetings)
     case macBackup // FORK(notch-macbackups)
     static var macBackupHooks: (title: (AppLanguage) -> String, summary: () -> String, isAvailable: (UserDefaults) -> Bool, height: () -> CGFloat) = ({ _ in "" }, { "" }, { _ in false }, { .infinity }) // FORK(notch-macbackups)
+    case glance // FORK(notch-glance)
+    static var glanceHooks: (title: (AppLanguage) -> String, summary: () -> String, isAvailable: (UserDefaults) -> Bool, height: () -> CGFloat) = ({ _ in "" }, { "" }, { _ in false }, { .infinity }) // FORK(notch-glance)
     var id: String { rawValue }
 
     var symbol: String {
@@ -37,6 +39,7 @@ enum NotchModule: String, CaseIterable, Identifiable {
         case .watch: return "eye"
         case .meetings: return "person.2.wave.2" // FORK(notch-meetings2)
         case .macBackup: return "clock.arrow.circlepath" // FORK(notch-macbackups2)
+        case .glance: return "eyes" // FORK(notch-glance2)
         }
     }
 
@@ -61,6 +64,7 @@ enum NotchModule: String, CaseIterable, Identifiable {
         case .watch: return "o"
         case .meetings: return "e" // FORK(notch-meetings2)
         case .macBackup: return "k" // FORK(notch-macbackups2)
+        case .glance: return "l" // FORK(notch-glance2)
         }
     }
 
@@ -86,6 +90,7 @@ enum NotchModule: String, CaseIterable, Identifiable {
         case .watch: return AppFeature.notchWatch.isAvailable(in: defaults)
         case .meetings: return Self.meetingsHooks.isAvailable(defaults) // FORK(notch-meetings2)
         case .macBackup: return Self.macBackupHooks.isAvailable(defaults) // FORK(notch-macbackups2)
+        case .glance: return Self.glanceHooks.isAvailable(defaults) // FORK(notch-glance2)
         case .system:
             return [.monitorCPU, .monitorGPU, .monitorMemory, .monitorNetwork,
                     .monitorDisk, .monitorPower, .fanControl, .connectedDevices].contains { (feature: AppFeature) in
@@ -838,6 +843,8 @@ enum NotchCompactActivity: String, Identifiable {
     static var meetingHooks: (title: (AppLanguage) -> String, activities: () -> [NotchCompactActivity], wing: (NotchGeometry) -> CGFloat) = ({ _ in "" }, { [] }, { _ in 0 }) // FORK(notch-meeting)
     case macBackup // FORK(notch-macbackup)
     static var macBackupHooks: (title: (AppLanguage) -> String, ordered: ([NotchCompactActivity]) -> [NotchCompactActivity], wing: (NotchGeometry) -> CGFloat) = ({ _ in "" }, { $0 }, { _ in 0 }) // FORK(notch-macbackup)
+    case glance // FORK(notch-glance-activity)
+    static var glanceHooks: (title: (AppLanguage) -> String, ordered: ([NotchCompactActivity]) -> [NotchCompactActivity], wing: (NotchGeometry) -> CGFloat) = ({ _ in "" }, { $0 }, { _ in 0 }) // FORK(notch-glance-activity)
 
     var id: String { rawValue }
 
@@ -852,6 +859,7 @@ enum NotchCompactActivity: String, Identifiable {
         case .keepAwake: return Strings.localized(language).keepAwakeTitle
         case .meeting: return Self.meetingHooks.title(language) // FORK(notch-meeting2)
         case .macBackup: return Self.macBackupHooks.title(language) // FORK(notch-macbackup2)
+        case .glance: return Self.glanceHooks.title(language) // FORK(notch-glance-activity2)
         }
     }
 
@@ -867,6 +875,7 @@ enum NotchCompactActivity: String, Identifiable {
         case .keepAwake: return .controls
         case .meeting: return .meetings // FORK(notch-meeting2)
         case .macBackup: return .macBackup // FORK(notch-macbackup2)
+        case .glance: return .glance // FORK(notch-glance-activity2)
         }
     }
 
@@ -1302,6 +1311,8 @@ enum NotchControlItem: String, CaseIterable, Identifiable {
     static var meetingIsAvailable: (UserDefaults) -> Bool = { _ in false } // FORK(notch-meeting-tile)
     case macBackup // FORK(notch-macbackup-tile)
     static var macBackupIsAvailable: (UserDefaults) -> Bool = { _ in false } // FORK(notch-macbackup-tile)
+    case glance // FORK(notch-glance-tile)
+    static var glanceIsAvailable: (UserDefaults) -> Bool = { _ in false } // FORK(notch-glance-tile)
     static let defaultHidden = "keyboardLight,microphone,screenshot,recording,speedTest,panel,commandBar,scratchpad"
     var id: String { rawValue }
 
@@ -1319,6 +1330,7 @@ enum NotchControlItem: String, CaseIterable, Identifiable {
         case .dictation: return "waveform" // FORK(notch-dictation2)
         case .meeting: return "person.2.wave.2" // FORK(notch-meeting-tile2)
         case .macBackup: return NotchModule.macBackup.symbol // FORK(notch-macbackup-tile2)
+        case .glance: return NotchModule.glance.symbol // FORK(notch-glance-tile2)
         case .volume: return "speaker.wave.2.fill"
         case .brightness: return "sun.max.fill"
         case .keyboardLight: return "light.max"
@@ -1343,6 +1355,7 @@ enum NotchControlItem: String, CaseIterable, Identifiable {
         case .dictation: return .page(.clipboard, feature: .clipboardHistory) // FORK(notch-dictation2)
         case .meeting: return .page(.controls, feature: nil) // FORK(notch-meeting-tile2)
         case .macBackup: return .page(.macBackup, feature: nil) // FORK(notch-macbackup-tile2)
+        case .glance: return .page(.glance, feature: nil) // FORK(notch-glance-tile2)
         case .volume: return .feature(.mixer)
         case .brightness, .keyboardLight: return .feature(.brightness)
         case .keepAwake: return .feature(.keepAwake)
@@ -1365,6 +1378,7 @@ enum NotchControlItem: String, CaseIterable, Identifiable {
         case .dictation: return Self.dictationIsAvailable(defaults) // FORK(notch-dictation2)
         case .meeting: return Self.meetingIsAvailable(defaults) // FORK(notch-meeting-tile2)
         case .macBackup: return Self.macBackupIsAvailable(defaults) // FORK(notch-macbackup-tile2)
+        case .glance: return Self.glanceIsAvailable(defaults) // FORK(notch-glance-tile2)
         case .volume: return AppFeature.mixer.isAvailable(in: defaults)
         case .mixer: return AppFeature.mixer.isAvailable(in: defaults) && NotchSupport.modules(in: defaults).contains(.mixer)
         case .brightness: return AppFeature.brightness.isAvailable(in: defaults)
@@ -1630,6 +1644,8 @@ enum NotchEvent: String, CaseIterable {
     case volume, brightness, battery, clipboard, capture, systemNotification, keyboardLight, timer, accessory, download, agents, track, microphone, watch, inputSource
     case backup // FORK(notch-macbackup-event)
     static var backupHooks: (preferenceKey: String, routes: (UserDefaults) -> Bool) = ("", { _ in false }) // FORK(notch-macbackup-event)
+    case glance // FORK(notch-glance-event)
+    static var glanceHooks: (preferenceKey: String, routes: (UserDefaults) -> Bool) = ("", { _ in false }) // FORK(notch-glance-event)
 
     var preferenceKey: String {
         switch self {
@@ -1649,6 +1665,7 @@ enum NotchEvent: String, CaseIterable {
         case .clipboard: return DefaultsKey.notchClipboard
         case .capture: return DefaultsKey.notchCapture
         case .backup: return Self.backupHooks.preferenceKey // FORK(notch-macbackup-event2)
+        case .glance: return Self.glanceHooks.preferenceKey // FORK(notch-glance-event2)
         }
     }
 
@@ -1659,6 +1676,7 @@ enum NotchEvent: String, CaseIterable {
         case .battery, .systemNotification, .accessory, .agents: return 1
         case .clipboard, .download, .track: return 0
         case .backup: return 1 // FORK(notch-macbackup-event2)
+        case .glance: return 1 // FORK(notch-glance-event2)
         }
     }
 
@@ -1672,6 +1690,7 @@ enum NotchEvent: String, CaseIterable {
         case .clipboard: return 2.5
         case .capture: return 12
         case .backup: return 6 // FORK(notch-macbackup-event2)
+        case .glance: return 4 // FORK(notch-glance-event2)
         }
     }
 }
@@ -2067,6 +2086,7 @@ enum NotchSupport {
         // A layout notice needs no feature of its own, only its own toggle.
         case .inputSource: return true
         case .backup: return NotchEvent.backupHooks.routes(defaults) // FORK(notch-macbackup-event3)
+        case .glance: return NotchEvent.glanceHooks.routes(defaults) // FORK(notch-glance-event3)
         }
     }
 
@@ -2782,6 +2802,7 @@ struct NotchGeometry: Equatable {
                 contentHeight = budget
             case .meetings: contentHeight = budget // FORK(notch-meetings3)
             case .macBackup: contentHeight = min(budget, NotchModule.macBackupHooks.height()) // FORK(notch-macbackups3)
+            case .glance: contentHeight = min(budget, NotchModule.glanceHooks.height()) // FORK(notch-glance3)
             }
         }
         var preferredHeight = headerTopInset + headerChromeHeight + contentHeight
