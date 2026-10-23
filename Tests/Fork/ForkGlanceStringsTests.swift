@@ -271,22 +271,46 @@ enum ForkGlanceStringsTests {
                         && fr(.paused(.user, until: now.addingTimeInterval(13 * 60 + 1))) == "14\u{00A0}min",
                      "a timed pause's tile counts the minutes left, rounded up")
         suite.expect(fr(.paused(.user, until: nil)) == "Pause" && fr(.paused(.battery, until: nil)) == "Batterie"
-                        && fr(.unavailable(.cameraPermission)) == "Autorisation caméra"
+                        && fr(.unavailable(.cameraPermission)) == "Autoriser"
                         && fr(.needsCalibration(.firstTime)) == "Calibrer" && fr(.calibrating(done: 12, total: 30)) == "12/30",
                      "a stopped tile says why in a word")
         suite.expect([ForkGlanceStatusLine.off, .starting, .active(zoneName: "LG"), .waiting(.typing), .noFace, .away]
                         .allSatisfy { fr($0) == nil },
                      "a running tile has no reading line")
+        // The space before « h » is the locale's (a narrow no-break one today).
+        let oneHour = fr(.paused(.user, until: now.addingTimeInterval(60 * 60))) ?? ""
+        let nineHours = fr(.paused(.user, until: now.addingTimeInterval(8 * 3600 + 32 * 60))) ?? ""
+        suite.expect(oneHour.hasPrefix("1") && oneHour.hasSuffix("h") && oneHour.count == 3
+                        && nineHours.hasPrefix("9") && nineHours.hasSuffix("h") && nineHours.count == 3,
+                     "a pause of more than an hour counts whole hours on the tile, rounded up")
+        // The tile is about 84 pt wide: 12 characters, a Chinese, Japanese
+        // or Korean one counting one and a half (8 of them at most).
         var long: [String] = []
+        let lines = sampleLines() + [.paused(.user, until: now.addingTimeInterval(65 * 60)),
+                                     .paused(.user, until: now.addingTimeInterval(8 * 3600 + 32 * 60))]
         for (language, strings) in zip(languages, all) {
-            let readings = sampleLines().compactMap { strings.tileReading($0, locale: frenchLocale, now: now) }
-            long += tooLong(readings, "\(language.rawValue): ")
+            let readings = lines.compactMap { strings.tileReading($0, locale: language.formattingLocale(), now: now) }
+            long += readings.filter { tileWidth($0) > 12 }.map { "\(language.rawValue): \($0)" }
             if readings.contains(where: \.isEmpty) { long.append("\(language.rawValue): empty reading") }
         }
-        suite.expect(long.isEmpty, "every tile reading fits in 28 characters: \(long)")
+        suite.expect(long.isEmpty, "every tile reading fits the tile in every language: \(long)")
         suite.expect(french.pauseBanner(until: now.addingTimeInterval(14 * 60), locale: frenchLocale, now: now) == "En pause · 14\u{00A0}min"
                         && french.pauseBanner(until: nil, locale: frenchLocale, now: now) == "En pause",
                      "the section's banner counts down a timed pause")
+    }
+
+    /// A reading's width in Latin characters: a wide (Chinese, Japanese,
+    /// Korean) character counts one and a half.
+    private static func tileWidth(_ text: String) -> Double {
+        text.unicodeScalars.reduce(0) { width, scalar in
+            switch scalar.value {
+            case 0x1100...0x11FF, 0x2E80...0x303F, 0x3040...0x30FF, 0x3130...0x318F, 0x3400...0x4DBF,
+                 0x4E00...0x9FFF, 0xAC00...0xD7AF, 0xF900...0xFAFF, 0xFF00...0xFFEF:
+                return width + 1.5
+            default:
+                return width + 1
+            }
+        }
     }
 
     /// Each case of each contract has its own words, in every language.
@@ -459,6 +483,12 @@ enum ForkGlanceStringsTests {
         suite.expect(ForkGlanceStrings.timeLeft(0, locale: frenchLocale) == "1\u{00A0}min"
                         && ForkGlanceStrings.timeLeft(.infinity, locale: frenchLocale) == "1\u{00A0}min",
                      "a countdown never reads zero or nonsense")
+        // The assistant's line, here beside the countdown it shares.
+        let assistant = ForkGlanceCalibrationStrings.fr
+        suite.expect(assistant.pointsLine(6, locale: frenchLocale) == "6 points · environ 15\u{00A0}s"
+                        && ForkGlanceCalibrationStrings.enUS.pointsLine(6, locale: englishLocale) == "6 points · about 15 s"
+                        && assistant.pointsLine(29, locale: frenchLocale) == "29 points · environ 1\u{00A0}min",
+                     "a quick recenter says its seconds, rounded up to five, a full calibration its minutes")
         suite.expect(french.calibrationScoreLine(0.97, date: now.addingTimeInterval(-3 * 86_400), now: now, locale: frenchLocale)
                         == "Calibrage 97\u{00A0}% · il y a 3\u{00A0}j",
                      "the score line says how old the calibration is")

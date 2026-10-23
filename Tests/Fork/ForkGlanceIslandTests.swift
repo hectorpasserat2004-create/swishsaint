@@ -155,8 +155,10 @@ enum ForkGlanceIslandTests {
         let watching = Rules.band(.watching)
         suite.expect(watching == Rules.Band(modes: true, recenter: true, pause: .menu, settings: true),
                      "watching: modes, Recenter, Pause ▾ and the page")
-        suite.expect(Rules.band(.paused(.user)).pause == .resume && !Rules.band(.paused(.user)).recenter,
-                     "paused by the person: Resume, nothing to recenter")
+        suite.expect(Rules.band(.paused(.user)).pause == .none && !Rules.band(.paused(.user)).recenter
+                        && Rules.banner(.paused(.user), pausedUntil: nil, driftSuggested: false, layoutMoved: false)
+                        == .paused(until: nil),
+                     "paused by the person: Resume once, in the pause banner, and nothing to recenter")
         suite.expect(Rules.band(.paused(.thermal)).pause == .menu, "an automatic pause still takes a pause of one's own")
         suite.expect(Rules.band(.off) == Rules.Band(modes: false, recenter: false, pause: .none, settings: false),
                      "off: only the empty state's button")
@@ -238,8 +240,8 @@ enum ForkGlanceIslandTests {
 
     private static func strings(_ suite: TestSuite) {
         let every: [KeyPath<ForkGlanceIslandStrings, String>] = [
-            \.sectionSummary, \.activityHint, \.mapLabel, \.modes, \.historyEmpty, \.showLiveDot, \.liveDotCaption,
-            \.showHistory, \.closedIsland, \.notices, \.noticesCaption, \.allSettings, \.islandSettings,
+            \.sectionSummary, \.activityHint, \.mapLabel, \.modes, \.historyEmpty, \.layoutMovedTitle, \.showLiveDot,
+            \.liveDotCaption, \.showHistory, \.closedIsland, \.notices, \.noticesCaption, \.allSettings, \.islandSettings,
         ]
         let fieldCount = ForkGlanceStringsTests.fields(ForkGlanceIslandStrings.enUS).count
         suite.expect(every.count == fieldCount, "the 28-character check covers every island field (\(fieldCount))")
