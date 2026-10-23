@@ -54,11 +54,8 @@ struct ForkGlanceIslandActivityCard: View {
     var forcesShown = false
 
     var body: some View {
-        if enabled || forcesShown {
-            card
-                // The activity comes or goes at once, not at the next change.
-                .onChange(of: closed) { _, _ in ForkGlanceIsland.sync() }
-        }
+        // The island's model follows `closed` itself (defaults observer).
+        if enabled || forcesShown { card }
     }
 
     private var card: some View {
