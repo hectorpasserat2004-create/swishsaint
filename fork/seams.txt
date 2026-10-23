@@ -83,3 +83,28 @@ command-bar-macbackup  Sources/Vorssaint/Services/CommandBar/CommandBarCatalog.s
 
 # Focus au regard (Fork/Glance/README.md). La page de réglages passe par settings4, le démarrage par bootstrap.
 glance-mru         Sources/Vorssaint/Services/Switcher/WindowUseTracker.swift  # focus au regard : le traqueur de fenêtres récentes tourne aussi quand Focus au regard est activé (forkDemand posé par ForkGlanceWindowIndex.start, décision D4 du 23/10)
+notch-glance         Sources/Vorssaint/Services/Notch/NotchSupport.swift        # focus au regard : section « Regard » de l'île (cas et crochets injectés : titre, résumé, disponibilité, hauteur) — ne nomme aucun type du fork (TEST_SOURCES)
+notch-glance2        Sources/Vorssaint/Services/Notch/NotchSupport.swift        # focus au regard : symbole eyes, raccourci ⌥⌘L et disponibilité de la section — ne nomme aucun type du fork (TEST_SOURCES)
+notch-glance3        Sources/Vorssaint/Services/Notch/NotchSupport.swift        # focus au regard : hauteur de la page, compacte 180 pt ou spacieuse 264 pt, par le crochet (switch exhaustif)
+notch-glance4        Sources/Vorssaint/Core/NotchEditorStrings.swift            # focus au regard : la ligne de la section dans l'onglet Contenu, par le crochet (TEST_SOURCES)
+notch-glance5        Sources/Vorssaint/UI/Notch/NotchView.swift                 # focus au regard : la page de la section, et son titre par le crochet (title est extrait par generate_sources.py)
+notch-glance6        Sources/Vorssaint/UI/Settings/NotchContentEditor.swift     # focus au regard : l'aperçu de la page et sa couleur (indigo) dans l'onglet Contenu
+notch-glance7        Sources/Vorssaint/UI/Settings/NotchSettings.swift          # focus au regard : options de la section (Contenu), pas d'AppFeature, et lien vers sa page tant que la feature est coupée
+notch-glance8        Sources/Vorssaint/UI/Settings/NotchSettings.swift          # focus au regard : carte « Focus au regard » de l'onglet Activité (île fermée, notices)
+notch-glance9        Sources/Vorssaint/Services/Notch/NotchService.swift        # focus au regard : un clic sur une notice du regard ouvre la section
+notch-glance-activity   Sources/Vorssaint/Services/Notch/NotchSupport.swift     # focus au regard : activité « Regard » de l'île fermée (cas et crochets : titre, ordre, aile) — ne nomme aucun type du fork (TEST_SOURCES)
+notch-glance-activity2  Sources/Vorssaint/Services/Notch/NotchSupport.swift     # focus au regard : titre et page (la section) de l'activité — ne nomme aucun type du fork (TEST_SOURCES)
+notch-glance-activity3  Sources/Vorssaint/Services/Notch/NotchService.swift     # focus au regard : sa place parmi les activités (avant Rester éveillé, par le crochet : compactActivities est extrait) et ses ailes
+notch-glance-activity8  Sources/Vorssaint/Services/Notch/NotchService.swift     # focus au regard : la taille de sa capsule (switch exhaustif)
+notch-glance-activity4  Sources/Vorssaint/UI/Notch/NotchView.swift              # focus au regard : bande « Regard » de l'île fermée (ailes et capsule)
+notch-glance-activity5  Sources/Vorssaint/UI/Notch/NotchMirrorView.swift        # focus au regard : la même bande sur les autres écrans (copies de l'île)
+notch-glance-activity6  Sources/Vorssaint/UI/Notch/NotchTimerStrip.swift        # focus au regard : l'activité n'est jamais compagne d'une autre (switch exhaustifs)
+notch-glance-activity7  Sources/Vorssaint/UI/Notch/NotchCapsuleViews.swift      # focus au regard : idem pour la capsule (switch exhaustif)
+notch-glance-tile    Sources/Vorssaint/Services/Notch/NotchSupport.swift        # focus au regard : bouton « Regard » des contrôles de l'île (cas et disponibilité injectée) — ne nomme aucun type du fork (TEST_SOURCES)
+notch-glance-tile2   Sources/Vorssaint/Services/Notch/NotchSupport.swift        # focus au regard : symbole, réglage requis (la section) et disponibilité du bouton — ne nomme aucun type du fork (TEST_SOURCES)
+notch-glance-tile3   Sources/Vorssaint/UI/Notch/NotchControlsView.swift         # focus au regard : tuile et titre du bouton « Regard » dans les contrôles de l'île
+notch-glance-tile4   Sources/Vorssaint/Services/Notch/NotchService.swift        # focus au regard : bouton rapide « Regard » → pause jusqu'à reprise ↔ reprendre (ou la section, ou le calibrage)
+notch-glance-tile5   Sources/Vorssaint/UI/Settings/NotchSettings.swift          # focus au regard : raison et lien du bouton tant que Focus au regard est coupé
+notch-glance-event   Sources/Vorssaint/Services/Notch/NotchSupport.swift        # focus au regard : NotchEvent.glance (cas et crochet : clé, routage) — ne nomme aucun type du fork (TEST_SOURCES)
+notch-glance-event2  Sources/Vorssaint/Services/Notch/NotchSupport.swift        # focus au regard : clé, priorité 1 et durée 4 s de NotchEvent.glance (switch exhaustifs)
+notch-glance-event3  Sources/Vorssaint/Services/Notch/NotchSupport.swift        # focus au regard : routage de NotchEvent.glance par le crochet (switch exhaustif) — ne nomme aucun type du fork (TEST_SOURCES)
