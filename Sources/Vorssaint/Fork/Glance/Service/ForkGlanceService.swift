@@ -227,6 +227,8 @@ final class ForkGlanceService: ObservableObject {
     private var shortcutFingerprint: [String] = []
     /// `fork.glance.cameraID` as last read.
     private var storedCameraChoice = ""
+    /// A shortcut recorder listens: the hotkeys are off meanwhile.
+    private var recordingShortcut = false
 
     // The one timer.
     private var deadlineTimer: Timer?
@@ -316,7 +318,11 @@ final class ForkGlanceService: ObservableObject {
         DispatchQueue.main.async { ForkGlance.sync() }
     }
 
-    /// The switch, the settings or the permissions may have changed.
+    /// The switch, the settings or the permissions may have changed. Light
+    /// and idempotent: the settings page calls it after every change and when
+    /// the app comes back in front. It reads the settings, the camera's
+    /// permission, the cameras and the displays again, and only what changed
+    /// moves: the camera is never restarted by it.
     func sync() {
         precondition(Thread.isMainThread)
         guard started else {
@@ -326,12 +332,18 @@ final class ForkGlanceService: ObservableObject {
         let read = ForkGlanceSettings.read()
         let permission = ForkGlanceCamera.permission
         if cameraPermission != permission { cameraPermission = permission }
+        let cameraBefore = cameraID
         refreshDevices()
         let current = ForkGlanceDisplays.current()
         if read.enabled {
             if isUp {
                 settingsChanged(read)
-                layoutChanged(current)
+                if current != layout {
+                    layoutChanged(current)
+                } else if cameraBefore != cameraID {
+                    devicesChanged()
+                }
+                syncShortcuts()
                 sendSystem()
             } else {
                 if settings != read { settings = read }
@@ -341,9 +353,11 @@ final class ForkGlanceService: ObservableObject {
         } else {
             tearDown()
             if settings != read { settings = read }
+            let moved = layout != current || cameraBefore != cameraID
             if layout != current { layout = current }
+            if profilesLoaded, moved || profile == nil { applyProfile() }
         }
-        if !profilesLoaded { loadProfiles() } else if !isUp { applyProfile() }
+        if !profilesLoaded { loadProfiles() }
     }
 
     /// Before Accessibility is revoked or the app quits: everything stops,
@@ -380,7 +394,7 @@ final class ForkGlanceService: ObservableObject {
         }
         observe(.default, UserDefaults.didChangeNotification) { service in service.defaultsChanged() }
         shortcutFingerprint = Self.shortcutFingerprint()
-        ForkGlanceHotKeys.shared.sync(enabled: true)
+        ForkGlanceHotKeys.shared.sync(enabled: !recordingShortcut)
 
         machine = ForkGlanceMachine(settings: settings)
         classifier = ForkGlanceClassifier()
@@ -647,11 +661,7 @@ final class ForkGlanceService: ObservableObject {
                 return
             }
             self.settingsChanged(read)
-            let fingerprint = Self.shortcutFingerprint()
-            if fingerprint != self.shortcutFingerprint {
-                self.shortcutFingerprint = fingerprint
-                ForkGlanceHotKeys.shared.sync(enabled: true)
-            }
+            self.syncShortcuts()
             // A camera chosen elsewhere (a settings import never carries it: machine state).
             if UserDefaults.standard.string(forKey: ForkDefaultsKey.glanceCameraID) ?? "" != self.storedCameraChoice {
                 self.devicesChanged()
@@ -666,6 +676,25 @@ final class ForkGlanceService: ObservableObject {
         send(.settings(read))
         if modeChanged { recomputeZones() }
         if !read.gazeDot { ForkGlanceHalo.shared.moveGazeDot(to: nil) }
+    }
+
+    /// Re-installs the shortcuts when what they depend on changed.
+    private func syncShortcuts() {
+        let fingerprint = Self.shortcutFingerprint()
+        guard fingerprint != shortcutFingerprint else { return }
+        shortcutFingerprint = fingerprint
+        ForkGlanceHotKeys.shared.sync(enabled: isUp && !recordingShortcut)
+    }
+
+    /// A shortcut recorder is listening (the page's): the global shortcuts
+    /// step aside, so the combination pressed is recorded, not run (like
+    /// `ForkMeetingService.setShortcutRecording`).
+    func setShortcutRecording(_ recording: Bool) {
+        precondition(Thread.isMainThread)
+        guard recordingShortcut != recording else { return }
+        recordingShortcut = recording
+        shortcutFingerprint = Self.shortcutFingerprint()
+        ForkGlanceHotKeys.shared.sync(enabled: isUp && !recording)
     }
 
     /// What the shortcuts depend on: a change re-installs them.
@@ -713,7 +742,8 @@ final class ForkGlanceService: ObservableObject {
         if profile != choice.profile { profile = choice.profile }
         profileIsNew = choice.isNew
         if layoutMoved != choice.moved { layoutMoved = choice.moved }
-        driftSuggested = choice.profile.learning.driftSuggested(mode: settings.mode)
+        let drift = choice.profile.learning.driftSuggested(mode: settings.mode)
+        if driftSuggested != drift { driftSuggested = drift }
         need = choice.need
         if !calibrationActive { pipeline.vision.usesEyes = choice.profile.calibration?.usesEyes ?? false }
 
@@ -874,6 +904,8 @@ final class ForkGlanceService: ObservableObject {
         if !ForkGlanceFocuser.shared.focus(target, raise: settings.raise) {
             pendingSwitch = nil
             failLater(zoneID)
+            // Accessibility withdrawn behind our back: the machine stops watching.
+            if !AXIsProcessTrusted() { DispatchQueue.main.async { [weak self] in self?.sendSystem() } }
         }
     }
 
@@ -1169,16 +1201,19 @@ final class ForkGlanceService: ObservableObject {
         precondition(Thread.isMainThread)
         UserDefaults.standard.set(id ?? "", forKey: ForkDefaultsKey.glanceCameraID)
         refreshDevices()
+        // A running session is rebuilt on the camera now chosen, the same one included.
+        restartCamera()
         guard isUp else {
             if profilesLoaded { applyProfile() }
             return
         }
         ForkGlanceCamera.shared.watch(deviceID: cameraID)
+        // After a failure the camera is off: the machine asks for it again,
+        // and `applyCamera` opens a new session.
         if failure != nil {
             failure = nil
             send(.cameraFailure(nil))
         }
-        restartCamera()
         applyProfile()
         sendSystem()
     }
@@ -1196,8 +1231,17 @@ final class ForkGlanceService: ObservableObject {
     /// Opens the assistant (`Calibration/ForkGlanceCalibrationWindow`).
     func openCalibration(_ entry: ForkGlanceCalibrationEntry) {
         precondition(Thread.isMainThread)
-        if !isUp { layout = ForkGlanceDisplays.current() }
+        refreshWhileDown()
         ForkGlanceCalibrationWindow.show(entry)
+    }
+
+    /// Switched off, nothing follows the displays: the assistant reads them now.
+    private func refreshWhileDown() {
+        guard !isUp else { return }
+        let current = ForkGlanceDisplays.current()
+        guard current != layout else { return }
+        layout = current
+        applyProfile()
     }
 
     /// Opens Settings on the feature's page.
@@ -1265,21 +1309,38 @@ final class ForkGlanceService: ObservableObject {
         return "rectangles rev \(used.rectangles), landmarks rev \(used.landmarks)"
     }
 
+    /// The process's CPU time and energy. `ri_energy_nj` only exists from
+    /// `rusage_info_v6` on (`sys/resource.h`; v4, the plan's, stops at
+    /// `ri_runnable_time`), which every macOS from 12 answers; v4 stays the
+    /// fallback, without the energy.
     private static func costReading(at time: TimeInterval) -> ForkGlanceCostMeter.Reading {
-        var info = rusage_info_v4()
-        let status = withUnsafeMutablePointer(to: &info) { pointer in
-            pointer.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) {
-                proc_pid_rusage(getpid(), RUSAGE_INFO_V4, $0)
-            }
-        }
-        guard status == 0 else { return ForkGlanceCostMeter.Reading(time: time, cpuSeconds: 0, energyJoules: nil) }
-        // CPU times are in Mach absolute units (`ForkMacBackupCostMeter`).
         var base = mach_timebase_info_data_t()
         mach_timebase_info(&base)
-        let ticks = Double(info.ri_user_time + info.ri_system_time)
-        let nanoseconds = base.denom == 0 ? ticks : ticks * Double(base.numer) / Double(base.denom)
-        let energy = info.ri_energy_nj > 0 ? Double(info.ri_energy_nj) / 1_000_000_000 : nil
-        return ForkGlanceCostMeter.Reading(time: time, cpuSeconds: nanoseconds / 1_000_000_000, energyJoules: energy)
+        // CPU times are in Mach absolute units (`ForkMacBackupCostMeter`).
+        func seconds(_ ticks: UInt64) -> Double {
+            let value = Double(ticks)
+            return (base.denom == 0 ? value : value * Double(base.numer) / Double(base.denom)) / 1_000_000_000
+        }
+        var current = rusage_info_v6()
+        if read(&current, flavor: RUSAGE_INFO_V6) {
+            let energy = current.ri_energy_nj > 0 ? Double(current.ri_energy_nj) / 1_000_000_000 : nil
+            return ForkGlanceCostMeter.Reading(time: time, cpuSeconds: seconds(current.ri_user_time + current.ri_system_time),
+                                               energyJoules: energy)
+        }
+        var older = rusage_info_v4()
+        guard read(&older, flavor: RUSAGE_INFO_V4) else {
+            return ForkGlanceCostMeter.Reading(time: time, cpuSeconds: 0, energyJoules: nil)
+        }
+        return ForkGlanceCostMeter.Reading(time: time, cpuSeconds: seconds(older.ri_user_time + older.ri_system_time),
+                                           energyJoules: nil)
+    }
+
+    private static func read<Info>(_ info: inout Info, flavor: Int32) -> Bool {
+        withUnsafeMutablePointer(to: &info) { pointer in
+            pointer.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) {
+                proc_pid_rusage(getpid(), flavor, $0) == 0
+            }
+        }
     }
 
     // MARK: - Trace and report (plan §12.11)
@@ -1483,7 +1544,7 @@ final class ForkGlanceService: ObservableObject {
         guard cameraPermission == .granted, let id = cameraID, cameraDevices.contains(where: { $0.id == id }) else {
             return false
         }
-        if !isUp { layout = ForkGlanceDisplays.current() }
+        refreshWhileDown()
         calibrationGeneration += 1
         recenterCollect = nil
         if !calibrationActive {
