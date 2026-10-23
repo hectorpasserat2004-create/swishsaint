@@ -247,8 +247,9 @@ struct ForkGlanceIslandSection: View {
             return BannerContent(symbol: "viewfinder", title: core.noticeDrift, button: core.recalibrate, warning: true,
                                  action: calibrate(.recalibrate))
         case .layoutMoved:
-            return BannerContent(symbol: "display.2", title: core.needNewLayout, button: core.recalibrate, warning: true,
-                                 action: calibrate(.recalibrate))
+            // The same displays moved a little: a quick recenter is enough (plan §8.6, the page's banner).
+            return BannerContent(symbol: "display.2", title: core.needNewLayout, button: core.quickRecenter, warning: true,
+                                 action: calibrate(.quickRecenter))
         case .calibrate(let need):
             return BannerContent(symbol: "viewfinder", title: core.calibrationNeed(need), button: core.calibrate,
                                  warning: true, action: calibrate(.full))
@@ -311,7 +312,9 @@ struct ForkGlanceIslandSection: View {
 
     /// « Calibrage 97 % · il y a 3 j ».
     private func scoreLine(_ state: ForkGlanceIslandSnapshot, now: Date) -> String? {
-        guard let calibration = state.calibration, let score = ForkGlanceIslandRules.score(calibration) else { return nil }
+        // While a calibration runs, the old score beside « Calibrage en cours » would read as its own.
+        guard ForkGlanceIslandRules.top(state.phase) != .calibrating,
+              let calibration = state.calibration, let score = ForkGlanceIslandRules.score(calibration) else { return nil }
         return core.calibrationScoreLine(score, date: calibration.date, now: now, locale: locale)
     }
 
@@ -337,19 +340,27 @@ struct ForkGlanceIslandSection: View {
                 }
             }
             Spacer(minLength: 0)
-            HStack(spacing: 6) {
-                let calibrated = state.calibration != nil
-                NotchPillButton(title: core.calibrate, prominent: !calibrated) {
-                    act { service.perform { ForkGlanceService.shared.openCalibration(calibrated ? .recalibrate : .full) } }
-                }
-                if calibrated {
-                    NotchPillButton(title: core.test) {
-                        act { service.perform { ForkGlanceService.shared.openCalibration(.test) } }
-                    }
-                }
+            // The assistant is already open while it calibrates.
+            if ForkGlanceIslandRules.top(state.phase) != .calibrating {
+                calibrateButtons(state)
             }
         }
         .frame(maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    /// Calibrate (prominent until there is a calibration) and Test.
+    private func calibrateButtons(_ state: ForkGlanceIslandSnapshot) -> some View {
+        HStack(spacing: 6) {
+            let calibrated = state.calibration != nil
+            NotchPillButton(title: core.calibrate, prominent: !calibrated) {
+                act { service.perform { ForkGlanceService.shared.openCalibration(calibrated ? .recalibrate : .full) } }
+            }
+            if calibrated {
+                NotchPillButton(title: core.test) {
+                    act { service.perform { ForkGlanceService.shared.openCalibration(.test) } }
+                }
+            }
+        }
     }
 
     private func switchRow(_ record: ForkGlanceSwitchRecord) -> some View {

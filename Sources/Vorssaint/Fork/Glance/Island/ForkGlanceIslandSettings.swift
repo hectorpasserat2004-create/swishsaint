@@ -53,6 +53,10 @@ struct ForkGlanceIslandActivityCard: View {
     /// Drawn whatever the switch says (the render harness).
     var forcesShown = false
 
+    init(forcesShown: Bool = false) {
+        self.forcesShown = forcesShown
+    }
+
     var body: some View {
         // The island's model follows `closed` itself (defaults observer).
         if enabled || forcesShown { card }

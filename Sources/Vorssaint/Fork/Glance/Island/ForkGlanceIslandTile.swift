@@ -14,10 +14,15 @@ struct ForkGlanceIslandTile: View {
     let service: NotchService
     @ObservedObject private var glance: ForkGlanceService
     @ObservedObject private var l10n = L10n.shared
+    /// A fixed state (the render harness); nil: the service's. A fixed tile
+    /// does nothing when clicked.
+    private let fixed: (phase: ForkGlancePhase, status: ForkGlanceStatusLine)?
 
-    init(service: NotchService, glance: ForkGlanceService = .shared) {
+    init(service: NotchService, glance: ForkGlanceService = .shared,
+         fixed: (phase: ForkGlancePhase, status: ForkGlanceStatusLine)? = nil) {
         self.service = service
         _glance = ObservedObject(wrappedValue: glance)
+        self.fixed = fixed
     }
 
     var body: some View {
@@ -29,10 +34,12 @@ struct ForkGlanceIslandTile: View {
 
     private func tile(now: Date) -> some View {
         let text = ForkGlanceStrings.strings(l10n.language)
-        let phase = glance.phase
+        let phase = fixed?.phase ?? glance.phase
+        let status = fixed?.status ?? glance.status
         return NotchActionTile(symbol: ForkGlancePresentation.symbol(phase), title: Self.title(l10n.language),
-                               reading: text.tileReading(glance.status, locale: l10n.language.formattingLocale(), now: now),
+                               reading: text.tileReading(status, locale: l10n.language.formattingLocale(), now: now),
                                active: ForkGlancePresentation.tileIsActive(phase), accent: .selection) {
+            guard fixed == nil else { return }
             Self.activate(from: service)
         }
         .accessibilityHint(ForkGlanceIslandStrings.strings(l10n.language).activityHint)

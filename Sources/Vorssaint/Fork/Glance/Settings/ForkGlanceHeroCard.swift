@@ -18,8 +18,10 @@ struct ForkGlanceHeroCard: View {
     }
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: Self.beat)) { context in
-            let right = reduceMotion || !isOn ? false
+        // Still (off, or Reduce Motion): the clock does not tick at all.
+        let still = reduceMotion || !isOn
+        TimelineView(.animation(minimumInterval: Self.beat, paused: still)) { context in
+            let right = still ? false
                 : Int(context.date.timeIntervalSinceReferenceDate / Self.beat) % 2 == 1
             ForkGlanceHeroDrawing(lookingRight: right, tint: isOn ? .accentColor : .secondary)
                 .animation(reduceMotion ? nil : .spring(response: 0.55, dampingFraction: 0.82), value: right)

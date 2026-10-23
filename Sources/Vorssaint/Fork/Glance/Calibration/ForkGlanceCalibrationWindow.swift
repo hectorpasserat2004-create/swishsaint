@@ -393,12 +393,14 @@ private struct ForkGlancePermissionsStep: View {
             HStack(spacing: 8) {
                 Image(systemName: granted ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
                     .foregroundStyle(granted ? .green : .orange)
+                    .accessibilityHidden(true)
                 Text(text.cameraName)
                 Spacer()
                 Text(granted ? official.permissionGranted : official.permissionMissing)
                     .font(.caption)
                     .foregroundStyle(granted ? .green : .orange)
             }
+            .accessibilityElement(children: .combine)
             if !granted {
                 HStack(spacing: 8) {
                     if permission == .notDetermined {
@@ -426,6 +428,7 @@ private struct ForkGlanceLayoutStep: View {
                 ForkGlanceLayoutMap(layout: session.layout, zones: session.zones, splits: session.splits,
                                     onSplit: { uuid, split in session.setSplit(split, display: uuid) })
                     .frame(height: 150)
+                    .frame(maxWidth: .infinity)
                 ForkGlanceCaption(text.layoutBody)
             } header: {
                 Text(text.layoutTitle)

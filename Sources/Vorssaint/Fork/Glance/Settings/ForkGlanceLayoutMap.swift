@@ -98,6 +98,7 @@ struct ForkGlanceLayoutMap: View {
                     .offset(x: rect.width * 0.44, y: 2)
             }
             if style == .settings && rect.height > 34 {
+                // In the bottom-left zone, never across a border between zones.
                 Text(displayName(screen.display))
                     .font(.system(size: rect.height > 70 ? 10.5 : 9, weight: .medium))
                     .foregroundStyle(.secondary)
@@ -106,9 +107,10 @@ struct ForkGlanceLayoutMap: View {
                     .padding(.horizontal, 5)
                     .padding(.vertical, 1.5)
                     .background(.regularMaterial, in: Capsule())
-                    .padding(.bottom, 5)
-                    .padding(.horizontal, 4)
-                    .frame(width: rect.width, height: rect.height, alignment: .bottom)
+                    .frame(maxWidth: labelRoom(own, map: map, screen: rect), alignment: .leading)
+                    .padding(.bottom, 6)
+                    .padding(.leading, 6)
+                    .frame(width: rect.width, height: rect.height, alignment: .bottomLeading)
                     .allowsHitTesting(false)
             }
         }
@@ -135,6 +137,9 @@ struct ForkGlanceLayoutMap: View {
             }
             .help(displayName(screen.display))
             .accessibilityLabel(displayName(screen.display))
+            .accessibilityValue(ForkGlanceStrings.strings(l10n.language).splitName(
+                splits[screen.display.uuid] ?? ForkGlanceZones.defaultSplit(for: screen.display)))
+            .accessibilityHint(ForkGlanceSettingsStrings.strings(l10n.language).splitTitle)
             .offset(x: rect.minX, y: rect.minY)
         } else {
             drawing
@@ -142,6 +147,14 @@ struct ForkGlanceLayoutMap: View {
                 .accessibilityLabel(displayName(screen.display))
                 .offset(x: rect.minX, y: rect.minY)
         }
+    }
+
+    /// The width the name may take: the zone in the display's bottom-left
+    /// corner, less the zone's own inset, or the whole display.
+    private func labelRoom(_ own: [ForkGlanceZone], map: ForkGlanceMapGeometry, screen rect: CGRect) -> CGFloat {
+        let corner = CGPoint(x: rect.minX + 4, y: rect.maxY - 4)
+        let zone = own.compactMap { map.rect(of: $0) }.first { $0.contains(corner) }
+        return max(0, min(rect.width, zone?.width ?? rect.width) - 12)
     }
 
     private func displayName(_ display: ForkGlanceDisplay) -> String {
@@ -199,7 +212,9 @@ struct ForkGlanceLayoutMap: View {
                 }
                 Circle()
                     .fill(dot)
-                    .overlay { Circle().strokeBorder(style == .island ? Color.black.opacity(0.4) : .white, lineWidth: 1.5) }
+                    // On the island's white active zone, a dark ring keeps the white dot seen.
+                    .overlay { Circle().strokeBorder(style == .island ? Color.black.opacity(0.75) : .white,
+                                                     lineWidth: style == .island ? 2 : 1.5) }
                     .frame(width: 9, height: 9)
                     .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
             }
@@ -215,8 +230,9 @@ struct ForkGlanceLayoutMap: View {
     }
 }
 
-/// A display's split menu: the five splits, each with its drawing.
-private struct ForkGlanceSplitMenu: View {
+/// A display's split menu: the five splits, each with its drawing (also
+/// drawn alone by the render harness: a popover never shows off screen).
+struct ForkGlanceSplitMenu: View {
     let display: String
     let current: ForkGlanceSplit
     let title: String
