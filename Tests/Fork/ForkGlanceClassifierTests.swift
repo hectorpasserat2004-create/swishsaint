@@ -29,11 +29,12 @@ enum ForkGlanceClassifierTests {
     }
 
     private static func sample(yaw: Double = 0, pitch: Double = 0, confidence: Double = 0.9,
-                               face: Bool = true) -> ForkGlanceSample {
+                               face: Bool = true, others: Double = 0) -> ForkGlanceSample {
         var vector = Array(repeating: 0.0, count: ForkGlanceVectorLayout.count)
         vector[ForkGlanceVectorLayout.yaw] = yaw
         vector[ForkGlanceVectorLayout.pitch] = pitch
-        return ForkGlanceSample(time: 0, vector: vector, confidence: confidence, eyesUsable: true, facePresent: face)
+        return ForkGlanceSample(time: 0, vector: vector, confidence: confidence, eyesUsable: true, facePresent: face,
+                                otherFaceRatio: others)
     }
 
     /// Only the yaw and pitch spans matter to the classifier.
@@ -148,15 +149,15 @@ enum ForkGlanceClassifierTests {
                                        layout: Fixtures.annex, calibration: calibration, current: left,
                                        sensitivity: s, headSpeed: 0)
         suite.expect(lost.target == .noFace, "a sample without a face is no face")
-        let crowded = classifier.classify(estimate(2600, 700), sample: sample(confidence: 0.3),
+        let crowded = classifier.classify(estimate(2600, 700), sample: sample(others: 0.8),
                                           zones: Fixtures.annexZones, layout: Fixtures.annex,
                                           calibration: calibration, current: left, sensitivity: s, headSpeed: 0)
-        suite.expect(crowded.crowded && crowded.confidence == 0.3,
-                     "a face with a confidence under 0.5 reads as crowded (the Features fold other faces into it)")
-        let clear = classifier.classify(estimate(2600, 700), sample: sample(confidence: 0.8),
+        suite.expect(crowded.crowded && crowded.confidence == 0.9,
+                     "another face over 70 % of the kept one's area reads as crowded")
+        let clear = classifier.classify(estimate(2600, 700), sample: sample(confidence: 0.3, others: 0.5),
                                         zones: Fixtures.annexZones, layout: Fixtures.annex,
                                         calibration: calibration, current: left, sensitivity: s, headSpeed: 0)
-        suite.expect(!clear.crowded, "a confident face is not crowded")
+        suite.expect(!clear.crowded, "a smaller face behind, or a low confidence alone, is not crowded")
         let data = try? JSONEncoder().encode(clear)
         suite.expect(data != nil, "a gaze encodes as JSON for the trace")
     }

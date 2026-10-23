@@ -57,7 +57,7 @@ enum ForkGlanceProfilesTests {
         profile.calibration = calibration()
         let sample = ForkGlanceSample(time: 12.5, vector: Array(repeating: 0.25, count: ForkGlanceVectorLayout.count),
                                       confidence: 0.9, eyesUsable: true, facePresent: true)
-        profile.learned = [ForkGlanceCalibrationPoint(target: CGPoint(x: 860, y: 720), samples: [sample])]
+        profile.learning.add(sample, click: CGPoint(x: 860, y: 720), at: Date(timeIntervalSince1970: 1_792_663_440))
         return profile
     }
 
@@ -168,7 +168,7 @@ enum ForkGlanceProfilesTests {
         suite.expect(profile.id == ForkGlanceProfiles.signature(layout: desk, cameraID: camera), "a new profile's id is the signature")
         suite.expect(profile.title == "LG HDR WQHD + MacBook", "it carries the layout's title")
         suite.expect(profile.splits == ["LG-UUID": .columns2, "BUILTIN-UUID": .whole], "it starts with the default splits")
-        suite.expect(profile.calibration == nil && profile.learned.isEmpty, "it starts uncalibrated, with nothing learned")
+        suite.expect(profile.calibration == nil && profile.learning.pairs.isEmpty, "it starts uncalibrated, with nothing learned")
         suite.expect(profile.lastUsed == now && profile.layout == desk, "it keeps its layout and when it was made")
     }
 
@@ -255,7 +255,7 @@ enum ForkGlanceProfilesTests {
         let oldBack = ForkGlanceProfiles.decode(data([old])).first
         suite.expect(oldBack?.id == other.id && oldBack?.layout == other.layout,
                      "a profile from an older version, fields missing, keeps its id and layout")
-        suite.expect(oldBack?.lastUsed == .distantPast && oldBack?.learned.isEmpty == true && oldBack?.title == other.title,
+        suite.expect(oldBack?.lastUsed == .distantPast && oldBack?.learning.pairs.isEmpty == true && oldBack?.title == other.title,
                      "its missing fields take safe values: never used, nothing learned, the title from its displays")
 
         var futureSplit = list[0]
@@ -269,7 +269,7 @@ enum ForkGlanceProfilesTests {
             futureCalibration["calibration"] = calibration
         }
         let recalibrate = ForkGlanceProfiles.decode(data([futureCalibration])).first
-        suite.expect(recalibrate?.id == good.id && recalibrate?.calibration == nil && recalibrate?.learned == good.learned,
+        suite.expect(recalibrate?.id == good.id && recalibrate?.calibration == nil && recalibrate?.learning == good.learning,
                      "a calibration of another version is dropped, the profile and what it learned kept")
 
         var badCalibration = list[0]
@@ -277,13 +277,13 @@ enum ForkGlanceProfilesTests {
         suite.expect(ForkGlanceProfiles.decode(data([badCalibration])).first?.calibration == nil,
                      "an unreadable calibration is dropped, the profile kept")
 
-        var badPoint = list[0]
-        if var learned = badPoint["learned"] as? [Any] {
-            learned.append(["target": "nowhere"])
-            badPoint["learned"] = learned
-        }
-        suite.expect(ForkGlanceProfiles.decode(data([badPoint])).first?.learned == good.learned,
-                     "an unreadable learned point is dropped, the others kept")
+        var badLearning = list[0]
+        badLearning["learning"] = ["pairs": "garbage"]
+        let relearn = ForkGlanceProfiles.decode(data([badLearning])).first
+        suite.expect(relearn?.id == good.id && relearn?.calibration == good.calibration
+                        && relearn?.learning.pairs.isEmpty == true,
+                     "an unreadable learning is dropped, the profile and its calibration kept")
+        suite.expect(!good.learning.pairs.isEmpty, "the stored profile does carry learned clicks, with their dates")
 
         var noDisplay = list[1]
         noDisplay["layout"] = ["displays": [], "lidClosed": false]

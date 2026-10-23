@@ -167,6 +167,9 @@ enum ForkGlanceFeaturesTests {
         let twin = features.sample(from: face(faceCount: 2, otherFaceRatio: 1), time: 0.2).confidence
         suite.expect(behind < alone && behind > 0.9, "a small face far behind barely lowers the confidence")
         suite.expect(twin <= 0.5 + 1e-9, "a second face as large as the kept one halves the confidence")
+        suite.expect(features.sample(from: face(faceCount: 2, otherFaceRatio: 0.8), time: 0.25).otherFaceRatio == 0.8
+                        && features.sample(from: face(), time: 0.26).otherFaceRatio == 0,
+                     "the sample carries the other faces' size for the crowded guard")
         let poor = features.sample(from: face(quality: 0.1), time: 0.3).confidence
         let good = features.sample(from: face(quality: 0.9), time: 0.4).confidence
         suite.expect(poor < good, "a poor capture quality (assistant) lowers the confidence")

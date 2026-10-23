@@ -88,7 +88,8 @@ struct ForkGlanceFeatures {
 
         last = vector
         return ForkGlanceSample(time: time, vector: vector, confidence: Self.confidence(observation),
-                                eyesUsable: eyesUsable, facePresent: true)
+                                eyesUsable: eyesUsable, facePresent: true,
+                                otherFaceRatio: min(max(observation.otherFaceRatio, 0), 1))
     }
 
     // MARK: - Pieces

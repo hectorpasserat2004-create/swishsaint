@@ -28,11 +28,8 @@ import Foundation
 /// edge (looking at the keyboard), or the head turned past the calibrated yaw
 /// or pitch by 15°. `noFace` without an estimate.
 ///
-/// `crowded`: the sample does not carry the other faces' size
-/// (`ForkGlanceObservation.otherFaceRatio`); `Pure/ForkGlanceFeatures` folds
-/// a comparable second face into the confidence. So a face present with a
-/// confidence under `crowdedConfidence` reads as crowded, which is the same
-/// bar as the `lowConfidence` guard.
+/// `crowded`: another face of a comparable size (over `crowdedRatio` of the
+/// kept one's area) is in the image, the plan's `lowConfidence` rule (§7.4).
 struct ForkGlanceClassifier {
     /// The current zone stays down to this score.
     static let stay = 0.6
@@ -42,7 +39,7 @@ struct ForkGlanceClassifier {
     static let awayMargin = 1.5
     /// Away past the calibrated yaw or pitch by this much, radians (15°).
     static let angleMargin = 15 * Double.pi / 180
-    static let crowdedConfidence = 0.5
+    static let crowdedRatio = 0.7
     /// Anti ping-pong: A → B → A with the return within this time…
     static let pingPongWindow: TimeInterval = 1.5
     /// … raises the entry bar by this…
@@ -74,7 +71,7 @@ struct ForkGlanceClassifier {
                            layout: ForkGlanceDisplayLayout, calibration: ForkGlanceCalibration?, current: String?,
                            sensitivity: Double, headSpeed: Double) -> ForkGlanceGaze {
         let confidence = sample?.confidence ?? estimate?.confidence ?? 0
-        let crowded = sample.map { $0.facePresent && $0.confidence < Self.crowdedConfidence } ?? false
+        let crowded = sample.map { $0.facePresent && $0.otherFaceRatio > Self.crowdedRatio } ?? false
         func gaze(_ target: ForkGlanceGazeTarget, margin: Double = 0) -> ForkGlanceGaze {
             ForkGlanceGaze(estimate: estimate, target: target, margin: margin, headSpeed: headSpeed,
                            confidence: confidence, crowded: crowded)

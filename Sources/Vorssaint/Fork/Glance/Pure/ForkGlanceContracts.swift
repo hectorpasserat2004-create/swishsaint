@@ -91,6 +91,9 @@ struct ForkGlanceSample: Sendable, Codable, Equatable {
     /// their last filtered value.
     var eyesUsable: Bool
     var facePresent: Bool
+    /// The largest other face's area over the kept one's, 0 when alone
+    /// (`crowded` past 0.7, the `lowConfidence` guard).
+    var otherFaceRatio: Double = 0
 }
 
 /// How a vector component is reduced: `(value - center) / scale`.
@@ -266,8 +269,8 @@ struct ForkGlanceProfile: Sendable, Codable, Equatable, Identifiable {
     /// Display uuid → split (Zones mode).
     var splits: [String: ForkGlanceSplit]
     var calibration: ForkGlanceCalibration?
-    /// Pairs learned from clicks, bounded (`Pure/ForkGlanceLearning`).
-    var learned: [ForkGlanceCalibrationPoint]
+    /// Pairs learned from clicks with their dates, bounded (`Pure/ForkGlanceLearning`).
+    var learning: ForkGlanceLearning
     /// Last time this profile was loaded, to drop the oldest unused one.
     var lastUsed: Date
 }

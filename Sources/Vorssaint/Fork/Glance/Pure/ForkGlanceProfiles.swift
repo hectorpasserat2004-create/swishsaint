@@ -104,7 +104,7 @@ enum ForkGlanceProfiles {
     static func newProfile(layout: ForkGlanceDisplayLayout, cameraID: String, now: Date) -> ForkGlanceProfile {
         ForkGlanceProfile(id: signature(layout: layout, cameraID: cameraID), title: title(for: layout),
                           layout: layout, splits: ForkGlanceZones.defaultSplits(layout), calibration: nil,
-                          learned: [], lastUsed: now)
+                          learning: ForkGlanceLearning(), lastUsed: now)
     }
 
     /// Replaces the profile with the same id where it stands, or adds it at
@@ -177,7 +177,7 @@ enum ForkGlanceProfiles {
     private struct LenientProfile: Decodable {
         let profile: ForkGlanceProfile
 
-        private enum Keys: String, CodingKey { case id, title, layout, splits, calibration, learned, lastUsed }
+        private enum Keys: String, CodingKey { case id, title, layout, splits, calibration, learning, lastUsed }
         private enum LayoutKeys: String, CodingKey { case displays, lidClosed }
 
         init(from decoder: Decoder) throws {
@@ -200,8 +200,7 @@ enum ForkGlanceProfiles {
                 layout: layout,
                 splits: rawSplits.compactMapValues(ForkGlanceSplit.init(rawValue:)),
                 calibration: calibration,
-                learned: ((try? container.decode([Tolerant<ForkGlanceCalibrationPoint>].self, forKey: .learned))
-                    ?? []).compactMap(\.value),
+                learning: (try? container.decode(ForkGlanceLearning.self, forKey: .learning)) ?? ForkGlanceLearning(),
                 lastUsed: (try? container.decode(Date.self, forKey: .lastUsed)) ?? .distantPast)
         }
     }
