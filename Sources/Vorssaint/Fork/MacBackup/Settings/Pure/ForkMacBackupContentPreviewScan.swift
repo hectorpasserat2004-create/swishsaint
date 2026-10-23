@@ -18,13 +18,29 @@ struct ForkMacBackupContentPreview: Codable, Equatable {
         var examples: [String]
     }
 
-    /// A file that announces far more than it holds (Docker.raw, an `.ext4`).
+    /// A file that announces far more than it holds (Docker.raw, an `.ext4`,
+    /// a VM clone).
     struct SparseFile: Codable, Equatable, Identifiable {
+        /// For display, `~/…`.
         var path: String
         var logicalBytes: Int64
         var allocatedBytes: Int64
+        /// The real path, the key of « Laisser de côté » (nil in an older cache).
+        var absolutePath: String?
+        /// Docker Desktop's or Apple Container's: left out with the preset.
+        var recreatable: Bool?
 
         var id: String { path }
+        var isRecreatable: Bool { recreatable ?? ForkMacBackupSparsePolicy.isRecreatable(absolutePath ?? path) }
+
+        init(path: String, logicalBytes: Int64, allocatedBytes: Int64, absolutePath: String? = nil,
+             recreatable: Bool? = nil) {
+            self.path = path
+            self.logicalBytes = logicalBytes
+            self.allocatedBytes = allocatedBytes
+            self.absolutePath = absolutePath
+            self.recreatable = recreatable
+        }
     }
 
     struct Folder: Codable, Equatable, Identifiable {
@@ -56,6 +72,8 @@ struct ForkMacBackupContentPreview: Codable, Equatable {
     var complete: Bool
 
     static func presetID(_ preset: ForkMacBackupPreset) -> String { "preset:" + preset.rawValue }
+    /// One sparse image that is not recreatable: kept unless left out by name.
+    static func sparseID(_ absolutePath: String) -> String { "sparse:" + absolutePath }
     static func ruleID(_ rule: String) -> String { "rule:" + rule.trimmingCharacters(in: .whitespaces) }
     static let iCloudID = "icloud"
 
@@ -83,15 +101,19 @@ enum ForkMacBackupContentScanner {
         var presets: [ForkMacBackupPreset]
         var customRules: [String]
         var iCloud: ForkMacBackupICloudMode
+        /// Sparse images left out by name (absolute paths).
+        var sparseExcluded: Set<String>
         /// Decision 1 of 22/10: ≥ 10 GB announced, less than half written
         /// (smaller in the tests only).
         var sparseMinimum: Int64
 
         init(presets: [ForkMacBackupPreset], customRules: [String], iCloud: ForkMacBackupICloudMode,
+             sparseExcluded: Set<String> = [],
              sparseMinimum: Int64 = ForkMacBackupContentScan.sparseMinimumLogicalBytes) {
             self.presets = presets
             self.customRules = customRules
             self.iCloud = iCloud
+            self.sparseExcluded = sparseExcluded
             self.sparseMinimum = sparseMinimum
         }
     }
@@ -200,20 +222,27 @@ enum ForkMacBackupContentScanner {
                     cloudOnlyBytes += logical
                 }
                 if entry.isRegularFile, logical >= settings.sparseMinimum, allocated * 2 < logical {
+                    // Only Docker's and Apple Container's go with the preset;
+                    // any other one is real data, kept unless left out by name.
+                    let absolute = ForkMacBackupSparsePolicy.absolutePath(entry.relativePath, in: source)
+                    let recreatable = ForkMacBackupSparsePolicy.isRecreatable(absolute)
                     sparse.append(.init(path: display(rootPath + "/" + entry.relativePath), logicalBytes: logical,
-                                        allocatedBytes: allocated))
-                    groups.insert(sparseID)
-                    var tally = tallies[sparseID] ?? Tally()
+                                        allocatedBytes: allocated, absolutePath: absolute, recreatable: recreatable))
+                    let id = recreatable ? sparseID : ForkMacBackupContentPreview.sparseID(absolute)
+                    groups.insert(id)
+                    var tally = tallies[id] ?? Tally()
                     tally.matches += 1
                     if tally.examples.count < 5 { tally.examples.append(display(rootPath + "/" + entry.relativePath)) }
-                    tallies[sparseID] = tally
+                    tallies[id] = tally
                 }
                 for id in groups {
                     tallies[id, default: Tally()].bytes += allocated
                     tallies[id, default: Tally()].files += 1
                 }
                 let isExcluded = groups.contains { id in
-                    id == sparseID ? sparseActive : (matchers.first { $0.id == id }?.active ?? false)
+                    if id == sparseID { return sparseActive }
+                    if id.hasPrefix("sparse:") { return settings.sparseExcluded.contains(String(id.dropFirst(7))) }
+                    return matchers.first { $0.id == id }?.active ?? false
                 }
                 if isExcluded {
                     excluded += allocated

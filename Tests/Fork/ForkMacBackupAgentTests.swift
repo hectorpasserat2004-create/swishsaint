@@ -1277,16 +1277,38 @@ enum ForkMacBackupAgentTests {
 
     private static func sparseImages(_ suite: TestSuite) {
         var usage = ForkMacBackupDiskUsage()
-        usage.sparseImages = [.init(relativePath: "VMs/kali [x].ext4", logicalBytes: 1_000_000_000_000, allocatedBytes: 4_000_000_000)]
+        usage.sparseImages = [.init(relativePath: "VMs/kali [x].ext4", logicalBytes: 1_000_000_000_000, allocatedBytes: 4_000_000_000),
+                              .init(relativePath: "Disks/Docker.raw", logicalBytes: 900_000_000_000, allocatedBytes: 9_000_000_000),
+                              .init(relativePath: "Documents/QNAP/castral/kvm4-hostinger-backup/kvm4-clone.vhd",
+                                    logicalBytes: 200_000_000_000, allocatedBytes: 45_800_000_000)]
         usage.dataless = ["Library/Mobile Documents/com~apple~CloudDocs/film.mov", "Library/Mobile Documents/x/"]
         let source = ForkMacBackupSource(path: home)
         suite.expect(ForkMacBackupRunRules.extra(for: source, usage: usage, iCloud: .local, home: home)
-                        == ["/VMs/kali \\[x].ext4", "/Library/Mobile Documents/com~apple~CloudDocs/film.mov",
+                        == ["/Disks/Docker.raw", "/Library/Mobile Documents/com~apple~CloudDocs/film.mov",
                             "/Library/Mobile Documents/x/"],
-                     "the run's rules: the sparse images and, in local mode, the cloud-only files (escaped, anchored)")
+                     "the run's rules: Docker's disk image (recreatable) and, in local mode, the cloud-only files; "
+                        + "a VM's or a server clone's sparse image is real data, backed up")
+        suite.expect(ForkMacBackupRunRules.extra(for: source, usage: usage, iCloud: .local, home: home,
+                                                 sparseExcluded: [home + "/VMs/kali [x].ext4"]).first
+                        == "/VMs/kali \\[x].ext4",
+                     "a sparse image left out by name becomes a rule (escaped, anchored)")
         suite.expect(ForkMacBackupRunRules.extra(for: ForkMacBackupSource(path: home, presets: []), usage: usage,
                                                  iCloud: .materialize, home: home).isEmpty,
-                     "the sparse images stay when their preset is off; nothing cloud-only when iCloud downloads")
+                     "Docker's image stays when its preset is off; nothing cloud-only when iCloud downloads")
+        suite.expect(ForkMacBackupSparsePolicy.isRecreatable(home + "/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw")
+                        && ForkMacBackupSparsePolicy.isRecreatable(home + "/Library/Application Support/com.apple.container/x/rootfs.ext4")
+                        && !ForkMacBackupSparsePolicy.isRecreatable(home + "/Documents/QNAP/castral/kvm4-clone.vhd"),
+                     "only Docker Desktop's and Apple Container's images are recreatable")
+        let entry = ForkMacBackupPrescanCache.Entry(date: t0, fingerprint: "", usage: {
+            var walked = usage
+            walked.allocatedBytes = 405_000_000_000
+            return walked
+        }())
+        suite.expect(ForkMacBackupRunRules.protectedBytes(entry, source: source, sparseExcluded: []) == 396_000_000_000,
+                     "the real size protected: the walk's minus Docker's image left out, the VM clone counted (45,8 GB)")
+        suite.expect(ForkMacBackupSparsePolicy.parse(ForkMacBackupSparsePolicy.storageValue([home + "/a.vhd/", home + "/a.vhd"]))
+                        == [home + "/a.vhd"] && ForkMacBackupSparsePolicy.parse("{") == [],
+                     "the list of images left out: canonical paths, once; damaged: none")
         suite.expect(ForkMacBackupRunRules.extra(for: source, usage: ForkMacBackupDiskUsage(), iCloud: .exclude, home: home)
                         == ["/Library/Mobile Documents/"]
                         && ForkMacBackupRunRules.iCloudDriveRule(source: home + "/Library", home: home) == "/Mobile Documents/"
@@ -1505,8 +1527,10 @@ enum ForkMacBackupAgentTests {
         suite.expect(gone.sparseImages.isEmpty && gone.dataless == walked.dataless, "a deleted image leaves the list")
         let rules = ForkMacBackupRunRules.extra(for: source, sparseImages: refreshed.sparseImages, dataless: refreshed.dataless,
                                                 iCloud: .local, home: home)
-        suite.expect(rules.contains("/vm/new.img") && rules.contains("/Library/Mobile Documents/x/"),
-                     "the refreshed walk gives the run's rules")
+        let named = ForkMacBackupRunRules.extra(for: source, sparseImages: refreshed.sparseImages, dataless: refreshed.dataless,
+                                                iCloud: .local, home: home, sparseExcluded: [home + "/vm/new.img"])
+        suite.expect(!rules.contains("/vm/new.img") && named.contains("/vm/new.img") && rules.contains("/Library/Mobile Documents/x/"),
+                     "the refreshed walk gives the run's rules (a VM image only when left out by name)")
         let cache = ForkMacBackupPrescanCache(entries: [home: refreshed])
         suite.expect(cache.encoded().flatMap(ForkMacBackupPrescanCache.decode) == cache, "prescan.json reads back what it wrote")
 

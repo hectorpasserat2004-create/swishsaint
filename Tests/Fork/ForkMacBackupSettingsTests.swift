@@ -544,14 +544,19 @@ enum ForkMacBackupSettingsTests {
         write("Movies/Renders/clip.mov", bytes: 400_000)
         write("Developer/cachey/CACHEDIR.TAG", bytes: 43)
         write("Developer/cachey/blob", bytes: 90_000)
-        // A sparse disk image: 64 MB announced, nothing written.
-        let image = root.appendingPathComponent("Library/Containers/vm/disk.raw")
-        try? FileManager.default.createDirectory(at: image.deletingLastPathComponent(), withIntermediateDirectories: true)
-        FileManager.default.createFile(atPath: image.path, contents: nil)
-        if let handle = try? FileHandle(forWritingTo: image) {
-            try? handle.truncate(atOffset: 64_000_000)
-            try? handle.close()
+        // Sparse disk images: 64 MB announced, nothing written. A VM's (real
+        // data, kept) and Docker Desktop's (recreatable, left out).
+        func sparse(_ path: String, bytes: UInt64) {
+            let image = root.appendingPathComponent(path)
+            try? FileManager.default.createDirectory(at: image.deletingLastPathComponent(), withIntermediateDirectories: true)
+            FileManager.default.createFile(atPath: image.path, contents: nil)
+            if let handle = try? FileHandle(forWritingTo: image) {
+                try? handle.truncate(atOffset: bytes)
+                try? handle.close()
+            }
         }
+        sparse("Library/Containers/vm/disk.raw", bytes: 64_000_000)
+        sparse("Disks/com.docker.docker/Docker.raw", bytes: 48_000_000)
 
         let settings = ForkMacBackupContentScanner.Settings(
             presets: [.trash, .caches, .devFolders, .logs, .sparseDiskImages, .cacheDirTag], customRules: ["Movies/Renders"],
@@ -570,11 +575,22 @@ enum ForkMacBackupSettingsTests {
                         && preview.group(.genericBuildNames)?.examples == ["~/Developer/web/build"],
                      "a preset left off is measured too, with the real paths it would touch")
         suite.expect((preview.group(rule: "Movies/Renders")?.bytes ?? 0) >= 400_000, "a free rule is measured")
-        suite.expect(preview.sparse.count == 1 && preview.sparse.first?.logicalBytes == 64_000_000
+        suite.expect(preview.sparse.count == 2 && preview.sparse.first?.logicalBytes == 64_000_000
                         && (preview.sparse.first?.allocatedBytes ?? .max) < 1_000_000
-                        && preview.sparse.first?.path == "~/Library/Containers/vm/disk.raw",
-                     "a sparse disk image is found with both its sizes: \(preview.sparse)")
-        suite.expect(preview.includedFiles == 2 && preview.includedBytes >= 500_000 + 80_000 && preview.complete
+                        && preview.sparse.first?.path == "~/Library/Containers/vm/disk.raw"
+                        && preview.sparse.first?.isRecreatable == false && preview.sparse.last?.isRecreatable == true,
+                     "sparse disk images are found with both their sizes, Docker's told apart: \(preview.sparse)")
+        let vm = preview.sparse.first?.absolutePath ?? ""
+        suite.expect(preview.group(.sparseDiskImages)?.files == 1
+                        && preview.groups.contains { $0.id == ForkMacBackupContentPreview.sparseID(vm) && $0.files == 1 },
+                     "Docker's image goes with the preset, the VM's has a switch of its own")
+        let leftOut = ForkMacBackupContentScanner.scan(
+            sources: [root.path], settings: .init(presets: settings.presets, customRules: settings.customRules, iCloud: .local,
+                                                  sparseExcluded: [vm], sparseMinimum: 32_000_000),
+            home: root.path, now: now)
+        suite.expect(leftOut.includedFiles == preview.includedFiles - 1 && leftOut.excludedFiles == preview.excludedFiles + 1,
+                     "« Laisser de côté » on the VM's image moves it to what is left out")
+        suite.expect(preview.includedFiles == 3 && preview.includedBytes >= 500_000 + 80_000 && preview.complete
                         && preview.excludedBytes >= 300_000 + 200_000 + 120_000 + 50_000 + 400_000,
                      "kept and left out add up from real sizes (kept \(preview.includedFiles) files)")
         suite.expect(preview.topFolders.first?.path == "~/Documents", "the biggest folder kept comes first")

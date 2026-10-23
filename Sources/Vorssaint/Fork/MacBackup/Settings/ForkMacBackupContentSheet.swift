@@ -278,24 +278,31 @@ struct ForkMacBackupContentSheet: View {
                     ForkMacBackupCaption(sparseSentence)
                 }
             }
-            if let sparse = context.preview?.sparse, !sparse.isEmpty {
+            if let sparse = context.preview?.sparse.filter(\.isRecreatable), !sparse.isEmpty {
                 ForEach(sparse.prefix(5)) { file in
-                    HStack(spacing: 8) {
-                        Image(systemName: "externaldrive")
-                            .foregroundStyle(.secondary)
-                            .accessibilityHidden(true)
-                        Text((file.path as NSString).lastPathComponent)
-                            .font(.callout)
-                            .lineLimit(1)
-                            .help(file.path)
-                        Spacer()
-                        Text(String(format: text.sparseSizes,
-                                    ForkMacBackupFormat.bytes(file.logicalBytes, locale: locale),
-                                    ForkMacBackupFormat.bytes(file.allocatedBytes, locale: locale)))
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
+                    sparseRow(file) {
+                        if presetsStorage.contains(ForkMacBackupPreset.sparseDiskImages.rawValue) {
+                            Text(text.sparseLeftOut)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                     .accessibilityElement(children: .combine)
+                }
+            }
+            // Any other sparse image is real data: kept, unless left out by name.
+            if let others = context.preview?.sparse.filter({ !$0.isRecreatable }), !others.isEmpty {
+                ForkMacBackupCaption(text.sparseOtherExplain)
+                ForEach(others) { file in
+                    sparseRow(file) {
+                        if let absolute = file.absolutePath {
+                            Toggle(text.sparseLeaveOut, isOn: Binding(
+                                get: { context.sparseExcluded.contains(absolute) },
+                                set: { context.setSparse(absolute, excluded: $0) }))
+                                .toggleStyle(.switch)
+                                .controlSize(.small)
+                        }
+                    }
                 }
             }
         } header: {
@@ -303,9 +310,34 @@ struct ForkMacBackupContentSheet: View {
         }
     }
 
-    /// One friendly sentence, with both sizes of the biggest one when known.
+    /// One sparse image: its name, « annonce 200 Go · occupe 45,8 Go », and
+    /// what is done with it.
+    private func sparseRow<Trailing: View>(_ file: ForkMacBackupContentPreview.SparseFile,
+                                           @ViewBuilder trailing: () -> Trailing) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "externaldrive")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 1) {
+                Text((file.path as NSString).lastPathComponent)
+                    .font(.callout)
+                    .lineLimit(1)
+                    .help(file.path)
+                Text(String(format: text.sparseSizes,
+                            ForkMacBackupFormat.bytes(file.logicalBytes, locale: locale),
+                            ForkMacBackupFormat.bytes(file.allocatedBytes, locale: locale)))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            trailing()
+        }
+    }
+
+    /// One friendly sentence, with both sizes of the biggest recreatable one
+    /// when known (any other one is backed up).
     private var sparseSentence: String {
-        guard let file = context.preview?.sparse.first else { return text.sparseExplain }
+        guard let file = context.preview?.sparse.first(where: \.isRecreatable) else { return text.sparseExplain }
         return String(format: text.sparseExplainMeasured, (file.path as NSString).lastPathComponent,
                       ForkMacBackupFormat.bytes(file.logicalBytes, locale: locale),
                       ForkMacBackupFormat.bytes(file.allocatedBytes, locale: locale))

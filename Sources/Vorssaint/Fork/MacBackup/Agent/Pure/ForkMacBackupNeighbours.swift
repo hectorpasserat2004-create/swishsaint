@@ -174,20 +174,43 @@ enum ForkMacBackupRunRules {
     }
 
     static func extra(for source: ForkMacBackupSource, usage: ForkMacBackupDiskUsage, iCloud: ForkMacBackupICloudMode,
-                      home: String) -> [String] {
-        extra(for: source, sparseImages: usage.sparseImages, dataless: usage.dataless, iCloud: iCloud, home: home)
+                      home: String, sparseExcluded: Set<String> = []) -> [String] {
+        extra(for: source, sparseImages: usage.sparseImages, dataless: usage.dataless, iCloud: iCloud, home: home,
+              sparseExcluded: sparseExcluded)
     }
 
-    /// The same from a cached walk (`ForkMacBackupPrescanCache`).
+    /// The same from a cached walk (`ForkMacBackupPrescanCache`). Only the
+    /// sparse images `ForkMacBackupSparsePolicy` leaves out become rules:
+    /// the recreatable ones under the preset, and those left out by name.
     static func extra(for source: ForkMacBackupSource, sparseImages: [ForkMacBackupDiskUsage.SparseImage],
-                      dataless: [String], iCloud: ForkMacBackupICloudMode, home: String) -> [String] {
+                      dataless: [String], iCloud: ForkMacBackupICloudMode, home: String,
+                      sparseExcluded: Set<String> = []) -> [String] {
         var rules = ForkMacBackupContentScan.runRules(
-            sparseImages: source.presets.contains(.sparseDiskImages) ? sparseImages : [],
+            sparseImages: excludedSparse(sparseImages, source: source, sparseExcluded: sparseExcluded),
             dataless: iCloud == .local ? dataless : [])
         if iCloud == .exclude, let rule = iCloudDriveRule(source: source.path, home: home), !rules.contains(rule) {
             rules.append(rule)
         }
         return rules
+    }
+
+    /// The sparse images of `source` left out of its snapshot.
+    static func excludedSparse(_ images: [ForkMacBackupDiskUsage.SparseImage], source: ForkMacBackupSource,
+                               sparseExcluded: Set<String>) -> [ForkMacBackupDiskUsage.SparseImage] {
+        images.filter {
+            ForkMacBackupSparsePolicy.excludes(relativePath: $0.relativePath, source: source, excluded: sparseExcluded)
+        }
+    }
+
+    /// The real size of what a snapshot of `source` protects, from its
+    /// pre-scan: the allocated bytes the walk kept (the source's rules
+    /// applied, cloud-only files never counted) minus the sparse images
+    /// the run left out. Never below zero.
+    static func protectedBytes(_ entry: ForkMacBackupPrescanCache.Entry, source: ForkMacBackupSource,
+                               sparseExcluded: Set<String>) -> Int64 {
+        let left = excludedSparse(entry.sparseImages, source: source, sparseExcluded: sparseExcluded)
+            .reduce(Int64(0)) { $0 + $1.allocatedBytes }
+        return max(0, entry.realBytes - left)
     }
 
     /// `~/Library/Mobile Documents/` as a rule of `source`; nil when the
