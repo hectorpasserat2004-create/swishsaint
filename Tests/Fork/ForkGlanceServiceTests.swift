@@ -12,6 +12,7 @@ enum ForkGlanceServiceTests {
         pauseNotices(suite)
         profileChoice(suite)
         rekeying(suite)
+        calibrationPoints(suite)
         learning(suite)
         smallRules(suite)
         commandBar(suite)
@@ -182,6 +183,49 @@ enum ForkGlanceServiceTests {
         let same = Rules.replacing(old.id, with: touched, in: [old, other])
         suite.expect(same.count == 2 && same.first { $0.id == old.id }?.splits[lg.uuid] == .grid2x2,
                      "with the same id, the profile is replaced in place")
+    }
+
+    // MARK: Calibration points next to the profiles
+
+    private static func calibrationPoints(_ suite: TestSuite) {
+        typealias Rules = ForkGlanceServiceRules
+        let point = ForkGlanceCalibrationPoint(target: CGPoint(x: 100, y: 100), samples: [sample(time: 1)])
+        let mine = calibrated(desk)
+        let alone = calibrated(ForkGlanceDisplayLayout(displays: [macBook]))
+        let stored = [mine.id: [point], alone.id: [point, point], "gone": [point]]
+        let kept = Rules.points(stored, keeping: [mine, alone])
+        suite.expect(kept.count == 2 && kept[mine.id] == [point] && kept[alone.id]?.count == 2 && kept["gone"] == nil,
+                     "the points of a profile no longer listed go, the others stay as they were")
+
+        // Twelve profiles are kept: the thirteenth pushes the least recently used out, and its points with it.
+        var list: [ForkGlanceProfile] = []
+        var points: [String: [ForkGlanceCalibrationPoint]] = [:]
+        for index in 0...ForkGlanceProfiles.capacity {
+            var profile = ForkGlanceProfiles.newProfile(
+                layout: ForkGlanceDisplayLayout(displays: [ForkGlanceDisplay(
+                    uuid: "D\(index)", name: "Display \(index)", frame: CGRect(x: 0, y: 0, width: 1920, height: 1080))]),
+                cameraID: camera, now: now.addingTimeInterval(Double(index)))
+            profile.calibration = calibration(for: profile.layout)
+            list = Rules.replacing(profile.id, with: profile, in: list)
+            points[profile.id] = [point]
+            points = Rules.points(points, keeping: list)
+        }
+        suite.expect(list.count == ForkGlanceProfiles.capacity && points.count == ForkGlanceProfiles.capacity
+                        && Set(points.keys) == Set(list.map(\.id)),
+                     "past the twelve profiles, the points file keeps exactly the profiles' points")
+        suite.expect(Rules.points(points, keeping: []).isEmpty,
+                     "with no profile left (all deleted, or an unreadable profiles.json), no point is kept")
+
+        var nudged = lg
+        nudged.name = "LG renamed"
+        nudged.frame = nudged.frame.offsetBy(dx: 2, dy: 0)
+        suite.expect(Rules.sameDesk(desk, ForkGlanceDisplayLayout(displays: [nudged, macBook], lidClosed: true)),
+                     "a rename, the lid or a nudge within the signature's grid leaves the calibration's desk as it was")
+        var lower = macBook
+        lower.frame = lower.frame.offsetBy(dx: -400, dy: 0)
+        suite.expect(!Rules.sameDesk(desk, ForkGlanceDisplayLayout(displays: [lg, lower]))
+                        && !Rules.sameDesk(desk, ForkGlanceDisplayLayout(displays: [lg])),
+                     "a display moved, added or removed is another desk: the points no longer match it")
     }
 
     // MARK: Learning

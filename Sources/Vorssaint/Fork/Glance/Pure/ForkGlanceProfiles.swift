@@ -35,16 +35,34 @@ enum ForkGlanceProfiles {
     }
 
     /// « LG HDR WQHD + MacBook »: the main display first, then the others
-    /// left to right and top to bottom. The built-in display is called by
-    /// the Mac's name, the same in every language; the others by theirs.
+    /// left to right and top to bottom. A laptop's built-in panel is called
+    /// « MacBook », the same in every language (`isLaptopPanel`); every
+    /// other display, an iMac's built-in one included, by the name macOS
+    /// gives it (`NSScreen.localizedName`, in the system's language when the
+    /// profile was made).
     static func title(for layout: ForkGlanceDisplayLayout) -> String {
         let main = layout.displays.firstIndex { $0.frame.origin == .zero } ?? 0
         let others = layout.displays.enumerated().filter { $0.offset != main }.map(\.element)
             .sorted { ($0.frame.minX, $0.frame.minY) < ($1.frame.minX, $1.frame.minY) }
         let ordered = (layout.displays.isEmpty ? [] : [layout.displays[main]]) + others
         return ordered.map { display -> String in
-            display.isBuiltIn ? "MacBook" : display.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            isLaptopPanel(display) ? "MacBook" : display.name.trimmingCharacters(in: .whitespacesAndNewlines)
         }.filter { !$0.isEmpty }.joined(separator: " + ")
+    }
+
+    /// A MacBook's panel measures at most 16.2" (412 mm) across, an iMac's at
+    /// least 21.5" (546 mm): this lies between.
+    static let laptopDiagonal: CGFloat = 450
+
+    /// The built-in display is a laptop's: it has a notch (only MacBooks
+    /// do), or its physical size (`CGDisplayScreenSize`) is a laptop's. A
+    /// built-in display of unknown size without a notch is not assumed to be
+    /// one: it keeps the name macOS gives it.
+    static func isLaptopPanel(_ display: ForkGlanceDisplay) -> Bool {
+        guard display.isBuiltIn else { return false }
+        if display.hasNotch { return true }
+        guard let size = display.millimeters, size.width > 0, size.height > 0 else { return false }
+        return hypot(size.width, size.height) <= laptopDiagonal
     }
 
     private static func rounded(_ value: CGFloat) -> Int {

@@ -179,7 +179,12 @@ final class ForkGlanceCalibrationSession: ObservableObject {
     private var framingTimer: Timer?
     private var overlay: ForkGlanceCalibrationOverlay?
     private var languageObserver: AnyCancellable?
-    private var screenObserver: NSObjectProtocol?
+    /// The desk the runs were planned on, from the first run until the
+    /// assistant ends (`ForkGlanceServiceRules.sameDesk`): the points, the fit
+    /// and the score only hold for it.
+    private var desk: ForkGlanceDisplayLayout?
+    /// The layout last compared, so a change of anything else costs nothing.
+    private var lastLayout: ForkGlanceDisplayLayout?
     private var seed = UInt64.random(in: 0...UInt64.max)
 
     init(entry: ForkGlanceCalibrationEntry, backend: ForkGlanceCalibrationBackend,
@@ -200,14 +205,13 @@ final class ForkGlanceCalibrationSession: ObservableObject {
                 .sink { [weak self] in self?.language = $0 }
         }
         guard !preview else { return }
-        backend.onChange = { [weak self] in self?.objectWillChange.send() }
+        backend.onChange = { [weak self] in self?.backendChanged() }
         enter(step)
     }
 
     deinit {
         timer?.invalidate()
         framingTimer?.invalidate()
-        if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
     }
 
     /// The steps each way in shows (plan §8.4): Calibrer 1 to 7, Recalibrer 3
@@ -450,10 +454,10 @@ final class ForkGlanceCalibrationSession: ObservableObject {
         runKind = kind
         run = ForkGlanceCalibrationRun(targets: targets, checksQuality: kind != .validation, now: clock.now)
         if kind != .validation { backend.calibrationProgressed(done: 0, total: targets.count) }
+        if desk == nil { desk = layout }
         let overlay = self.overlay ?? ForkGlanceCalibrationOverlay()
         self.overlay = overlay
         overlay.show(session: self)
-        watchScreens()
         schedule()
     }
 
@@ -534,7 +538,6 @@ final class ForkGlanceCalibrationSession: ObservableObject {
         timer?.invalidate()
         timer = nil
         overlay?.hide()
-        unwatchScreens()
         let kind = runKind
         run = nil
         runKind = nil
@@ -580,6 +583,10 @@ final class ForkGlanceCalibrationSession: ObservableObject {
                 if self.steps.contains(.validation) { self.go(to: .validation) }
             case .failure(let error):
                 Self.logger.info("calibration fit failed: \(String(describing: error), privacy: .public)")
+                if error as? ForkGlanceCalibrationError == .layoutChanged {
+                    self.forgetDesk()
+                    return
+                }
                 switch error as? ForkGlanceRegressionError {
                 case .tooFewPoints?: self.problem = .fitTooFew
                 case .degenerate?: self.problem = .fitDegenerate
@@ -598,30 +605,38 @@ final class ForkGlanceCalibrationSession: ObservableObject {
         if step != .points, steps.contains(.points) { go(to: .points) }
     }
 
-    /// The overlay is on the displays: a display came or went.
-    private func watchScreens() {
-        guard screenObserver == nil else { return }
-        screenObserver = NotificationCenter.default.addObserver(
-            forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
-        ) { [weak self] _ in
-            self?.layoutChanged()
-        }
+    /// Something the assistant reads from the service changed. The service
+    /// follows the displays (grouped per 0.5 s burst), the feature on or off.
+    private func backendChanged() {
+        objectWillChange.send()
+        let now = layout
+        guard now != lastLayout else { return }
+        lastLayout = now
+        guard let desk, !ForkGlanceServiceRules.sameDesk(desk, now) else { return }
+        forgetDesk()
     }
 
-    private func unwatchScreens() {
-        if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
-        screenObserver = nil
-    }
-
-    private func layoutChanged() {
-        guard isRunning else { return }
+    /// The displays the runs were planned on are gone (a display came, went
+    /// or moved): a run under way stops, the points, the fit and the score of
+    /// the old desk are forgotten, the splits follow the new displays, and
+    /// « Recommencer » starts the points again. A fit under way comes back
+    /// refused by the service (`ForkGlanceCalibrationError.layoutChanged`).
+    private func forgetDesk() {
+        Self.logger.info("calibration: the displays changed")
+        desk = nil
         timer?.invalidate()
         timer = nil
         overlay?.hide()
-        unwatchScreens()
         run = nil
         runKind = nil
         askingCancel = false
+        collected = [:]
+        calibration = nil
+        accuracy = nil
+        lastAccuracy = [:]
+        let displays = Set(layout.displays.map(\.uuid))
+        splits = ForkGlanceZones.defaultSplits(layout).merging(splits.filter { displays.contains($0.key) }) { _, kept in kept }
+        planTargets = ForkGlanceCalibrationPlan.targets(layout: layout, mode: mode, splits: splits)
         problem = .layoutChanged
     }
 
@@ -666,7 +681,6 @@ final class ForkGlanceCalibrationSession: ObservableObject {
         stopFramingTimer()
         overlay?.hide()
         overlay = nil
-        unwatchScreens()
         if began { backend.calibrationFeed = nil }
         backend.onChange = nil
         run = nil

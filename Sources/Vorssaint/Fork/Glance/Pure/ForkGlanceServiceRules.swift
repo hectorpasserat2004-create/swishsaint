@@ -73,6 +73,23 @@ enum ForkGlanceServiceRules {
         ForkGlanceProfiles.upserting(profile, into: profiles.filter { $0.id != old || old == profile.id })
     }
 
+    /// The calibration points kept next to `profiles.json`
+    /// (`calibration-points.json`): only those of a profile still in the
+    /// list. A profile deleted, or dropped past `ForkGlanceProfiles.capacity`,
+    /// takes its points with it, so the file never outgrows the list.
+    static func points<Points>(_ stored: [String: Points], keeping profiles: [ForkGlanceProfile]) -> [String: Points] {
+        let ids = Set(profiles.map(\.id))
+        return stored.filter { ids.contains($0.key) }
+    }
+
+    /// The displays the calibration points were shown on are still the
+    /// displays: same uuids, places (within the signature's 8 pt) and
+    /// rotations. A name, the lid or the physical size may change; a
+    /// display added, removed, moved or resized may not.
+    static func sameDesk(_ lhs: ForkGlanceDisplayLayout, _ rhs: ForkGlanceDisplayLayout) -> Bool {
+        ForkGlanceProfiles.signature(layout: lhs, cameraID: "") == ForkGlanceProfiles.signature(layout: rhs, cameraID: "")
+    }
+
     // MARK: - Notices (plan §11.4)
 
     /// Where a pause or a resume came from.
@@ -368,6 +385,15 @@ enum ForkGlancePauseRules {
     static func date(ofUptime value: TimeInterval, now: Date, uptime: TimeInterval) -> Date {
         now.addingTimeInterval(value - uptime)
     }
+}
+
+// MARK: - Calibration (plan §8.4)
+
+/// Why the service did not keep a fit the assistant asked for.
+enum ForkGlanceCalibrationError: Error, Equatable {
+    /// The displays changed while the points were fitted: the points belong
+    /// to the old layout, and the assistant starts the points again.
+    case layoutChanged
 }
 
 // MARK: - Cost (plan §10.4)

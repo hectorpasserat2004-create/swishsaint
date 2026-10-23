@@ -113,6 +113,23 @@ enum ForkGlanceProfilesTests {
         suite.expect(ForkGlanceProfiles.title(for: three) == "LG HDR WQHD + DELL U2720Q + MacBook",
                      "the others follow from left to right, names trimmed")
         suite.expect(ForkGlanceProfiles.title(for: ForkGlanceDisplayLayout(displays: [])).isEmpty, "no display, no title")
+        // A 24" iMac: built in, no notch, 527 × 296 mm.
+        let iMac = ForkGlanceDisplay(uuid: "IMAC", name: "iMac", frame: CGRect(x: 0, y: 0, width: 2240, height: 1260),
+                                     millimeters: CGSize(width: 527, height: 296), isBuiltIn: true)
+        suite.expect(ForkGlanceProfiles.title(for: ForkGlanceDisplayLayout(displays: [iMac])) == "iMac",
+                     "an iMac's built-in display is called by the name macOS gives it, never « MacBook »")
+        suite.expect(!ForkGlanceProfiles.isLaptopPanel(iMac), "an iMac's panel is too large for a laptop's")
+        var air = macBook
+        air.hasNotch = false
+        air.millimeters = CGSize(width: 286, height: 179)
+        suite.expect(ForkGlanceProfiles.isLaptopPanel(air), "a 13\" MacBook Air without a notch is a laptop by its size")
+        var unknown = air
+        unknown.millimeters = nil
+        unknown.name = "Built-in Display"
+        suite.expect(!ForkGlanceProfiles.isLaptopPanel(unknown)
+                     && ForkGlanceProfiles.title(for: ForkGlanceDisplayLayout(displays: [unknown])) == "Built-in Display",
+                     "a built-in display of unknown size without a notch keeps the system's name")
+        suite.expect(!ForkGlanceProfiles.isLaptopPanel(lg), "an external display is never a laptop's panel")
     }
 
     // MARK: Matching
