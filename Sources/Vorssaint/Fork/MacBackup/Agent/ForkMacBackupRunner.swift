@@ -65,6 +65,11 @@ final class ForkMacBackupRunner {
     private var otherEngineCheckedAt: Date?
     private var diskRefused = false
     private var diskCheckedAt: Date?
+    /// The last run's failures showed Kopia without Full Disk Access
+    /// (`ForkMacBackupDiskAccess.runShowsRefusal`): scheduled runs wait
+    /// until a run reads those folders again (« Sauvegarder quand même »)
+    /// or this process starts again (access given back, then a relaunch).
+    private var diskRefusedByRun = false
     private var spaceLow = false
     private var spaceCheckedAt: Date?
 
@@ -449,15 +454,19 @@ final class ForkMacBackupRunner {
                                        lowPowerMode: watch.lowPowerMode, network: watch.network,
                                        peerOnline: settings.repository?.peer == nil ? nil : peerOnline,
                                        meetingBusy: meeting, engineAvailable: engine != nil,
-                                       wrongRepository: wrongRepository, diskAccess: !diskRefused,
+                                       wrongRepository: wrongRepository, diskAccess: !diskRefused && !diskRefusedByRun,
                                        localSpaceLow: spaceLow, otherEngine: otherEngine, updateHold: updateHold)
     }
 
     /// The conditions that send no notification, each at its own pace.
     private func refreshSlowConditions(now: Date) {
-        if diskCheckedAt.map({ now.timeIntervalSince($0) >= ForkMacBackupAgentTuning.diskAccessRecheck }) ?? true {
+        // The app backs up in the agent's place only for a while: it looks
+        // before every run it may start, the agent every 10 min.
+        let diskRecheck = host == .app ? ForkMacBackupAgentTuning.appDiskAccessRecheck
+            : ForkMacBackupAgentTuning.diskAccessRecheck
+        if diskCheckedAt.map({ now.timeIntervalSince($0) >= diskRecheck }) ?? true {
             diskCheckedAt = now
-            diskRefused = ForkMacBackupSystemWatch.diskAccessKnownRefused()
+            diskRefused = ForkMacBackupDiskAccess.probe() == .refused
         }
         if spaceCheckedAt.map({ now.timeIntervalSince($0) >= 60 }) ?? true {
             spaceCheckedAt = now
@@ -788,7 +797,7 @@ final class ForkMacBackupRunner {
             guard let self, case .success(let manifests) = result else { return }
             self.proofs.reconcile(with: manifests, paths: self.settings.sources.map(\.path),
                                   identity: self.settings.repository?.clientIdentity, iCloud: self.settings.iCloud,
-                                  now: Date())
+                                  now: Date(), listedAt: now)
             self.saveProofs()
             self.publish()
             self.writeMissingFailureLists(manifests)
@@ -1139,6 +1148,14 @@ final class ForkMacBackupRunner {
         if runs.count > 500 { runs.removeFirst(runs.count - 500) }
         if let slot = book.runEnded(summary.result, runID: summary.id, canceledByPerson: summary.stopReason == .user) {
             append(slot, to: paths.slots)
+        }
+        // Kopia refused in the folders Full Disk Access opens: the next
+        // scheduled runs wait (`noDiskAccess`) instead of repeating it.
+        switch summary.result {
+        case .complete?, .partial?:
+            diskRefusedByRun = summary.proofs.contains { ForkMacBackupDiskAccess.runShowsRefusal($0.failures) }
+        default:
+            break
         }
         if !summary.proofs.isEmpty {
             // What the pre-scan measured is the run's real size on disk: the
