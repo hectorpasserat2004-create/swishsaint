@@ -865,6 +865,11 @@ struct Strings {
     let secureInputUnattributed: String
     let secureInputUnidentified: String
     let secureInputRevealFormat: String
+    // The switcher page's captions: there secure input costs the switcher its
+    // keys rather than typing, and ⌘Tab reaches the macOS switcher until it ends.
+    let secureInputSwitcherHeldFormat: String
+    let secureInputSwitcherUnattributed: String
+    let secureInputSwitcherUnidentified: String
 
     // MARK: About
     let aboutDescription: String
@@ -915,6 +920,7 @@ struct Strings {
     // MARK: Settings — monitor / menu bar metrics
     let tabMonitor: String
     let monitorMenuBarSection: String
+    let monitorMenuBarPreview: String
     let monitorMenuBarCaption: String
     let monitorCombineTemperatures: String
     let monitorCombineTemperaturesCaption: String
@@ -1617,7 +1623,7 @@ extension Strings {
         autoQuitHowTitle: "Como funciona",
         autoQuitStep1: "Feche a última janela de um app (⌘W ou o botão vermelho).",
         autoQuitStep2: "O app é encerrado sozinho. Diálogos de “salvar?” continuam aparecendo.",
-        autoQuitPredictableNote: "Apps que normalmente rodam sem janela nunca são encerrados.",
+        autoQuitPredictableNote: "Apps que ainda não abriram uma janela continuam abertos. Apps da barra de menus continuam abertos, a menos que você autorize seu encerramento.",
         autoQuitOngoingWorkNote: "Alguns apps fecham a última janela e continuam trabalhando, como um gravador de tela depois que a captura começa. Esses também são encerrados, a menos que estejam na lista de exceções.",
         autoQuitExceptionsTitle: "Exceções",
         autoQuitExceptionsCaption: "Apps nesta lista continuam abertos mesmo sem nenhuma janela.",
@@ -1986,10 +1992,13 @@ extension Strings {
         permissionRequest: "Conceder acesso",
         permissionRestartNote: "O macOS pode pedir para reabrir o app depois de conceder.",
         secureInputTitle: "A entrada segura está ativa",
-        secureInputHeldFormat: "%@ está mantendo-a ativa, então o Vorssaint não consegue digitar por você. Saia do campo de senha do app, ou encerre-o, para liberá-la.",
-        secureInputUnattributed: "Nenhum app em execução a reivindica. Encerre a sessão e entre novamente para limpá-la.",
+        secureInputHeldFormat: "%@ era o app em primeiro plano quando ela foi ligada e pode estar mantendo-a ativa, então o Vorssaint não consegue digitar por você. Saia do campo de senha do app, ou encerre-o, para liberá-la.",
+        secureInputUnattributed: "Não é possível dizer qual app a está mantendo ativa, então o Vorssaint não consegue digitar por você. Saia de qualquer campo de senha aberto, ou encerre a sessão e entre novamente, para limpá-la.",
         secureInputUnidentified: "Não foi possível identificar o app que a está mantendo ativa, então o Vorssaint não consegue digitar por você.",
         secureInputRevealFormat: "Mostrar %@",
+        secureInputSwitcherHeldFormat: "%@ era o app em primeiro plano quando ela foi ligada e pode estar mantendo-a ativa. Até ela ser desativada, o macOS esconde do alternador as teclas que você pressiona e o ⌘Tab abre o alternador do macOS. Saia do campo de senha do app, ou encerre-o, para liberá-la.",
+        secureInputSwitcherUnattributed: "Não é possível dizer qual app a está mantendo ativa. Até ela ser desativada, o macOS esconde do alternador as teclas que você pressiona e o ⌘Tab abre o alternador do macOS. Saia de qualquer campo de senha aberto, ou encerre a sessão e entre novamente, para limpá-la.",
+        secureInputSwitcherUnidentified: "Não foi possível identificar o app que a está mantendo ativa. Até ela ser desativada, o macOS esconde do alternador as teclas que você pressiona e o ⌘Tab abre o alternador do macOS.",
 
         aboutDescription: "Central de utilidades para o seu Mac.\nEnergia, monitor do sistema, rolagem e alternador de janelas, direto na barra de menus.",
         versionPrefix: "Versão",
@@ -2037,6 +2046,7 @@ extension Strings {
 
         tabMonitor: "Monitor",
         monitorMenuBarSection: "Na barra de menus",
+        monitorMenuBarPreview: "Prévia da barra de menus",
         monitorMenuBarCaption: "Escolha o que aparece ao lado do ícone na barra de menus.",
         monitorCombineTemperatures: "Combinar uso e temperatura",
         monitorCombineTemperaturesCaption: "Quando uso e temperatura do mesmo item estiverem ativos, mostra tudo em um bloco só.",
@@ -2212,11 +2222,11 @@ extension Strings {
         shortcutsPageTitle: "Atalhos de teclado",
         settingsSearchPlaceholder: "Buscar ajustes",
         donateHeading: "Ajude o Vorssaint a continuar crescendo",
-        donateMessage: "O Vorssaint é gratuito, independente e desenvolvido no meu tempo livre. Se você quiser contribuir financeiramente, o Buy Me a Coffee ajuda diretamente a manter o desenvolvimento avançando.",
+        donateMessage: "O Vorssaint continua de graça, local e sem anúncios ou coleta de dados de uso. Se ele te ajuda, o Buy Me a Coffee é a única forma de apoiar seu desenvolvimento financeiramente.",
         donateButton: "Apoiar no Buy Me a Coffee",
         donateThanks: "Obrigado por estar aqui. 🖤",
         supportIntroTitle: "Ajude o Vorssaint a continuar crescendo",
-        supportIntroMessage: "Se você quiser apoiar financeiramente o desenvolvimento, o Buy Me a Coffee é o único lugar para fazer isso.",
+        supportIntroMessage: "O Vorssaint continua de graça, local e sem anúncios ou coleta de dados de uso. Se ele te ajuda, o Buy Me a Coffee é a única forma de apoiar seu desenvolvimento financeiramente.",
         supportIntroStarButton: "Dar uma estrela no GitHub",
         supportIntroStarMessage: "Apoio financeiro nunca é esperado. Dar uma estrela no GitHub ajuda mais pessoas a encontrar o Vorssaint e faz uma diferença enorme no desenvolvimento.",
         supportIntroStarHint: "Uma estrela no GitHub também ajuda mais pessoas a conhecer o Vorssaint e significa muito.",
@@ -2725,7 +2735,7 @@ extension Strings {
         autoQuitHowTitle: "How it works",
         autoQuitStep1: "Close an app’s last window (⌘W or the red button).",
         autoQuitStep2: "The app quits on its own. “Save changes?” dialogs still appear.",
-        autoQuitPredictableNote: "Apps that normally run without a window are never quit.",
+        autoQuitPredictableNote: "Apps that have not opened a window stay open. Menu bar apps stay open unless you explicitly allow them to quit.",
         autoQuitOngoingWorkNote: "Some apps close their last window while they keep working, such as a screen recorder once capture starts. Those are quit too, unless they are on the Exceptions list.",
         autoQuitExceptionsTitle: "Exceptions",
         autoQuitExceptionsCaption: "Apps on this list stay open even with no windows.",
@@ -3094,10 +3104,13 @@ extension Strings {
         permissionRequest: "Grant access",
         permissionRestartNote: "macOS may ask to reopen the app after granting.",
         secureInputTitle: "Secure input is on",
-        secureInputHeldFormat: "%@ is holding it, so Vorssaint cannot type for you. Dismiss its password field, or quit it, to release it.",
-        secureInputUnattributed: "No running app claims it. Log out and back in to clear it.",
+        secureInputHeldFormat: "%@ was the active app when it turned on and may be holding it, so Vorssaint cannot type for you. Dismiss its password field, or quit it, to release it.",
+        secureInputUnattributed: "The app holding it cannot be named, so Vorssaint cannot type for you. Dismiss any open password field, or log out and back in, to clear it.",
         secureInputUnidentified: "The app holding it could not be identified, so Vorssaint cannot type for you.",
         secureInputRevealFormat: "Show %@",
+        secureInputSwitcherHeldFormat: "%@ was the active app when it turned on and may be holding it. Until it turns off, macOS hides your keystrokes from the switcher and ⌘Tab opens the macOS switcher instead. Dismiss its password field, or quit it, to release it.",
+        secureInputSwitcherUnattributed: "The app holding it cannot be named. Until it turns off, macOS hides your keystrokes from the switcher and ⌘Tab opens the macOS switcher instead. Dismiss any open password field, or log out and back in, to clear it.",
+        secureInputSwitcherUnidentified: "The app holding it could not be identified. Until it turns off, macOS hides your keystrokes from the switcher and ⌘Tab opens the macOS switcher instead.",
 
         aboutDescription: "A utility hub for your Mac.\nEnergy, system monitor, scrolling and a window switcher, right in the menu bar.",
         versionPrefix: "Version",
@@ -3145,6 +3158,7 @@ extension Strings {
 
         tabMonitor: "Monitor",
         monitorMenuBarSection: "In the menu bar",
+        monitorMenuBarPreview: "Menu bar preview",
         monitorMenuBarCaption: "Choose what appears next to the icon in the menu bar.",
         monitorCombineTemperatures: "Combine usage and temperature",
         monitorCombineTemperaturesCaption: "When usage and temperature for the same item are enabled, show them in one block.",
@@ -3320,11 +3334,11 @@ extension Strings {
         shortcutsPageTitle: "Keyboard shortcuts",
         settingsSearchPlaceholder: "Search settings",
         donateHeading: "Help Vorssaint keep growing",
-        donateMessage: "Vorssaint is free, independent and built in my spare time. If you would like to contribute financially, Buy Me a Coffee directly helps me keep development moving forward.",
+        donateMessage: "Vorssaint stays free and local, with no ads or usage tracking. If it helps you, Buy Me a Coffee is the only way to help fund its development.",
         donateButton: "Support on Buy Me a Coffee",
         donateThanks: "Thank you for being here. 🖤",
         supportIntroTitle: "Help Vorssaint keep growing",
-        supportIntroMessage: "If you would like to support development financially, Buy Me a Coffee is the one place to do it.",
+        supportIntroMessage: "Vorssaint stays free and local, with no ads or usage tracking. If it helps you, Buy Me a Coffee is the only way to help fund its development.",
         supportIntroStarButton: "Star Vorssaint on GitHub",
         supportIntroStarMessage: "Financial support is never expected. A star on GitHub helps more people discover Vorssaint and makes a real difference to its development.",
         supportIntroStarHint: "A star on GitHub also helps more people find Vorssaint, and it means a lot.",

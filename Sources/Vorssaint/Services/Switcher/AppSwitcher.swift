@@ -109,6 +109,10 @@ final class AppSwitcher: ObservableObject {
     private var pendingStartAfterStop = false
     /// Alive only while the Switcher's tap needs layout labels off main.
     private var keyboardLayoutObserver: NSObjectProtocol?
+    /// Registered only while the switcher takes macOS's keys over.
+    private lazy var secureInputWatch = SecureInputWatch { [weak self] enabled in
+        self?.secureInputChanged(enabled)
+    }
     private var wakeObserver: NSObjectProtocol?
     private var wakeRetry: DispatchWorkItem?
 
@@ -231,8 +235,10 @@ final class AppSwitcher: ObservableObject {
             // A live tap can pick up a shortcut change without rebuilding;
             // apply here so the native hotkeys follow immediately.
             if !UserDefaults.standard.bool(forKey: DefaultsKey.switcherTakeOverSystemShortcuts) {
+                secureInputWatch.stop()
                 restoreNativeHotkeys()
             } else {
+                secureInputWatch.start()
                 applyNativeHotkeySuppressionIfTapLive()
             }
             // Build the panel and its SwiftUI tree now: the first hosting-view
@@ -246,6 +252,7 @@ final class AppSwitcher: ObservableObject {
                 WindowPreviewProvider.shared.startWarming()
             }
         } else {
+            secureInputWatch.stop()
             restoreNativeHotkeys()
             stopObservingKeyboardLayout()
             stopObservingWake()
@@ -258,6 +265,7 @@ final class AppSwitcher: ObservableObject {
     /// resets its own permissions, so a revoked Accessibility grant can never
     /// leave a live tap behind.
     func suspend() {
+        secureInputWatch.stop()
         restoreNativeHotkeys()
         stopObservingWake()
         routeLock.withLock { routeCanStartSession = false }
@@ -451,7 +459,9 @@ final class AppSwitcher: ObservableObject {
 
     /// Dock's ⌘Tab handler is a symbolic hotkey, not an event the session tap
     /// can swallow. Switch those hotkeys off only while this tap is actually
-    /// installed, so a missing Accessibility grant never kills both switchers.
+    /// installed, so a missing Accessibility grant never kills both switchers,
+    /// and only while it can hear the keyboard, so Secure Event Input never
+    /// does either.
     private func applyNativeHotkeySuppression() {
         let (apps, windows) = routeLock.withLock { (routeShortcut, routeWindowShortcut) }
         let takeOver = UserDefaults.standard.bool(
@@ -459,6 +469,7 @@ final class AppSwitcher: ObservableObject {
         SystemShortcutTakeover.setWanted(
             SwitcherSupport.nativeHotkeyIDs(
                 takeOverSystemShortcuts: takeOver,
+                secureInputEnabled: IsSecureEventInputEnabled(),
                 appsShortcut: apps,
                 windowShortcut: windows,
                 liveEntries: SymbolicHotKeys.entries(for: SwitcherNativeSymbolicHotKey.ids) ?? []),
@@ -482,6 +493,7 @@ final class AppSwitcher: ObservableObject {
         else { return [] }
         return SwitcherSupport.nativeHotkeyIDs(
             takeOverSystemShortcuts: true,
+            secureInputEnabled: IsSecureEventInputEnabled(),
             appsShortcut: GlobalShortcut.saved(for: DefaultsKey.switcherShortcut,
                                                fallback: .switcherDefault),
             windowShortcut: GlobalShortcut.saved(for: DefaultsKey.switcherWindowShortcut,
@@ -497,6 +509,19 @@ final class AppSwitcher: ObservableObject {
 
     private func restoreNativeHotkeys() {
         SystemShortcutTakeover.setWanted([], for: SystemShortcutTakeover.switcherSource)
+    }
+
+    /// Secure Event Input stops every key from reaching the tap, so macOS gets
+    /// its keys back for as long as it lasts, and a session already open is
+    /// dropped: the release that would commit it can no longer arrive.
+    private func secureInputChanged(_ enabled: Bool) {
+        guard enabled else {
+            applyNativeHotkeySuppressionIfTapLive()
+            return
+        }
+        routeLock.withLock { routePendingSessionStart = nil }
+        if sessionActive { cancelSession() }
+        restoreNativeHotkeys()
     }
 
     private func clearEventTapThread() -> Bool {
@@ -705,7 +730,15 @@ final class AppSwitcher: ObservableObject {
         switch type {
         case .scrollWheel:
             guard sessionActive else { return Unmanaged.passUnretained(event) }
-            let delta = scrollNavigation.selectionDelta(for: event)
+            // A remote screen's scroll comes already turned the controlling
+            // computer's way, so Scroll Direction is for local wheels only.
+            let direction = ScrollDirectionPreferences(defaults: .standard)
+            let directionApplies = direction.isEnabled
+                && ScrollWheelHIDStage.shared.passed(event)
+                && !MouseAppExceptions.shared.excludesPointerTarget(
+                    .scrollDirection, at: event.location,
+                    sourceProcessID: event.getIntegerValueField(.eventSourceUnixProcessID))
+            let delta = scrollNavigation.selectionDelta(for: event, direction: directionApplies ? direction : nil)
             if delta != 0 {
                 // Moving the row must not select the card under a stationary pointer.
                 hoverAnchor = NSEvent.mouseLocation
@@ -854,7 +887,7 @@ final class AppSwitcher: ObservableObject {
                 if event.getIntegerValueField(.keyboardEventAutorepeat) == 0 {
                     switch action {
                     case .closeWindow, .quitApp: runProtectedLetterAction(action)
-                    case .pinSearch: isSearchPinned = true
+                    case .pinSearch: pinSearch()
                     }
                 }
             } else if let text {
@@ -1240,6 +1273,12 @@ final class AppSwitcher: ObservableObject {
             !CharacterSet.controlCharacters.contains(scalar)
                 && !CharacterSet.newlines.contains(scalar)
         }))
+    }
+
+    private func pinSearch() {
+        isSearchPinned = true
+        recomputeLayouts(for: windows)
+        resizePanel()
     }
 
     private func applySearchFilter(preferredItemID: String?) {
@@ -1734,11 +1773,21 @@ final class AppSwitcher: ObservableObject {
     }
 
     private var currentPanelSize: CGSize {
-        usesIconRowLayout
+        let contentSize = usesIconRowLayout && !windows.isEmpty
             ? (simpleModeEnabled
                 ? (usesWindowRow ? iconRowLayout.simpleWindowPanelSize : iconRowLayout.simplePanelSize)
                 : iconRowLayout.panelSize)
             : grid.panelSize
+        return CGSize(width: contentSize.width, height: contentSize.height + searchTopInset)
+    }
+
+    var searchTopInset: CGFloat {
+        SwitcherSearchLayout.topInset(
+            query: searchQuery,
+            isPinned: isSearchPinned,
+            contentPadding: usesIconRowLayout && !windows.isEmpty
+                ? SwitcherIconRowLayout.padding : SwitcherGrid.padding
+        )
     }
 
     private var iconRowModeEnabled: Bool {
@@ -1837,7 +1886,8 @@ final class AppSwitcher: ObservableObject {
         guard let screen = placementScreen ?? NSScreen.screens.first else { return }
         sessionPlacementVisibleFrame = screen.visibleFrame
         grid = SwitcherGrid.compute(count: max(items.count, 1), on: screen,
-                                    maxColumns: SwitcherSupport.userMaxColumns)
+                                    maxColumns: SwitcherSupport.userMaxColumns,
+                                    searchTopInset: searchTopInset)
         let appGroups = SwitcherSupport.appGroups(items: items)
         iconRowLayout = SwitcherIconRowLayout.compute(
             appCount: usesWindowRow ? items.count : appGroups.count,
@@ -1848,7 +1898,8 @@ final class AppSwitcher: ObservableObject {
             showsShortcutHints: showsShortcutHints,
             tileWidth: usesWindowRow ? SwitcherIconRowLayout.windowTileWidth
                                      : SwitcherIconRowLayout.appTileWidth,
-            maxColumns: SwitcherSupport.userMaxColumns
+            maxColumns: SwitcherSupport.userMaxColumns,
+            searchTopInset: searchTopInset
         )
     }
 
@@ -1864,7 +1915,8 @@ final class AppSwitcher: ObservableObject {
             showsShortcutHints: showsShortcutHints,
             tileWidth: usesWindowRow ? SwitcherIconRowLayout.windowTileWidth
                                      : SwitcherIconRowLayout.appTileWidth,
-            maxColumns: SwitcherSupport.userMaxColumns
+            maxColumns: SwitcherSupport.userMaxColumns,
+            searchTopInset: searchTopInset
         )
         if iconRowLayout != newLayout {
             iconRowLayout = newLayout
@@ -2035,9 +2087,10 @@ struct SwitcherGrid: Equatable {
 
     static let empty = SwitcherGrid(columns: 1, rows: 1, visibleRows: 1, panelSize: .zero)
 
-    static func compute(count: Int, on screen: NSScreen, maxColumns userMax: Int? = nil) -> SwitcherGrid {
+    static func compute(count: Int, on screen: NSScreen, maxColumns userMax: Int? = nil,
+                        searchTopInset: CGFloat = 0) -> SwitcherGrid {
         let usableWidth = screen.visibleFrame.width * 0.92
-        let usableHeight = screen.visibleFrame.height * 0.85
+        let usableHeight = screen.visibleFrame.height * 0.85 - searchTopInset
 
         let fitByWidth = max(1, Int((usableWidth - padding * 2 + spacing) / (cardWidth + spacing)))
         let columns = SwitcherSupport.wrappingColumnCount(itemCount: count, fitByWidth: fitByWidth,
