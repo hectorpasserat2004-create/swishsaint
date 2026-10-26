@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Martial
 
 import AppKit
+import AVFoundation
 import Combine
 import CoreGraphics
 import CoreVideo
@@ -413,6 +414,7 @@ final class ForkGlanceService: ObservableObject {
         restorePause()
         sendSystem()
         if profilesLoaded { applyProfile() }
+        syncJournal()
     }
 
     private func tearDown() {
@@ -422,6 +424,7 @@ final class ForkGlanceService: ObservableObject {
         }
         isUp = false
         Self.log.info("glance focus down")
+        endJournal(reason: "featureDown")
         if calibrationActive {
             // The switch went off under the assistant: it closes as « Annuler ».
             ForkGlanceCalibrationWindow.close()
@@ -490,6 +493,7 @@ final class ForkGlanceService: ObservableObject {
             applyCamera()
         case let .setRate(rate):
             machineRate = rate
+            journalRate(rate)
             if !calibrationActive { ForkGlanceCamera.shared.setRate(rate) }
         case let .focus(zone):
             performFocus(zone)
@@ -541,6 +545,7 @@ final class ForkGlanceService: ObservableObject {
     private func publishState() {
         let now = clock.now
         let newPhase = machine?.phase ?? (calibrationActive ? .calibrating : .off)
+        journalPhase(newPhase)
         if phase != newPhase { phase = newPhase }
         switch newPhase {
         case .searching, .away:
@@ -645,6 +650,7 @@ final class ForkGlanceService: ObservableObject {
         layout = newLayout
         pointerByDisplay = pointerByDisplay.filter { uuid, _ in newLayout.displays.contains { $0.uuid == uuid } }
         applyProfile()
+        journalLayout()
         sendSystem()
     }
 
@@ -674,6 +680,7 @@ final class ForkGlanceService: ObservableObject {
             }
             self.settingsChanged(read)
             self.syncShortcuts()
+            self.syncJournal()
             // A camera chosen elsewhere (a settings import never carries it: machine state).
             if UserDefaults.standard.string(forKey: ForkDefaultsKey.glanceCameraID) ?? "" != self.storedCameraChoice {
                 self.devicesChanged()
@@ -832,6 +839,7 @@ final class ForkGlanceService: ObservableObject {
         guard fresh != zones else { return }
         zones = fresh
         mark(.zonesChanged(time: 0, zones: fresh))
+        journalZones(fresh)
         send(.zonesChanged(fresh))
     }
 
@@ -925,6 +933,7 @@ final class ForkGlanceService: ObservableObject {
             estimate = ForkGlanceCalibrationModel.estimate(sample, with: calibration)
         }
         lastEstimate = estimate
+        journalFrame(frame, gaze: gaze)
 
         if var collect = recenterCollect, collect.generation == profileGeneration, sample.facePresent {
             collect.samples.append(sample)
@@ -970,6 +979,7 @@ final class ForkGlanceService: ObservableObject {
         DispatchQueue.main.async { [weak self] in
             guard let self, self.isUp else { return }
             self.mark(.switched(time: 0, zone: zone, succeeded: false))
+            self.journalSwitch(zone, succeeded: false, app: nil, alreadyFocused: nil)
             self.send(.focusResult(zone: zone, succeeded: false))
         }
     }
@@ -980,6 +990,8 @@ final class ForkGlanceService: ObservableObject {
         pendingSwitch = nil
         let now = clock.now
         mark(.switched(time: 0, zone: target.zoneID, succeeded: succeeded))
+        journalSwitch(target.zoneID, succeeded: succeeded, app: target.window.bundleID,
+                      alreadyFocused: pending.alreadyFocused)
         if succeeded {
             classifier.noteSwitch(to: target.zoneID, at: now)
             lastSwitched = (target.window.id, target.zoneID)
@@ -1094,6 +1106,7 @@ final class ForkGlanceService: ObservableObject {
         case .cameraUnavailable, .recentered, .drift:
             break
         }
+        journalNotice(notice)
         ForkGlanceIsland.show(notice)
     }
 
@@ -1219,6 +1232,7 @@ final class ForkGlanceService: ObservableObject {
         guard !collect.samples.isEmpty, var current = profile, let calibration = current.calibration else { return }
         current.calibration = ForkGlanceCalibrationModel.recentered(calibration, samples: collect.samples,
                                                                     target: collect.target, layout: layout)
+        journalCalibration(.recenter, before: calibration, after: current.calibration)
         store(current)
         present(.recentered)
     }
@@ -1514,6 +1528,7 @@ final class ForkGlanceService: ObservableObject {
     // MARK: - Learning from clicks (plan §7.6)
 
     private func clicked(at point: CGPoint, time: TimeInterval) {
+        journalClick(at: point)
         guard isUp, !calibrationActive, var current = profile, current.calibration != nil else { return }
         let clickedZone = ForkGlanceServiceRules.zone(at: point, in: zones)
         mark(.click(time: 0, point: point, zone: clickedZone?.id))
@@ -1576,6 +1591,8 @@ final class ForkGlanceService: ObservableObject {
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 self.refitting = false
+                self.journalRefit(old: old, accepted: accepted, learned: learned, id: id, layout: layout,
+                                  generation: generation)
                 guard let accepted, generation == self.profileGeneration, var latest = self.profile,
                       latest.id == id else {
                     Self.log.info("refit from clicks not kept")
@@ -1647,6 +1664,7 @@ final class ForkGlanceService: ObservableObject {
             }
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
+                self.journalFit(result, layout: layout, generation: generation)
                 // The displays changed while fitting: the points belong to the
                 // old desk, and the profile in force may be another one now.
                 guard ForkGlanceServiceRules.sameDesk(layout, self.layout) else {
@@ -1693,6 +1711,7 @@ final class ForkGlanceService: ObservableObject {
     /// The validation's per-zone scores, then the notice and the mascot.
     func finishValidation(zoneAccuracy: [String: Double]) {
         precondition(Thread.isMainThread)
+        journalValidation(zoneAccuracy)
         if var current = profile, current.calibration != nil {
             current.calibration?.zoneAccuracy = zoneAccuracy
             store(current)
@@ -1722,6 +1741,7 @@ final class ForkGlanceService: ObservableObject {
             }
             current.calibration = ForkGlanceCalibrationModel.recentered(calibration, points: recenterPoints,
                                                                         layout: layout)
+            journalCalibration(.quickRecenter, before: calibration, after: current.calibration)
             store(current, replacing: oldID)
             profile = current
             present(.recentered)
@@ -1907,5 +1927,335 @@ private final class ForkGlancePointsStore: @unchecked Sendable {
             log.error("calibration points not written")
             return
         }
+    }
+}
+
+// MARK: - Live journal
+
+/// Diagnostic › « Journal en direct pour l'analyse » (`ForkGlanceJournal`): while
+/// `fork.glance.liveJournal` is on and the feature is up, every image and
+/// every event is appended to `Glance/journal/glance-live-….jsonl`, so the
+/// feature can be tuned from a terminal reading the file while the person
+/// works. The switch turns itself off after 30 min, when the feature goes
+/// down, and at the next launch. Off, each hook costs one Bool: nothing is
+/// built, nothing encoded.
+extension ForkGlanceService {
+    private var journal: ForkGlanceJournalRecorder { .shared }
+
+    /// The folder the journals are written to.
+    static var journalFolder: URL? { ForkGlanceJournalRecorder.folder }
+
+    /// Shows the latest journal (or its folder) in the Finder.
+    func revealJournal() {
+        precondition(Thread.isMainThread)
+        journal.reveal()
+    }
+
+    /// Follows the switch: at the feature's start and at each change of the defaults.
+    private func syncJournal() {
+        precondition(Thread.isMainThread)
+        let defaults = UserDefaults.standard
+        if !journal.launchChecked {
+            journal.launchChecked = true
+            // A switch left on by a crash does not start another 30 minutes.
+            if defaults.bool(forKey: ForkDefaultsKey.glanceLiveJournal) {
+                defaults.set(false, forKey: ForkDefaultsKey.glanceLiveJournal)
+            }
+        }
+        let wanted = isUp && defaults.bool(forKey: ForkDefaultsKey.glanceLiveJournal)
+        if wanted, !journal.isOn {
+            startJournal()
+        } else if !wanted, journal.isOn {
+            endJournal(reason: "switchedOff")
+        }
+    }
+
+    /// Ends the journal and turns its switch off (the feature went down, the time limit).
+    private func endJournal(reason: String) {
+        if journal.isOn {
+            journal.end(reason: reason, at: clock.now)
+            Self.log.info("live journal off (\(reason, privacy: .public))")
+        }
+        let defaults = UserDefaults.standard
+        if defaults.bool(forKey: ForkDefaultsKey.glanceLiveJournal) {
+            defaults.set(false, forKey: ForkDefaultsKey.glanceLiveJournal)
+        }
+    }
+
+    private func startJournal() {
+        let now = clock.now
+        let signature = ForkGlanceProfiles.signature(layout: layout, cameraID: cameraID ?? "")
+        let start = ForkGlanceJournal.Start(
+            wall: Date(), appVersion: Self.appVersion, macOS: ProcessInfo.processInfo.operatingSystemVersionString,
+            mac: Self.macModel, settings: settings, layout: layout, layoutSignature: signature, zones: zones,
+            currentZone: machine?.currentZone, phase: ForkGlanceJournal.Phase(phase, origin: now),
+            profile: profile.map(ForkGlanceJournal.Profile.init), camera: journalCamera())
+        journal.begin(at: now, start: start) { [weak self] in self?.endJournal(reason: "timeLimit") }
+        Self.log.info("live journal on")
+    }
+
+    /// The camera filmed with: its model and active format, never its name.
+    private func journalCamera() -> ForkGlanceJournal.Camera {
+        let device = cameraDevices.first { $0.id == cameraID }
+        let kind = device.map { $0.isBuiltIn ? "builtIn" : ($0.isContinuity ? "continuity" : "external") } ?? "none"
+        let capture = cameraID.flatMap { AVCaptureDevice(uniqueID: $0) }
+        let size = capture.map { CMVideoFormatDescriptionGetDimensions($0.activeFormat.formatDescription) }
+        return ForkGlanceJournal.Camera(
+            model: capture?.modelID, kind: kind, width: size.map { Int($0.width) }, height: size.map { Int($0.height) },
+            fps: calibrationActive ? Self.calibrationRate : machineRate,
+            measuredFps: cameraRunning ? ForkGlanceCamera.shared.measuredRate : nil, running: cameraRunning)
+    }
+
+    // MARK: Hooks (one line each where the event happens)
+
+    /// Each processed image, after the machine saw it.
+    private func journalFrame(_ frame: ForkGlanceFrame, gaze: ForkGlanceGaze?) {
+        guard journal.isOn else { return }
+        let watching = machine != nil && !calibrationActive
+        let line = ForkGlanceJournal.Frame(
+            sample: frame.sample.facePresent ? frame.sample : nil, gaze: gaze,
+            input: watching ? ForkGlanceTrace.Input(lastInputs, neverLeaveApps: settings.neverLeaveApps) : nil,
+            guards: machine?.guards ?? [], face: frame.observation.map(ForkGlanceJournal.Face.init),
+            phase: ForkGlanceJournal.Phase(phase, origin: journal.origin))
+        journal.write(.frame(line), at: frame.time)
+    }
+
+    private func journalPhase(_ newPhase: ForkGlancePhase) {
+        guard journal.isOn, newPhase != phase else { return }
+        journal.write(.phase(ForkGlanceJournal.Phase(newPhase, origin: journal.origin)), at: clock.now)
+    }
+
+    private func journalClick(at point: CGPoint) {
+        guard journal.isOn else { return }
+        let gaze = lastGaze.map { ForkGlanceJournal.describe($0.target) }
+        journal.write(.click(ForkGlanceJournal.Click(
+            point: point, zone: ForkGlanceServiceRules.zone(at: point, in: zones)?.id, gaze: gaze?.word,
+            gazeZone: gaze?.zone, app: NSWorkspace.shared.frontmostApplication?.bundleIdentifier)), at: clock.now)
+    }
+
+    private func journalSwitch(_ zone: String, succeeded: Bool, app: String?, alreadyFocused: Bool?) {
+        guard journal.isOn else { return }
+        journal.write(.switch(ForkGlanceJournal.Switch(zone: zone, from: machine?.currentZone, succeeded: succeeded,
+                                                       app: app, alreadyFocused: alreadyFocused)), at: clock.now)
+    }
+
+    /// After the displays changed and the profile was matched for them.
+    private func journalLayout() {
+        guard journal.isOn else { return }
+        journal.write(.layout(ForkGlanceJournal.Layout(
+            layout: layout, layoutSignature: ForkGlanceProfiles.signature(layout: layout, cameraID: cameraID ?? ""),
+            profile: profile.map(ForkGlanceJournal.Profile.init))), at: clock.now)
+    }
+
+    private func journalZones(_ fresh: [ForkGlanceZone]) {
+        guard journal.isOn else { return }
+        journal.write(.zones(fresh), at: clock.now)
+    }
+
+    private func journalNotice(_ notice: ForkGlanceNotice) {
+        guard journal.isOn else { return }
+        journal.write(.notice(ForkGlanceJournal.Notice(notice, origin: journal.origin)), at: clock.now)
+    }
+
+    /// The machine asked for another rate step.
+    private func journalRate(_ rate: Double) {
+        guard journal.isOn, journal.lastRate != rate else { return }
+        journal.lastRate = rate
+        journal.write(.cameraFps(ForkGlanceJournal.CameraRate(fps: rate, camera: journalCamera())), at: clock.now)
+    }
+
+    /// A recenter (shortcut or assistant): the bias before and after.
+    private func journalCalibration(_ what: ForkGlanceJournal.Calibration.What, before: ForkGlanceCalibration?,
+                                    after: ForkGlanceCalibration?) {
+        guard journal.isOn else { return }
+        journal.write(.calibration(ForkGlanceJournal.Calibration(what: what, kept: true, before: before, after: after)),
+                      at: clock.now)
+    }
+
+    /// The assistant's fit came back: before the profile takes it, if it does.
+    private func journalFit(_ result: Result<ForkGlanceCalibration, Error>, layout fitted: ForkGlanceDisplayLayout,
+                            generation: Int) {
+        guard journal.isOn else { return }
+        var reason: String?
+        switch result {
+        case let .failure(error): reason = String(describing: error)
+        case .success where !ForkGlanceServiceRules.sameDesk(fitted, layout): reason = "layoutChanged"
+        case .success where generation != calibrationGeneration: reason = "superseded"
+        case .success: break
+        }
+        journal.write(.calibration(ForkGlanceJournal.Calibration(
+            what: .calibration, kept: reason == nil, before: profile?.calibration, after: try? result.get(),
+            reason: reason)), at: clock.now)
+    }
+
+    private func journalValidation(_ zoneAccuracy: [String: Double]) {
+        guard journal.isOn else { return }
+        journal.write(.calibration(ForkGlanceJournal.Calibration(
+            what: .validation, kept: profile?.calibration != nil, score: ForkGlanceServiceRules.score(zoneAccuracy),
+            zoneAccuracy: zoneAccuracy)), at: clock.now)
+    }
+
+    /// A refit from the clicks came back. Its error on the calibration points
+    /// before and after, measured off the main thread; a refused refit is
+    /// fitted again (the same inputs give the same model) to say how much worse it was.
+    private func journalRefit(old: ForkGlanceCalibration, accepted: ForkGlanceCalibration?,
+                              learned: [(ForkGlanceCalibrationPoint, Double)], id: String,
+                              layout fitted: ForkGlanceDisplayLayout, generation: Int) {
+        guard journal.isOn else { return }
+        let kept = accepted != nil && generation == profileGeneration && profile?.id == id
+        let reason: String? = kept ? nil : (accepted == nil ? "worse" : "superseded")
+        pointsStore.withPoints(for: id) { points in
+            let points = points ?? []
+            var candidate = accepted
+            if candidate == nil, var refitted = try? ForkGlanceCalibrationModel.fit(
+                points: points, learned: learned, usesEyes: old.usesEyes, layout: fitted, cameraID: old.cameraID,
+                layoutSignature: old.layoutSignature, date: old.date) {
+                refitted.bias = old.bias
+                candidate = refitted
+            }
+            let before = ForkGlanceCalibrationModel.error(of: old, on: points)
+            let after = candidate.flatMap { ForkGlanceCalibrationModel.error(of: $0, on: points) }
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.journal.isOn else { return }
+                self.journal.write(.calibration(ForkGlanceJournal.Calibration(
+                    what: .refit, kept: kept, before: old, after: candidate, errorBefore: before, errorAfter: after,
+                    reason: reason)), at: self.clock.now)
+            }
+        }
+    }
+}
+
+/// The journal's file side. Main thread: whether it is on, its origin, the
+/// time limit. `queue` (serial, utility): encoding, writing, rotating,
+/// pruning; the main thread never touches the disk.
+private final class ForkGlanceJournalRecorder: @unchecked Sendable {
+    static let shared = ForkGlanceJournalRecorder()
+
+    static var folder: URL? {
+        PrivateFileStore.containerURL?
+            .appendingPathComponent("Glance", isDirectory: true)
+            .appendingPathComponent(ForkGlanceJournal.folderName, isDirectory: true)
+    }
+
+    private let queue = DispatchQueue(label: "fork.glance.journal", qos: .utility)
+    private let log = Logger(subsystem: "fork.glance", category: "journal")
+
+    // Main thread.
+    private(set) var isOn = false
+    /// The `systemUptime` of `t` = 0.
+    private(set) var origin: TimeInterval = 0
+    var launchChecked = false
+    var lastRate: Double?
+    private var timeLimit: DispatchWorkItem?
+
+    // Queue only.
+    private var handle: FileHandle?
+    private var file: URL?
+    private var output = ForkGlanceJournal.Output()
+    private var failed = false
+
+    /// A new file, its `start` line first; `expired` runs after `maxDuration` of wall time.
+    func begin(at origin: TimeInterval, start: ForkGlanceJournal.Start, expired: @escaping () -> Void) {
+        isOn = true
+        self.origin = origin
+        lastRate = start.camera.fps
+        let work = DispatchWorkItem(block: expired)
+        timeLimit = work
+        // Wall time: 30 minutes even across a sleep.
+        DispatchQueue.main.asyncAfter(wallDeadline: .now() + ForkGlanceJournal.maxDuration, execute: work)
+        queue.async {
+            self.output = ForkGlanceJournal.Output()
+            self.failed = false
+            self.openFile()
+        }
+        write(.start(start), at: origin)
+    }
+
+    func write(_ event: ForkGlanceJournal.Event, at time: TimeInterval) {
+        guard isOn else { return }
+        let line = ForkGlanceJournal.Line(t: time - origin, event: event)
+        queue.async { self.append(line) }
+    }
+
+    func end(reason: String, at time: TimeInterval) {
+        guard isOn else { return }
+        write(.stop(reason: reason), at: time)
+        isOn = false
+        lastRate = nil
+        timeLimit?.cancel()
+        timeLimit = nil
+        queue.async { self.closeFile() }
+    }
+
+    /// The current journal, else the newest one, else the folder, in the Finder.
+    func reveal() {
+        queue.async {
+            guard let folder = Self.folder else { return }
+            var shown = self.file
+            if shown == nil, PrivateFileStore.createDirectory(at: folder) {
+                let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
+                let newest = names.filter(ForkGlanceJournal.isJournalFile).max {
+                    ForkGlanceJournal.surplus([$0, $1], keeping: 1) == [$0]
+                }
+                shown = newest.map { folder.appendingPathComponent($0, isDirectory: false) }
+            }
+            let target = shown ?? folder
+            DispatchQueue.main.async { NSWorkspace.shared.activateFileViewerSelecting([target]) }
+        }
+    }
+
+    // MARK: Queue
+
+    private func append(_ line: ForkGlanceJournal.Line) {
+        guard !failed, handle != nil, let data = try? ForkGlanceJournal.encode(line) else { return }
+        switch output.place(data, kind: line.event.kind) {
+        case .append:
+            write(data)
+        case let .rotate(preamble):
+            closeFile()
+            openFile()
+            preamble.forEach(write)
+            write(data)
+        }
+    }
+
+    private func write(_ data: Data) {
+        guard let handle, !failed else { return }
+        do {
+            try handle.write(contentsOf: data)
+        } catch {
+            failed = true
+            log.error("live journal not written, stopped until switched on again")
+        }
+    }
+
+    /// A new owner-only file named by the time; the oldest beyond five go.
+    private func openFile() {
+        guard let folder = Self.folder, PrivateFileStore.createDirectory(at: folder) else {
+            failed = true
+            log.error("live journal folder not created")
+            return
+        }
+        let manager = FileManager.default
+        let names = (try? manager.contentsOfDirectory(atPath: folder.path)) ?? []
+        let name = ForkGlanceJournal.fileName(for: Date(), taken: Set(names))
+        let url = folder.appendingPathComponent(name, isDirectory: false)
+        guard manager.createFile(atPath: url.path, contents: nil, attributes: [.posixPermissions: 0o600]),
+              let opened = try? FileHandle(forWritingTo: url) else {
+            failed = true
+            log.error("live journal file not created")
+            return
+        }
+        handle = opened
+        file = url
+        for old in ForkGlanceJournal.surplus(names + [name]) {
+            try? manager.removeItem(at: folder.appendingPathComponent(old, isDirectory: false))
+        }
+    }
+
+    private func closeFile() {
+        try? handle?.close()
+        handle = nil
+        file = nil
     }
 }

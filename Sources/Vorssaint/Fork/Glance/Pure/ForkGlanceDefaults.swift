@@ -62,6 +62,9 @@ extension ForkDefaultsKey {
     static let glancePausedUntil = "fork.glance.pausedUntil"
     /// The layout signature last seen, to tell a new layout at launch.
     static let glanceLastLayoutSignature = "fork.glance.lastLayoutSignature"
+    /// Diagnostic › « Journal en direct pour l'analyse » (`ForkGlanceJournal`):
+    /// on for 30 min at most, so neither kept nor exported.
+    static let glanceLiveJournal = "fork.glance.liveJournal"
 }
 
 enum ForkGlanceDefaults {
@@ -112,6 +115,7 @@ enum ForkGlanceDefaults {
     /// Machine state: never registered, never in the settings backup.
     static let machineKeys: [String] = [
         ForkDefaultsKey.glanceCameraID, ForkDefaultsKey.glancePausedUntil, ForkDefaultsKey.glanceLastLayoutSignature,
+        ForkDefaultsKey.glanceLiveJournal,
     ]
 
     /// A JSON array of strings, as the app lists are stored.

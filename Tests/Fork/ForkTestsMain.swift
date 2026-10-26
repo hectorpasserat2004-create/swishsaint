@@ -98,6 +98,7 @@ struct ForkTests {
             ("fork-glance-calibration-plan", { ForkGlanceCalibrationPlanTests.run(suite) }),
             ("fork-glance-settings", { ForkGlanceSettingsTests.run(suite) }),
             ("fork-glance-island", { ForkGlanceIslandTests.run(suite) }),
+            ("fork-glance-journal", { ForkGlanceJournalTests.run(suite) }),
         ]
         var selected = Set<String>()
         var listOnly = false

@@ -223,6 +223,32 @@ phase, calibrage (σ, score, biais), apprentissage, réglages, énergie, coût.
   contient rien d'autre que des nombres, des identifiants d'écrans et de zones, des noms d'écrans et des identifiants de
   bundle, et garder les plus parlantes (la taille d'un fichier de 60 s n'a pas encore été mesurée).
 
+### Journal en direct
+
+Pour régler la feature en direct : la personne travaille, un terminal lit le fichier (`tail -f`), sans caméra ni
+interface pilotée. Diagnostic › « Journal en direct pour l'analyse » (`fork.glance.liveJournal`, état machine dans
+`machineKeys`, jamais sauvegardé) ; ne s'allume que feature en marche, s'éteint seul après 30 min (horloge murale),
+quand la feature s'arrête ou l'app quitte, et n'est jamais repris au lancement. « Afficher dans le Finder » montre le
+fichier courant (sinon le plus récent, sinon le dossier).
+
+- **Fichiers** : `PrivateFileStore.containerURL/Glance/journal/glance-live-AAAA-MM-JJ-HHmmss.jsonl` (heure locale,
+  dossier 0700, fichiers 0600), JSON Lines (un objet par ligne, clés triées, dates ISO 8601, non-finis écrits `"inf"`).
+  50 Mo au plus par fichier, puis un nouveau qui recommence par les lignes `start`, puis le dernier `layout` et le
+  dernier `zones` ; on garde les 5 derniers fichiers. Tout passe sur une file série utilitaire (encodage, écriture,
+  rotation, ménage) ; le fil principal ne touche jamais le disque.
+- **Lignes** (`Pure/ForkGlanceJournal.swift`) : chacune a `t` (secondes depuis le début, à la ms) et `kind` :
+  `start` (heure murale `wall`, version, macOS, `hw.model`, réglages résolus, disposition, signature, zones, zone et
+  phase courantes, profil : titre, calibrage résumé — date, σ, erreur √(σx²+σy²), biais, yeux, précision par zone —,
+  clics appris et accord ; caméra : `modelID`, type, taille du format actif, cadence demandée et mesurée), `frame`
+  (à chaque image : les champs d'une image de trace `sample`, `gaze`, `input`, `guards`, plus `face` — boîte, angles,
+  pupilles trouvées, visages — et `phase`), `click` (point, zone, où était le regard, app au premier plan), `switch`
+  (zone, zone quittée, réussie ou non, app ciblée), `phase`, `layout`, `zones`, `calibration` (calibrage, validation,
+  recentrage, recalage rapide, réajustement par les clics : avant/après, gardé ou non, erreur RMS sur les points de
+  calibrage pour un réajustement), `notice`, `cameraFps` (nouveau palier de cadence), `stop` (raison).
+- **Confidentialité** : des mesures seulement. Ni image, ni titre de fenêtre, ni touche, ni nom de caméra ; il contient
+  en revanche des identifiants de bundle (clics, bascules, listes d'apps des réglages). Éteint, chaque crochet coûte un
+  test de booléen : rien n'est construit ni encodé.
+
 ## 7. Coutures
 
 Toutes déclarées dans `fork/seams.txt` (bloc « Focus au regard ») ; aucune dans `Info.plist`, `Defaults.swift`,

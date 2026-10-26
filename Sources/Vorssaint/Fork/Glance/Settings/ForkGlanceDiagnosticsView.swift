@@ -14,13 +14,16 @@ struct ForkGlanceDiagnosticsActions {
     var makePreviewLayer: () -> AVCaptureVideoPreviewLayer?
     var recordTrace: (TimeInterval, @escaping (URL?) -> Void) -> Void
     var reportText: () -> String
+    /// The live journal's file, or its folder, in the Finder.
+    var revealJournal: () -> Void = {}
 
     static var live: ForkGlanceDiagnosticsActions {
         ForkGlanceDiagnosticsActions(
             liveLease: { ForkGlanceService.shared.liveLease() },
             makePreviewLayer: { ForkGlanceCamera.shared.makePreviewLayer() },
             recordTrace: { ForkGlanceService.shared.recordTrace(seconds: $0, completion: $1) },
-            reportText: { ForkGlanceService.shared.reportText() })
+            reportText: { ForkGlanceService.shared.reportText() },
+            revealJournal: { ForkGlanceService.shared.revealJournal() })
     }
 
     static let inert = ForkGlanceDiagnosticsActions(liveLease: { ForkGlanceLease {} }, makePreviewLayer: { nil },
@@ -56,6 +59,9 @@ struct ForkGlanceDiagnosticsView: View {
     /// The gaze dot over every display (plan §6.4): the service reads the
     /// key again as it changes and shows or hides the dot.
     @AppStorage(ForkDefaultsKey.glanceGazeDot) private var gazeDot = false
+    /// The live journal (`ForkGlanceJournal`): the service starts and stops
+    /// it as the key changes, and turns the key off after 30 min.
+    @AppStorage(ForkDefaultsKey.glanceLiveJournal) private var liveJournal = false
 
     init(live: ForkGlanceLive?, phase: ForkGlancePhase, layout: ForkGlanceDisplayLayout, zones: [ForkGlanceZone],
          currentZone: String?, lastSwitch: Date?, text: ForkGlanceSettingsStrings, core: ForkGlanceStrings,
@@ -94,6 +100,7 @@ struct ForkGlanceDiagnosticsView: View {
                 .controlSize(.small)
                 .font(.caption)
             buttons
+            journal
         }
         .padding(.vertical, 4)
         .onAppear { lease = actions.liveLease() }
@@ -265,6 +272,49 @@ struct ForkGlanceDiagnosticsView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+}
+
+// MARK: - Live journal
+
+extension ForkGlanceDiagnosticsView {
+    /// `~/Library/Application Support/<bundle id>/Glance/journal`.
+    private var journalFolder: String? {
+        ForkGlanceService.journalFolder.map { ($0.path as NSString).abbreviatingWithTildeInPath }
+    }
+
+    /// The switch, what it writes and where, and the way to the file. It
+    /// only turns on while the feature runs.
+    private var journal: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Toggle(text.liveJournal, isOn: $liveJournal)
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .font(.caption)
+                .disabled(phase == .off && !liveJournal)
+            Text(text.liveJournalCaption)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                if let journalFolder {
+                    Text(journalFolder)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .textSelection(.enabled)
+                }
+                Spacer(minLength: 0)
+                Button {
+                    actions.revealJournal()
+                } label: {
+                    Label(text.showJournalInFinder, systemImage: "folder")
+                }
+                .controlSize(.small)
+            }
+        }
+        .padding(.top, 4)
     }
 }
 
