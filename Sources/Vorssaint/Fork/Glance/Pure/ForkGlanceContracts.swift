@@ -234,7 +234,7 @@ struct ForkGlanceCalibrationPoint: Sendable, Codable, Equatable {
 }
 
 struct ForkGlanceCalibration: Sendable, Codable, Equatable {
-    static let currentVersion = 1
+    static let currentVersion = 2
 
     var version: Int
     var date: Date

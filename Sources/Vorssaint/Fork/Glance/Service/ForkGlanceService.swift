@@ -209,6 +209,8 @@ final class ForkGlanceService: ObservableObject {
     private var newLayoutNoticeAllowed = true
     private var learningSave: DispatchWorkItem?
     private var refitting = false
+    /// Profiles whose older calibration is being fitted again.
+    private var upgrading: Set<String> = []
 
     // Camera.
     private var machineWantsCamera = false
@@ -728,6 +730,40 @@ final class ForkGlanceService: ObservableObject {
             self.profilesLoaded = true
             if self.profiles != list { self.profiles = list }
             self.applyProfile()
+            self.upgradeCalibrations()
+        }
+    }
+
+    /// A calibration made by an older model is fitted again on its profile's
+    /// points, off the main thread (`ForkGlanceCalibrationModel.upgraded`):
+    /// no new calibration is asked for. Without points it is dropped, and the
+    /// profile needs a calibration. Until then it gives no estimate.
+    private func upgradeCalibrations() {
+        for stale in profiles where ForkGlanceProfiles.calibrationOutdated(stale) && !upgrading.contains(stale.id) {
+            guard let old = stale.calibration else { continue }
+            upgrading.insert(stale.id)
+            let id = stale.id, layout = stale.layout, learned = stale.learning.weighted(now: Date())
+            pointsStore.withPoints(for: id) { calibrationPoints in
+                let upgraded = calibrationPoints.flatMap {
+                    ForkGlanceCalibrationModel.upgraded(old, points: $0, learned: learned, layout: layout)
+                }
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    self.upgrading.remove(id)
+                    // The profile in force holds clicks not written yet.
+                    let current = self.profile?.id == id ? self.profile : self.profiles.first { $0.id == id }
+                    // Recalibrated, refitted or rekeyed meanwhile: nothing to upgrade any more.
+                    guard var latest = current, latest.calibration == old else { return }
+                    latest.calibration = upgraded
+                    self.store(latest)
+                    if upgraded != nil {
+                        Self.log.info("older calibration fitted again")
+                    } else {
+                        Self.log.info("older calibration dropped: no points")
+                        if self.profile?.id == id { self.applyProfile() }
+                    }
+                }
+            }
         }
     }
 
