@@ -96,6 +96,7 @@ struct NotchControlsView: View {
         case .dictation: ForkNotchDictationTile() // FORK(notch-dictation3)
         case .meeting: ForkMeetingIslandTile(service: service) // FORK(notch-meeting-tile3)
         case .macBackup: ForkMacBackupIslandTile(service: service) // FORK(notch-macbackup-tile3)
+        case .glance: ForkGlanceIslandTile(service: service) // FORK(notch-glance-tile3)
         case .keepAwake: NotchAwakeButton()
         case .microphone: NotchMicButton()
         case .screenshot:
@@ -126,6 +127,7 @@ extension NotchControlItem {
         case .dictation: return ForkNotchDictations.title(l10n.language) // FORK(notch-dictation3)
         case .meeting: return ForkMeetingIslandTile.title(l10n.language) // FORK(notch-meeting-tile3)
         case .macBackup: return ForkMacBackupIslandTile.title(l10n.language) // FORK(notch-macbackup-tile3)
+        case .glance: return ForkGlanceIslandTile.title(l10n.language) // FORK(notch-glance-tile3)
         case .volume: return FeatureStrings.notch(l10n.language).volume
         case .brightness: return FeatureStrings.notch(l10n.language).brightness
         case .keyboardLight: return FeatureStrings.brightness(l10n.language).keyboardLight
