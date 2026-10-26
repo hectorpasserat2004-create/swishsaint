@@ -286,33 +286,35 @@ extension ForkGlanceDiagnosticsView {
     /// The switch, what it writes and where, and the way to the file. It
     /// only turns on while the feature runs.
     private var journal: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
+            Toggle(text.liveJournal, isOn: $liveJournal)
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .font(.caption)
+                .disabled(phase == .off && !liveJournal)
+            Text(text.liveJournalCaption)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
-                Toggle(text.liveJournal, isOn: $liveJournal)
-                    .toggleStyle(.switch)
-                    .font(.caption)
-                    .disabled(phase == .off && !liveJournal)
+                if let journalFolder {
+                    Text(journalFolder)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .textSelection(.enabled)
+                }
                 Spacer(minLength: 0)
                 Button {
                     actions.revealJournal()
                 } label: {
                     Label(text.showJournalInFinder, systemImage: "folder")
                 }
-            }
-            .controlSize(.small)
-            Text(text.liveJournalCaption)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            if let journalFolder {
-                Text(journalFolder)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .textSelection(.enabled)
+                .controlSize(.small)
             }
         }
+        .padding(.top, 4)
     }
 }
 
