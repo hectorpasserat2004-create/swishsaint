@@ -165,6 +165,11 @@ struct ForkGlanceSettingsStrings {
     let traceCaption: String
     let copyReport: String
     let reportCopied: String
+    /// Diagnostic › the live journal's switch (`fork.glance.liveJournal`).
+    let liveJournal: String
+    /// Under it: what the file holds, where it is (the folder is shown below), when it stops.
+    let liveJournalCaption: String
+    let showJournalInFinder: String
 
     static func strings(_ language: AppLanguage) -> ForkGlanceSettingsStrings {
         switch language {
@@ -306,7 +311,10 @@ extension ForkGlanceSettingsStrings {
         traceNotSaved: "Trace not saved",
         traceCaption: "Only numbers, no image: send it to fine-tune the settings.",
         copyReport: "Copy Report",
-        reportCopied: "Report copied"
+        reportCopied: "Report copied",
+        liveJournal: "Live journal for analysis",
+        liveJournalCaption: "While it is on, what the gaze measures is written image by image to the folder below, to be read as you work: numbers only, never an image. Turns itself off after 30 min.",
+        showJournalInFinder: "Show in Finder"
     )
 
     static let fr = ForkGlanceSettingsStrings(
@@ -425,7 +433,10 @@ extension ForkGlanceSettingsStrings {
         traceNotSaved: "Trace non enregistrée",
         traceCaption: "Que des nombres, aucune image\u{00A0}: à envoyer pour affiner les réglages.",
         copyReport: "Copier le rapport",
-        reportCopied: "Rapport copié"
+        reportCopied: "Rapport copié",
+        liveJournal: "Journal en direct pour l’analyse",
+        liveJournalCaption: "Tant qu’il est allumé, ce que mesure le regard est noté image par image dans le dossier ci-dessous, à lire pendant que vous travaillez\u{00A0}: que des nombres, jamais d’image. S’éteint seul après 30\u{00A0}min.",
+        showJournalInFinder: "Afficher dans le Finder"
     )
 
     static let ptBR = ForkGlanceSettingsStrings(
@@ -544,7 +555,10 @@ extension ForkGlanceSettingsStrings {
         traceNotSaved: "Rastro não salvo",
         traceCaption: "Só números, nenhuma imagem: envie para ajustar as configurações.",
         copyReport: "Copiar relatório",
-        reportCopied: "Relatório copiado"
+        reportCopied: "Relatório copiado",
+        liveJournal: "Diário ao vivo para análise",
+        liveJournalCaption: "Enquanto estiver ativado, o que o olhar mede é gravado imagem por imagem na pasta abaixo, para ler enquanto você trabalha: só números, nunca uma imagem. Desliga sozinho após 30 min.",
+        showJournalInFinder: "Mostrar no Finder"
     )
 
     static let tr = ForkGlanceSettingsStrings(
@@ -663,7 +677,10 @@ extension ForkGlanceSettingsStrings {
         traceNotSaved: "İz kaydedilmedi",
         traceCaption: "Yalnızca sayılar, görüntü yok: ayarları ince ayarlamak için gönderin.",
         copyReport: "Raporu kopyala",
-        reportCopied: "Rapor kopyalandı"
+        reportCopied: "Rapor kopyalandı",
+        liveJournal: "Analiz için canlı günlük",
+        liveJournalCaption: "Açıkken bakışın ölçtükleri, siz çalışırken okunmak üzere aşağıdaki klasöre kare kare yazılır: yalnızca sayılar, asla görüntü yok. 30 dk sonra kendiliğinden kapanır.",
+        showJournalInFinder: "Finder içinde göster"
     )
 
     static let ru = ForkGlanceSettingsStrings(
@@ -782,7 +799,10 @@ extension ForkGlanceSettingsStrings {
         traceNotSaved: "Трасса не сохранена",
         traceCaption: "Только числа, без изображений: отправьте, чтобы точнее настроить параметры.",
         copyReport: "Скопировать отчёт",
-        reportCopied: "Отчёт скопирован"
+        reportCopied: "Отчёт скопирован",
+        liveJournal: "Живой журнал для анализа",
+        liveJournalCaption: "Пока он включён, всё, что измеряет взгляд, записывается кадр за кадром в папку ниже, чтобы это можно было читать во время работы: только числа, никаких изображений. Выключается сам через 30 мин.",
+        showJournalInFinder: "Показать в Finder"
     )
 
     static let es = ForkGlanceSettingsStrings(
@@ -901,7 +921,10 @@ extension ForkGlanceSettingsStrings {
         traceNotSaved: "Registro no guardado",
         traceCaption: "Solo números, ninguna imagen: envíalo para afinar los ajustes.",
         copyReport: "Copiar informe",
-        reportCopied: "Informe copiado"
+        reportCopied: "Informe copiado",
+        liveJournal: "Registro en directo para el análisis",
+        liveJournalCaption: "Mientras está activado, lo que mide la mirada se escribe imagen a imagen en la carpeta de abajo para leerlo mientras trabajas: solo números, nunca una imagen. Se apaga solo tras 30 min.",
+        showJournalInFinder: "Mostrar en Finder"
     )
 
     static let sk = ForkGlanceSettingsStrings(
@@ -1020,7 +1043,10 @@ extension ForkGlanceSettingsStrings {
         traceNotSaved: "Záznam neuložený",
         traceCaption: "Iba čísla, žiadny obraz: pošlite ho na doladenie nastavení.",
         copyReport: "Kopírovať správu",
-        reportCopied: "Správa skopírovaná"
+        reportCopied: "Správa skopírovaná",
+        liveJournal: "Živý denník na analýzu",
+        liveJournalCaption: "Kým je zapnutý, to, čo pohľad meria, sa zapisuje snímku po snímke do priečinka nižšie, aby sa to dalo čítať počas práce: iba čísla, nikdy obraz. Po 30 min sa sám vypne.",
+        showJournalInFinder: "Zobraziť vo Finderi"
     )
 
     static let de = ForkGlanceSettingsStrings(
@@ -1139,7 +1165,10 @@ extension ForkGlanceSettingsStrings {
         traceNotSaved: "Aufzeichnung nicht gesichert",
         traceCaption: "Nur Zahlen, kein Bild: Schick sie, um die Einstellungen zu verfeinern.",
         copyReport: "Bericht kopieren",
-        reportCopied: "Bericht kopiert"
+        reportCopied: "Bericht kopiert",
+        liveJournal: "Live-Protokoll zur Analyse",
+        liveJournalCaption: "Solange es an ist, wird Bild für Bild in den Ordner unten geschrieben, was der Blick misst, zum Mitlesen, während du arbeitest: nur Zahlen, nie ein Bild. Schaltet sich nach 30 Min. selbst aus.",
+        showJournalInFinder: "Im Finder zeigen"
     )
 
     static let it = ForkGlanceSettingsStrings(
@@ -1258,7 +1287,10 @@ extension ForkGlanceSettingsStrings {
         traceNotSaved: "Traccia non salvata",
         traceCaption: "Solo numeri, nessuna immagine: inviala per perfezionare le impostazioni.",
         copyReport: "Copia rapporto",
-        reportCopied: "Rapporto copiato"
+        reportCopied: "Rapporto copiato",
+        liveJournal: "Registro in diretta per l’analisi",
+        liveJournalCaption: "Finché è attivo, ciò che misura lo sguardo viene scritto immagine per immagine nella cartella qui sotto, da leggere mentre lavori: solo numeri, mai un’immagine. Si spegne da solo dopo 30 min.",
+        showJournalInFinder: "Mostra nel Finder"
     )
 
     static let ja = ForkGlanceSettingsStrings(
@@ -1377,7 +1409,10 @@ extension ForkGlanceSettingsStrings {
         traceNotSaved: "トレースを保存できませんでした",
         traceCaption: "数値のみで画像は含まれません。設定の微調整のために送ってください。",
         copyReport: "レポートをコピー",
-        reportCopied: "レポートをコピーしました"
+        reportCopied: "レポートをコピーしました",
+        liveJournal: "分析用ライブログ",
+        liveJournalCaption: "オンの間、視線の測定値を1コマずつ下のフォルダに書き込み、作業中に読めるようにします。数値のみで、画像は含まれません。30分後に自動でオフになります。",
+        showJournalInFinder: "Finder に表示"
     )
 
     static let ko = ForkGlanceSettingsStrings(
@@ -1496,7 +1531,10 @@ extension ForkGlanceSettingsStrings {
         traceNotSaved: "추적 기록이 저장되지 않음",
         traceCaption: "숫자만 있고 이미지는 없습니다. 설정을 다듬는 데 쓰도록 보내 주세요.",
         copyReport: "보고서 복사",
-        reportCopied: "보고서 복사됨"
+        reportCopied: "보고서 복사됨",
+        liveJournal: "분석용 실시간 기록",
+        liveJournalCaption: "켜져 있는 동안 시선이 측정한 값을 프레임마다 아래 폴더에 기록해 작업 중에 읽을 수 있게 합니다. 숫자만 있고 이미지는 없습니다. 30분 후 자동으로 꺼집니다.",
+        showJournalInFinder: "Finder에서 보기"
     )
 
     static let uk = ForkGlanceSettingsStrings(
@@ -1615,7 +1653,10 @@ extension ForkGlanceSettingsStrings {
         traceNotSaved: "Трасу не збережено",
         traceCaption: "Лише числа, без зображень: надішліть, щоб точніше налаштувати параметри.",
         copyReport: "Скопіювати звіт",
-        reportCopied: "Звіт скопійовано"
+        reportCopied: "Звіт скопійовано",
+        liveJournal: "Живий журнал для аналізу",
+        liveJournalCaption: "Поки його ввімкнено, усе, що вимірює погляд, записується кадр за кадром у папку нижче, щоб це можна було читати під час роботи: лише числа, жодних зображень. Вимикається сам через 30 хв.",
+        showJournalInFinder: "Показати у Finder"
     )
 
     static let zhHans = ForkGlanceSettingsStrings(
@@ -1734,7 +1775,10 @@ extension ForkGlanceSettingsStrings {
         traceNotSaved: "轨迹未保存",
         traceCaption: "只有数字，没有图像：发送它以便微调设置。",
         copyReport: "拷贝报告",
-        reportCopied: "报告已拷贝"
+        reportCopied: "报告已拷贝",
+        liveJournal: "用于分析的实时日志",
+        liveJournalCaption: "开启期间，目光的测量值会逐帧写入下方文件夹，供你工作时读取：只有数字，没有图像。30 分钟后自动关闭。",
+        showJournalInFinder: "在访达中显示"
     )
 
     static let zhTW = ForkGlanceSettingsStrings(
@@ -1853,7 +1897,10 @@ extension ForkGlanceSettingsStrings {
         traceNotSaved: "軌跡未儲存",
         traceCaption: "只有數字，沒有影像：傳送它以便微調設定。",
         copyReport: "拷貝報告",
-        reportCopied: "報告已拷貝"
+        reportCopied: "報告已拷貝",
+        liveJournal: "供分析用的即時日誌",
+        liveJournalCaption: "開啟期間，目光的測量值會逐格寫入下方資料夾，讓你工作時讀取：只有數字，沒有影像。30 分鐘後自動關閉。",
+        showJournalInFinder: "在 Finder 中顯示"
     )
 
     static let zhHK = ForkGlanceSettingsStrings(
@@ -1972,6 +2019,9 @@ extension ForkGlanceSettingsStrings {
         traceNotSaved: "軌跡未儲存",
         traceCaption: "只有數字，沒有影像：傳送它以便微調設定。",
         copyReport: "拷貝報告",
-        reportCopied: "報告已拷貝"
+        reportCopied: "報告已拷貝",
+        liveJournal: "供分析用的即時日誌",
+        liveJournalCaption: "開啟期間，目光的測量值會逐格寫入下方資料夾，讓你工作時讀取：只有數字，沒有影像。30 分鐘後自動關閉。",
+        showJournalInFinder: "在 Finder 中顯示"
     )
 }
