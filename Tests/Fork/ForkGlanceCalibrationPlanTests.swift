@@ -19,6 +19,7 @@ enum ForkGlanceCalibrationPlanTests {
         validationScore(suite)
         validationAdvice(suite)
         framing(suite)
+        previewGeometry(suite)
         strings(suite)
     }
 
@@ -394,6 +395,48 @@ enum ForkGlanceCalibrationPlanTests {
         hold.update(false, now: 11.1)
         hold.update(true, now: 11.2)
         suite.expect(!hold.isReady(now: 12), "one red reading starts the second over")
+    }
+
+    // MARK: Preview geometry
+
+    /// Measured on a still of Martial's framing step (the 300×225 preview of a
+    /// 16:9 FaceTime HD image): Vision's box of the face, read by the real
+    /// `ForkGlanceVision` on the still made back into a 16:9 camera image,
+    /// and where the face really sits in the preview, measured on the still.
+    private static let measuredBox = CGRect(x: 0.4147, y: 0.2178, width: 0.2438, height: 0.4338)
+    private static let faceInPreview = CGRect(x: 88, y: 79, width: 95, height: 95)
+
+    private static func previewGeometry(_ suite: TestSuite) {
+        let framing = ForkGlancePreviewGeometry(size: CGSize(width: 300, height: 225),
+                                                imageSize: CGSize(width: 1280, height: 720), fills: true)
+        suite.expect(framing.imageFrame == CGRect(x: -50, y: 0, width: 400, height: 225),
+                     "a 16:9 image filling a 4:3 preview is as tall as it and cropped on both sides")
+        let frame = framing.rect(measuredBox)
+        let lands = [(frame.minX, faceInPreview.minX), (frame.minY, faceInPreview.minY),
+                     (frame.width, faceInPreview.width), (frame.height, faceInPreview.height)]
+            .allSatisfy { abs($0.0 - $0.1) <= 4 }
+        suite.expect(lands, "the face frame surrounds the face in the mirrored preview, top and sides within 4 pt")
+        suite.expect(frame.minY < 112.5,
+                     "the frame of a face in the upper half of the image stays in the upper half, not upside down")
+        suite.expect(ForkGlanceFraming.check(ForkGlanceObservation(time: 0, faceBox: measuredBox, yaw: 0, pitch: 0,
+                                                                   captureQuality: 0.6), sample: nil).allGood,
+                     "that face, close and facing the camera, turns the four gauges green")
+
+        let diagnostics = ForkGlancePreviewGeometry(size: CGSize(width: 200, height: 150),
+                                                    imageSize: CGSize(width: 1280, height: 720), fills: false)
+        suite.expect(diagnostics.imageFrame == CGRect(x: 0, y: 18.75, width: 200, height: 112.5),
+                     "a 16:9 image fitting a 4:3 panel is letterboxed above and below")
+        let pupil = diagnostics.point(CGPoint(x: 0.487, y: 0.536))
+        suite.expectClose(Double(pupil.x), 102.6, "a pupil left of the image's middle shows right of it, mirrored", tol: 0.01)
+        suite.expectClose(Double(pupil.y), 70.95, "a pupil is placed inside the letterboxed image", tol: 0.01)
+
+        let unknown = ForkGlancePreviewGeometry(size: CGSize(width: 300, height: 225), imageSize: nil, fills: true)
+        let whole = unknown.rect(CGRect(x: 0.1, y: 0.6, width: 0.3, height: 0.2))
+        suite.expect([(whole.minX, 180), (whole.minY, 45), (whole.width, 90), (whole.height, 45)]
+                        .allSatisfy { abs($0.0 - $0.1) < 1e-9 },
+                     "an image of unknown size is taken to fill the preview exactly")
+        let plain = ForkGlancePreviewGeometry(size: CGSize(width: 300, height: 225), imageSize: nil, fills: true, mirrored: false)
+        suite.expectClose(Double(plain.point(CGPoint(x: 0.2, y: 0.9)).x), 60, "an unmirrored preview keeps x")
     }
 
     // MARK: Strings
