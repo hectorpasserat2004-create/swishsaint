@@ -13,6 +13,8 @@ enum ForkGlanceCalibrationTests {
         eyesChoice(suite)
         degenerate(suite)
         estimate(suite)
+        headMoves(suite)
+        upgrade(suite)
         recenter(suite)
     }
 
@@ -49,9 +51,13 @@ enum ForkGlanceCalibrationTests {
         }
         suite.expect(calibration.usesEyes, "a stacked layout uses the eyes")
         suite.expect(calibration.normalization.count == ForkGlanceVectorLayout.count
-                        && calibration.coefficientsX.count == 78 && calibration.coefficientsY.count == 78,
-                     "head and eyes read every component, 78 terms per axis")
+                        && calibration.coefficientsX.count == 15 && calibration.coefficientsY.count == 15,
+                     "head and eyes read every component, 15 terms per axis")
         suite.expect(calibration.normalization.allSatisfy { $0.scale > 0 }, "no range has a zero scale")
+        suite.expect(ForkGlanceCalibrationModel.minimumScales.count == ForkGlanceVectorLayout.count
+                        && zip(calibration.normalization, ForkGlanceCalibrationModel.minimumScales)
+                            .allSatisfy { $0.scale >= $1 },
+                     "every component's scale keeps its floor, the face's size first (it barely moves here)")
         suite.expect(calibration.version == ForkGlanceCalibration.currentVersion && calibration.bias == .zero
                         && calibration.cameraID == "camera" && calibration.layoutSignature == "signature"
                         && calibration.date == Fixtures.date && calibration.zoneAccuracy.isEmpty,
@@ -98,7 +104,7 @@ enum ForkGlanceCalibrationTests {
         let head = Fixtures.fit(blankEyes.points(targets, random: &random), layout: Fixtures.sideBySide)
         let eyes = Fixtures.fit(eyesOnly.points(targets, random: &random), layout: Fixtures.sideBySide)
         suite.expect(head?.usesEyes == false && head?.normalization.count == ForkGlanceVectorLayout.headCount
-                        && head?.coefficientsX.count == 28,
+                        && head?.coefficientsX.count == 10,
                      "side by side, eyes that say nothing leave the head-only model")
         suite.expect(eyes?.usesEyes == true, "eyes that carry the vertical gaze win by more than 10 %")
         let forced = Fixtures.fit(eyesOnly.points(targets, random: &random), layout: Fixtures.sideBySide,
@@ -156,6 +162,109 @@ enum ForkGlanceCalibrationTests {
         sample.vector = Array(sample.vector.prefix(6))
         suite.expect(ForkGlanceCalibrationModel.estimate(sample, with: calibration) == nil,
                      "a head-only vector cannot feed a head and eyes calibration")
+    }
+
+    /// The calibration is taken with a still head; in use the person leans,
+    /// shifts and comes closer. Such a sample must still land on the desk.
+    private static func headMoves(_ suite: TestSuite) {
+        var random = Fixtures.Random(seed: 16)
+        let person = Fixtures.Person()
+        let points = person.points(Fixtures.annexTargets(), random: &random)
+        guard let calibration = Fixtures.fit(points) else {
+            suite.expect(false, "the calibration fits")
+            return
+        }
+        let samples = points.flatMap(\.samples)
+        func deviation(_ component: Int) -> Double {
+            let values = samples.map { $0.vector[component] }
+            let mean = values.reduce(0, +) / Double(values.count)
+            return (values.map { ($0 - mean) * ($0 - mean) }.reduce(0, +) / Double(values.count)).squareRoot()
+        }
+        let desk = Fixtures.annex.displays.map(\.frame).reduce(CGRect.null) { $0.union($1) }
+        let target = CGPoint(x: 2580, y: 720)
+        let still = person.sample(looking: target, random: &random)
+        guard let base = ForkGlanceCalibrationModel.estimate(still, with: calibration)?.point else {
+            suite.expect(false, "a still glance gives an estimate")
+            return
+        }
+        for (component, name) in [(ForkGlanceVectorLayout.size, "size"), (ForkGlanceVectorLayout.centerX, "center x")] {
+            for sign in [-1.0, 1.0] {
+                var moved = still
+                moved.vector[component] += sign * 10 * deviation(component)
+                guard let point = ForkGlanceCalibrationModel.estimate(moved, with: calibration)?.point else {
+                    suite.expect(false, "a moved head still gives an estimate")
+                    continue
+                }
+                let shift = hypot(Double(point.x - base.x), Double(point.y - base.y))
+                suite.expect(desk.insetBy(dx: -300, dy: -300).contains(point) && shift < 600,
+                             "the face's \(name) 10 σ off still lands near the displays (moved \(Int(shift)) pt)")
+            }
+        }
+        // Far past the bound, further makes no difference.
+        var near = still, nearer = still
+        near.vector[ForkGlanceVectorLayout.size] += 0.1
+        nearer.vector[ForkGlanceVectorLayout.size] += 10
+        suite.expect(ForkGlanceCalibrationModel.estimate(near, with: calibration)?.point
+                        == ForkGlanceCalibrationModel.estimate(nearer, with: calibration)?.point,
+                     "past ±3 scales a component is held at the bound: the estimate stops moving")
+    }
+
+    /// A calibration from the version-1 model (degree 2 on every component)
+    /// is fitted again on its points, with nothing asked of the person.
+    private static func upgrade(_ suite: TestSuite) {
+        var random = Fixtures.Random(seed: 17)
+        let person = Fixtures.Person()
+        let points = person.points(Fixtures.annexTargets(), random: &random)
+        guard var old = Fixtures.fit(points) else {
+            suite.expect(false, "the calibration fits")
+            return
+        }
+        old.version = 1
+        old.coefficientsX = (0..<78).map { Double($0) }
+        old.coefficientsY = (0..<78).map { -Double($0) }
+        old.bias = CGVector(dx: 40, dy: -25)
+        old.zoneAccuracy = ["LG-UUID#0": 0.9]
+        old.date = Date(timeIntervalSince1970: 1_790_000_000)
+        let glance = person.sample(looking: CGPoint(x: 860, y: 720), random: &random)
+        suite.expect(ForkGlanceCalibrationModel.estimate(glance, with: old) == nil,
+                     "a version-1 calibration gives no estimate: its terms are not the model's")
+
+        guard let upgraded = ForkGlanceCalibrationModel.upgraded(old, points: points, learned: [],
+                                                                 layout: Fixtures.annex) else {
+            suite.expect(false, "a version-1 calibration with its points is fitted again")
+            return
+        }
+        suite.expect(upgraded.version == ForkGlanceCalibration.currentVersion && upgraded.coefficientsX.count == 15
+                        && upgraded.usesEyes == old.usesEyes && upgraded.cameraID == old.cameraID
+                        && upgraded.layoutSignature == old.layoutSignature && upgraded.date == old.date
+                        && upgraded.zoneAccuracy == old.zoneAccuracy,
+                     "the upgrade keeps the eyes choice, camera, layout, date and validation, in the current version")
+        suite.expect(upgraded.bias == .zero, "the old bias, measured against the old model, goes")
+        let landed = ForkGlanceCalibrationModel.estimate(glance, with: upgraded)?.point
+        let miss = heldOutError(upgraded, person: person, targets: Fixtures.annexTargets(), random: &random)
+        suite.expect(miss < 60, "the upgraded calibration tracks the gaze again (\(Int(miss)) pt)")
+
+        var headOnly = old
+        headOnly.usesEyes = false
+        headOnly.normalization = Array(old.normalization.prefix(ForkGlanceVectorLayout.headCount))
+        headOnly.coefficientsX = Array(repeating: 1, count: 28)
+        headOnly.coefficientsY = Array(repeating: 1, count: 28)
+        let head = ForkGlanceCalibrationModel.upgraded(headOnly, points: points, learned: [], layout: Fixtures.annex)
+        suite.expect(head?.usesEyes == false && head?.coefficientsX.count == 10,
+                     "a head-only calibration stays head-only, even on a stacked layout")
+
+        // Clicks learned since the calibration, all pointing 300 pt right of where the person looked.
+        let learned = (0..<30).map { index -> (ForkGlanceCalibrationPoint, Double) in
+            let look = CGPoint(x: 400 + 90 * Double(index), y: 300 + 25 * Double(index % 20))
+            let sample = person.sample(looking: look, random: &random)
+            return (ForkGlanceCalibrationPoint(target: CGPoint(x: look.x + 300, y: look.y), samples: [sample]), 5)
+        }
+        let taught = ForkGlanceCalibrationModel.upgraded(old, points: points, learned: learned, layout: Fixtures.annex)
+        let taughtX = taught.flatMap { ForkGlanceCalibrationModel.estimate(glance, with: $0) }.map { Double($0.point.x) }
+        suite.expect((taughtX ?? 0) > Double(landed?.x ?? .infinity) + 20,
+                     "the clicks learned since are learned again")
+        suite.expect(ForkGlanceCalibrationModel.upgraded(old, points: [], learned: learned, layout: Fixtures.annex) == nil,
+                     "without its points a calibration cannot be fitted again")
     }
 
     private static func recenter(_ suite: TestSuite) {
