@@ -238,7 +238,8 @@ enum ForkGlanceCalibrationPlan {
         let frame = display.frame
         let verticals: [CGFloat], horizontals: [CGFloat]
         switch split {
-        case .whole: verticals = []; horizontals = []
+        // A window split's borders move with the windows: the grid alone (its 1/2 column) serves.
+        case .whole, .windows: verticals = []; horizontals = []
         case .columns2: verticals = [0.5]; horizontals = []
         case .columns3: verticals = [1.0 / 3, 2.0 / 3]; horizontals = []
         case .rows2: verticals = []; horizontals = [0.5]

@@ -22,24 +22,29 @@ enum ForkGlanceZones {
 
     // MARK: - Splits
 
+    /// The fixed split a display falls back to when nothing else is known:
+    /// no split in the map, or a window split no window was read for (the
+    /// island's preview, a test).
     static func defaultSplit(for display: ForkGlanceDisplay) -> ForkGlanceSplit {
         let size = display.frame.size
         guard size.width > 0, size.height > 0 else { return .whole }
         return size.width / size.height >= wideRatio ? .columns2 : .whole
     }
 
-    /// Display uuid → its default split, for a new profile.
+    /// Display uuid → its split in a new profile: each display follows its
+    /// windows (« Selon mes fenêtres »). A profile stored before keeps its own.
     static func defaultSplits(_ layout: ForkGlanceDisplayLayout) -> [String: ForkGlanceSplit] {
         var splits: [String: ForkGlanceSplit] = [:]
-        for display in layout.displays { splits[display.uuid] = defaultSplit(for: display) }
+        for display in layout.displays { splits[display.uuid] = .windows }
         return splits
     }
 
     /// The positions of a split's zones, in zone index order: left to right,
-    /// then top to bottom.
+    /// then top to bottom. A window split has the positions of the split it
+    /// resolves to; unresolved, it is drawn whole here.
     static func positions(for split: ForkGlanceSplit) -> [ForkGlancePosition] {
         switch split {
-        case .whole: return [.whole]
+        case .whole, .windows: return [.whole]
         case .columns2: return [.left, .right]
         case .columns3: return [.left, .center, .right]
         case .rows2: return [.top, .bottom]
@@ -50,7 +55,7 @@ enum ForkGlanceZones {
     /// Columns and rows of a split.
     private static func grid(_ split: ForkGlanceSplit) -> (columns: Int, rows: Int) {
         switch split {
-        case .whole: return (1, 1)
+        case .whole, .windows: return (1, 1)
         case .columns2: return (2, 1)
         case .columns3: return (3, 1)
         case .rows2: return (1, 2)
@@ -61,7 +66,9 @@ enum ForkGlanceZones {
     // MARK: - Zones
 
     /// Screens: one zone per display. Zones: each display cut by its split
-    /// (its default one when `splits` has none). Windows: the visible part of
+    /// (its default one when `splits` has none; a window split is resolved
+    /// beforehand with `resolving(_:with:)`, else it falls back to the
+    /// default one too). Windows: the visible part of
     /// each window, `windows` front to back and already filtered to layer 0;
     /// a covered window keeps only what is left of it, a hidden one neither
     /// counts nor covers.
@@ -92,7 +99,8 @@ enum ForkGlanceZones {
 
     /// Edges are computed from the display's own, so the zones of a split
     /// tile it exactly, with neither gap nor overlap.
-    private static func splitZones(_ display: ForkGlanceDisplay, split: ForkGlanceSplit) -> [ForkGlanceZone] {
+    private static func splitZones(_ display: ForkGlanceDisplay, split chosen: ForkGlanceSplit) -> [ForkGlanceZone] {
+        let split = chosen == .windows ? defaultSplit(for: display) : chosen
         let frame = display.frame
         let (columns, rows) = grid(split)
         let positions = positions(for: split)
@@ -193,6 +201,167 @@ enum ForkGlanceZones {
         return area > 0 ? (area, largest) : nil
     }
 
+    // MARK: - Window split (« Selon mes fenêtres »)
+
+    /// The splits a window split resolves to, the coarsest first: a finer
+    /// one wins only when it explains clearly more of the display.
+    static let fixedSplits: [ForkGlanceSplit] = [.whole, .columns2, .rows2, .columns3, .grid2x2]
+
+    /// A window takes a split's cell when their intersection over union
+    /// reaches this. A half and a two-thirds overlap at 0.75 at best, a third
+    /// and a half at 0.67, so no window fits both; Swish's gaps (10 pt on
+    /// each side of a 1 512 pt half: 0.97) and a half spilling past the
+    /// middle for its minimum width (`Gestures/ForkLayoutComplement`, up to
+    /// about 8 % of the display) still fit.
+    static let windowFit: CGFloat = 0.78
+    /// A window showing less than this share of the usable area says nothing
+    /// about the split: a sliver left between two others, a small panel.
+    static let windowEvidenceShare: CGFloat = 0.04
+    /// A finer split must explain this share of the usable area more than
+    /// the coarser one in force: two side by side halves stay 2 columns,
+    /// never a 2×2 grid that explains them as well.
+    static let windowSplitMargin: CGFloat = 0.03
+    /// Only a display's front windows count, which also bounds the cost.
+    static let windowEvidenceLimit = 12
+
+    /// One window seen on a display, in global points.
+    struct WindowEvidence: Sendable, Equatable {
+        /// The window's frame within the usable area.
+        var frame: CGRect
+        /// Its largest visible rectangle: a maximized window behind a left
+        /// half shows as the right half.
+        var visible: CGRect
+        /// Its visible area, the weight of its vote.
+        var area: CGFloat
+    }
+
+    /// Display uuid → the fixed split its windows draw. `windows` front to
+    /// back (layer 0, the app's own left out by the caller), on every
+    /// display: a window belongs to the display showing most of it, and
+    /// hides what is under it wherever it is. `usable` is each display's
+    /// visible frame (no menu bar, no Dock), its frame when missing.
+    static func deducedSplits(layout: ForkGlanceDisplayLayout, windows: [ForkGlanceWindow],
+                              usable: [String: CGRect] = [:]) -> [String: ForkGlanceSplit] {
+        let shown = windows.filter { !$0.isOnHiddenSpace && !$0.frame.isNull && !$0.frame.isEmpty }
+        let owners = shown.map { displayShowingMost(of: $0.frame, in: layout)?.uuid }
+        var splits: [String: ForkGlanceSplit] = [:]
+        for display in layout.displays {
+            let area = usableArea(display, usable[display.uuid])
+            var evidence: [WindowEvidence] = []
+            var above: [CGRect] = []
+            for (index, window) in shown.enumerated() {
+                defer { above.append(window.frame) }
+                guard owners[index] == display.uuid, evidence.count < windowEvidenceLimit,
+                      let part = visiblePart(of: window.frame, within: area, under: above) else { continue }
+                evidence.append(WindowEvidence(frame: window.frame.intersection(area), visible: part.largest,
+                                               area: part.area))
+            }
+            splits[display.uuid] = split(for: evidence, usable: area)
+        }
+        return splits
+    }
+
+    /// The fixed split that explains the most visible window area, each
+    /// window counting when its frame or its visible part fits one of the
+    /// split's cells (`cells(of:)`, `windowFit`); a finer split must beat the
+    /// coarser one by `windowSplitMargin`. Nothing recognizable: whole.
+    static func split(for evidence: [WindowEvidence], usable: CGRect) -> ForkGlanceSplit {
+        let total = usable.width * usable.height
+        guard total > 0 else { return .whole }
+        let counted = evidence.filter { item in
+            item.area >= windowEvidenceShare * total
+                && item.visible.width >= minimumWindowSide && item.visible.height >= minimumWindowSide
+        }
+        var best = ForkGlanceSplit.whole
+        var bestScore = score(.whole, counted, usable: usable)
+        for split in fixedSplits.dropFirst() {
+            let score = score(split, counted, usable: usable)
+            if score > bestScore + windowSplitMargin * total {
+                best = split
+                bestScore = score
+            }
+        }
+        return best
+    }
+
+    /// The shapes a window may take under a split, as fractions of the
+    /// usable area (y down): its zones, and the unions of zones the window
+    /// tools place (two thirds; a half beside two quarters in a 2×2 grid).
+    static func cells(of split: ForkGlanceSplit) -> [CGRect] {
+        let third: CGFloat = 1.0 / 3
+        func cell(_ x0: CGFloat, _ y0: CGFloat, _ x1: CGFloat, _ y1: CGFloat) -> CGRect {
+            CGRect(x: x0, y: y0, width: x1 - x0, height: y1 - y0)
+        }
+        let halves = [cell(0, 0, 0.5, 1), cell(0.5, 0, 1, 1)]
+        let rows = [cell(0, 0, 1, 0.5), cell(0, 0.5, 1, 1)]
+        switch split {
+        case .whole:
+            return [cell(0, 0, 1, 1)]
+        case .columns2:
+            return halves
+        case .rows2:
+            return rows
+        case .columns3:
+            return [cell(0, 0, third, 1), cell(third, 0, 2 * third, 1), cell(2 * third, 0, 1, 1),
+                    cell(0, 0, 2 * third, 1), cell(third, 0, 1, 1)]
+        case .grid2x2:
+            return [cell(0, 0, 0.5, 0.5), cell(0.5, 0, 1, 0.5), cell(0, 0.5, 0.5, 1), cell(0.5, 0.5, 1, 1)]
+                + halves + rows
+        case .windows:
+            return []
+        }
+    }
+
+    /// `splits` with each window split replaced by the split its windows
+    /// draw (`deduced`, from `deducedSplits`); one not deduced stays as it is.
+    static func resolving(_ splits: [String: ForkGlanceSplit],
+                          with deduced: [String: ForkGlanceSplit]) -> [String: ForkGlanceSplit] {
+        var resolved = splits
+        for (uuid, split) in splits where split == .windows {
+            if let fixed = deduced[uuid], fixed != .windows { resolved[uuid] = fixed }
+        }
+        return resolved
+    }
+
+    /// The zone that takes over `zone` once its display's split changed: the
+    /// one on the same display it overlaps most. Nil when none is left there.
+    static func successor(of zone: ForkGlanceZone, in zones: [ForkGlanceZone]) -> ForkGlanceZone? {
+        var best: (zone: ForkGlanceZone, area: CGFloat)?
+        for candidate in zones where candidate.displayUUID == zone.displayUUID {
+            let overlap = candidate.rect.intersection(zone.rect)
+            let area = overlap.isNull ? 0 : overlap.width * overlap.height
+            if area > (best?.area ?? -1) { best = (candidate, area) }
+        }
+        return best?.zone
+    }
+
+    private static func usableArea(_ display: ForkGlanceDisplay, _ usable: CGRect?) -> CGRect {
+        guard let usable else { return display.frame }
+        let inside = usable.intersection(display.frame)
+        return inside.isNull || inside.width <= 0 || inside.height <= 0 ? display.frame : inside
+    }
+
+    /// The visible area of the windows that fit one of `split`'s cells.
+    private static func score(_ split: ForkGlanceSplit, _ evidence: [WindowEvidence], usable: CGRect) -> CGFloat {
+        let cells = cells(of: split).map { cell in
+            CGRect(x: usable.minX + cell.minX * usable.width, y: usable.minY + cell.minY * usable.height,
+                   width: cell.width * usable.width, height: cell.height * usable.height)
+        }
+        var score: CGFloat = 0
+        for item in evidence where cells.contains(where: { fits(item.frame, $0) || fits(item.visible, $0) }) {
+            score += item.area
+        }
+        return score
+    }
+
+    private static func fits(_ rect: CGRect, _ cell: CGRect) -> Bool {
+        let overlap = rect.intersection(cell)
+        guard !overlap.isNull, overlap.width > 0, overlap.height > 0 else { return false }
+        let shared = overlap.width * overlap.height
+        let union = rect.width * rect.height + cell.width * cell.height - shared
+        return union > 0 && shared / union >= windowFit
+    }
+
     // MARK: - Displays
 
     /// The display under a point. Frames are half-open, so a point on the
@@ -229,5 +398,54 @@ enum ForkGlanceZones {
     /// The same flip, back: it is its own inverse.
     static func globalToCocoa(_ rect: CGRect, mainHeight: CGFloat) -> CGRect {
         CGRect(x: rect.minX, y: mainHeight - rect.maxY, width: rect.width, height: rect.height)
+    }
+}
+
+/// Window split: the split in force for each display, held back until the
+/// windows have drawn the same one for `settle` seconds with no mouse button
+/// down, so a window being dragged or a Swish gesture under way never cuts
+/// the display anew. The service reads it at each look at the window server.
+struct ForkGlanceWindowSplitWatch: Sendable, Equatable {
+    static let settle: TimeInterval = 1
+
+    /// Display uuid → the deduced split in force; nil before the first reading.
+    private(set) var applied: [String: ForkGlanceSplit]?
+    private var pending: [String: ForkGlanceSplit]?
+    private var since: TimeInterval = 0
+
+    /// One reading of the windows; true when `applied` changed. The first
+    /// reading is taken at once: there is nothing to hold back yet.
+    mutating func observe(_ deduced: [String: ForkGlanceSplit], buttonsDown: Bool, now: TimeInterval) -> Bool {
+        guard let current = applied else {
+            applied = deduced
+            return true
+        }
+        guard deduced != current else {
+            pending = nil
+            return false
+        }
+        if deduced != pending || buttonsDown {
+            pending = deduced
+            since = now
+            return false
+        }
+        guard now - since >= Self.settle else { return false }
+        applied = deduced
+        pending = nil
+        return true
+    }
+
+    /// Taken at once, when nothing follows the windows (a one-off reading).
+    mutating func take(_ deduced: [String: ForkGlanceSplit]) -> Bool {
+        pending = nil
+        guard applied != deduced else { return false }
+        applied = deduced
+        return true
+    }
+
+    /// Following stops: the next reading is taken at once.
+    mutating func reset() {
+        applied = nil
+        pending = nil
     }
 }
