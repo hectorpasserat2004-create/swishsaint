@@ -185,7 +185,8 @@ Réactif 15 / 10 / 5 / 6 ; Économe 8 / 4 / 2 / 3. « En mouvement » au-delà d
 | λ candidats, points minimum | 1e-3…1, 6 | `ForkGlanceRegression.defaultLambdas`, `.minimumPoints` |
 | apprentissage : capacité, demi-vie, réajustement, confiance, âge, dégradation, fenêtre d'accord | 400, 3 j, 25, 0,7, 250 ms, 15 %, 60 | `ForkGlanceLearning.*` |
 | appartenance d'une fenêtre à une zone | 40 % de la fenêtre ou 50 % de la zone | `ForkGlanceTargeting.windowShare`, `.zoneShare` |
-| découpage par défaut en 2 colonnes | rapport ≥ 2,1 | `ForkGlanceZones.wideRatio` |
+| découpage de repli en 2 colonnes (le défaut d'un nouveau profil est « Selon mes fenêtres ») | rapport ≥ 2,1 | `ForkGlanceZones.wideRatio` |
+| « Selon mes fenêtres » : recouvrement d'une cellule, gain d'un découpage plus fin, stabilité | 0,78, 3 % de l'aire utile, 1 s | `ForkGlanceZones`, `ForkGlanceWindowSplitWatch.settle` |
 | mode Fenêtres « adapté » | σ ≤ 8 % de la largeur | `ForkGlanceSettingsRules.windowsSigmaShare` |
 | vérification du focus, échecs avant mise de côté, durée | 150 ms, 3, 5 min | `ForkGlanceFocuser.*` |
 | calibrage : trajet, stabilisation, collecte, échantillons, lacet max | 0,35 s, 0,45 s, 0,9 s, 8, 2,5° | `ForkGlanceCalibrationPlan.*` |
