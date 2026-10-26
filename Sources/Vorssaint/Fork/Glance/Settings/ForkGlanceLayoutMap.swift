@@ -98,7 +98,7 @@ struct ForkGlanceLayoutMap: View {
                     .offset(x: rect.width * 0.44, y: 2)
             }
             if style == .settings && splits[screen.display.uuid] == .windows && rect.width > 90 && rect.height > 34 {
-                windowSplitNote(screen.display, in: rect)
+                windowSplitNote(screen.display, in: rect, room: noteRoom(own, map: map, screen: rect))
             }
             if style == .settings && rect.height > 34 {
                 // In the bottom-left zone, never across a border between zones.
@@ -161,24 +161,39 @@ struct ForkGlanceLayoutMap: View {
     }
 
     /// « d’après vos fenêtres », top right, under the notch: the zones drawn
-    /// are the ones the display's windows give now.
-    private func windowSplitNote(_ display: ForkGlanceDisplay, in rect: CGRect) -> some View {
-        HStack(spacing: 3) {
-            Image(systemName: "macwindow")
-            Text(ForkGlanceStrings.strings(l10n.language).splitFromWindows)
-                .lineLimit(1)
-                .truncationMode(.tail)
+    /// are the ones the display's windows give now. In the top right zone,
+    /// never across a border; the symbol alone when the words do not fit.
+    private func windowSplitNote(_ display: ForkGlanceDisplay, in rect: CGRect, room: CGFloat) -> some View {
+        let words = ForkGlanceStrings.strings(l10n.language).splitFromWindows
+        func capsule(_ text: String?) -> some View {
+            HStack(spacing: 3) {
+                Image(systemName: "macwindow")
+                if let text { Text(text).lineLimit(1).fixedSize() }
+            }
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1.5)
+            .background(.regularMaterial, in: Capsule())
+        }
+        return ViewThatFits(in: .horizontal) {
+            capsule(words)
+            capsule(nil)
         }
         .font(.system(size: rect.height > 70 ? 10 : 9, weight: .medium))
         .foregroundStyle(.secondary)
-        .padding(.horizontal, 5)
-        .padding(.vertical, 1.5)
-        .background(.regularMaterial, in: Capsule())
-        .frame(maxWidth: max(0, rect.width - 12), alignment: .trailing)
+        .help(words)
+        .frame(maxWidth: room, alignment: .trailing)
         .padding(.top, display.hasNotch ? max(3, rect.height * 0.045) + 6 : 6)
         .padding(.trailing, 6)
         .frame(width: rect.width, height: rect.height, alignment: .topTrailing)
         .allowsHitTesting(false)
+    }
+
+    /// The width the window split's note may take: the zone in the display's
+    /// top right corner, less the zone's own inset, or the whole display.
+    private func noteRoom(_ own: [ForkGlanceZone], map: ForkGlanceMapGeometry, screen rect: CGRect) -> CGFloat {
+        let corner = CGPoint(x: rect.maxX - 4, y: rect.minY + 4)
+        let zone = own.compactMap { map.rect(of: $0) }.first { $0.contains(corner) }
+        return max(0, min(rect.width, zone?.width ?? rect.width) - 12)
     }
 
     private func displayName(_ display: ForkGlanceDisplay) -> String {

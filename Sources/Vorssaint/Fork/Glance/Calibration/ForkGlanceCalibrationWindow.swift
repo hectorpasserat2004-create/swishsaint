@@ -430,6 +430,12 @@ private struct ForkGlanceLayoutStep: View {
                     .frame(height: 150)
                     .frame(maxWidth: .infinity)
                 ForkGlanceCaption(text.layoutBody)
+                if session.mode == .zones && session.splits.values.contains(.windows) {
+                    Label(core.splitFromWindowsCaption, systemImage: "macwindow")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             } header: {
                 Text(text.layoutTitle)
             }

@@ -503,6 +503,12 @@ struct ForkGlanceSettingsContent: View {
                         Text(text.mapCaption)
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                        if splits.values.contains(.windows) {
+                            Label(core.splitFromWindowsCaption, systemImage: "macwindow")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                 }
                 .padding(.vertical, 4)
