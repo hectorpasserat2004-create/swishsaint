@@ -150,7 +150,7 @@ ALL_SOURCES=("${OFFICIAL_TESTS[@]}" Tests/Fork/*.swift "${OFFICIAL_SOURCES[@]}" 
     printf '\n}\n'
 } > "$OBJECTS/output-file-map.json"
 note "Compilation des tests du fork…"
-swiftc -Onone -incremental -enable-batch-mode -j "$(sysctl -n hw.logicalcpu)" -module-name ForkTests \
+swiftc -Onone -incremental -enable-batch-mode -j "$(sysctl -n hw.logicalcpu)" -module-name VorssaintTests \
     -output-file-map "$OBJECTS/output-file-map.json" \
     -target arm64-apple-macosx14.0 -sdk "$SDK" ${SDK_COMPAT_FLAGS[@]+"${SDK_COMPAT_FLAGS[@]}"} \
     -I Sources/VMStatisticsCompat \
