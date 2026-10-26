@@ -159,6 +159,9 @@ final class ForkGlanceService: ObservableObject {
     @Published private(set) var cameraID: String?
     @Published private(set) var cameraPermission: ForkGlanceCameraPermission = .notDetermined
     @Published private(set) var live: ForkGlanceLive?
+    /// Display uuid → the fixed split its windows draw, once settled
+    /// (« Selon mes fenêtres », extension `Window split` below).
+    @Published private(set) var windowSplits: [String: ForkGlanceSplit] = [:]
 
     /// The zone's display name (« Zone gauche du LG »), in the person's language.
     func zoneName(_ zoneID: String) -> String? {
@@ -249,6 +252,8 @@ final class ForkGlanceService: ObservableObject {
     private var lastHistoryHead: UInt32?
     /// Windows mode: the app of each window zone, for its name.
     private var windowApps: [UInt32: String] = [:]
+    /// The window split's reading (extension `Window split` below).
+    private var windowSplit = WindowSplitFollow()
 
     // Switching.
     private struct PendingSwitch {
@@ -442,6 +447,7 @@ final class ForkGlanceService: ObservableObject {
         ForkGlanceHotKeys.shared.sync(enabled: false)
         ForkGlanceFocuser.shared.reset()
         ForkGlanceHalo.shared.hideAll()
+        syncWindowSplitWatch()
         pendingSwitch = nil
         feedback = nil
         lastSwitched = nil
@@ -783,6 +789,7 @@ final class ForkGlanceService: ObservableObject {
     }
 
     private func recomputeZones() {
+        syncWindowSplitWatch()
         var windows: [ForkGlanceWindow] = []
         if settings.mode == .windows, isUp {
             windows = ForkGlanceWindowIndex.shared.windows()
@@ -790,7 +797,7 @@ final class ForkGlanceService: ObservableObject {
         } else {
             windowApps = [:]
         }
-        let splits = profile?.splits ?? ForkGlanceZones.defaultSplits(layout)
+        let splits = windowSplitsResolved(profile?.splits ?? ForkGlanceZones.defaultSplits(layout))
         let fresh = ForkGlanceZones.zones(layout: layout, mode: settings.mode, splits: splits, windows: windows)
         lastWindowZones = clock.now
         guard fresh != zones else { return }
@@ -1730,6 +1737,160 @@ final class ForkGlanceService: ObservableObject {
         if !isUp { ForkGlanceCamera.shared.stopWatching() }
         if cameraRunning, let machineRate { ForkGlanceCamera.shared.setRate(machineRate) }
         publishState()
+    }
+}
+
+// MARK: - Window split
+
+/// « Selon mes fenêtres » (plan §5.2): a display whose split is `.windows` is
+/// cut like its windows are arranged, among the fixed splits
+/// (`ForkGlanceZones.deducedSplits`). The window server is read every 0.5 s
+/// while it matters: Glance on in Zones mode with a window split, or a
+/// surface drawing one (the settings' map, the assistant) holding a
+/// `windowSplitLease()`. A new split is taken once the windows have drawn it
+/// for a second with no mouse button down (`ForkGlanceWindowSplitWatch`).
+/// The zones then change without a recalibration (the calibration maps the
+/// gaze to a point, the zones come from the point), and the zone the
+/// keyboard is in gets its new id at once: a renamed zone is never a switch.
+extension ForkGlanceService {
+    fileprivate struct WindowSplitFollow {
+        var watch = ForkGlanceWindowSplitWatch()
+        var timer: Timer?
+        var leases = 0
+        /// The last reading and what it gave: an unchanged desk costs no deduction.
+        var lastInput: WindowSplitInput?
+        var lastDeduced: [String: ForkGlanceSplit] = [:]
+    }
+
+    fileprivate struct WindowSplitInput: Equatable {
+        var layout: ForkGlanceDisplayLayout
+        var windows: [ForkGlanceWindow]
+        var usable: [String: CGRect]
+    }
+
+    /// How often the windows are read while a window split is followed.
+    private static let windowSplitInterval: TimeInterval = 0.5
+
+    /// The windows are followed while a surface drawing a window split holds this.
+    func windowSplitLease() -> ForkGlanceLease {
+        precondition(Thread.isMainThread)
+        windowSplit.leases += 1
+        syncWindowSplitWatch()
+        return ForkGlanceLease { [weak self] in
+            if Thread.isMainThread {
+                self?.windowSplitLeaseReleased()
+            } else {
+                DispatchQueue.main.async { self?.windowSplitLeaseReleased() }
+            }
+        }
+    }
+
+    private func windowSplitLeaseReleased() {
+        windowSplit.leases = max(0, windowSplit.leases - 1)
+        syncWindowSplitWatch()
+    }
+
+    private var followsWindowSplit: Bool {
+        windowSplit.leases > 0
+            || (isUp && settings.mode == .zones && profile?.splits.values.contains(.windows) == true)
+    }
+
+    /// Starts or stops the reading as `followsWindowSplit` says; cheap when
+    /// nothing changes (each zones recompute calls it).
+    private func syncWindowSplitWatch() {
+        if followsWindowSplit {
+            guard windowSplit.timer == nil else { return }
+            let timer = Timer(timeInterval: Self.windowSplitInterval, repeats: true) { [weak self] _ in
+                self?.windowSplitTick()
+            }
+            timer.tolerance = 0.1
+            RunLoop.main.add(timer, forMode: .common)
+            windowSplit.timer = timer
+            // The first reading at once: the zones or the surface need it now.
+            windowSplit.watch.reset()
+            readWindowSplits()
+        } else if let timer = windowSplit.timer {
+            timer.invalidate()
+            windowSplit.timer = nil
+            windowSplit.watch.reset()
+            windowSplit.lastInput = nil
+        }
+    }
+
+    /// `splits` with each window split replaced by the split in force (read
+    /// once now when nothing follows the windows). Zones mode only.
+    private func windowSplitsResolved(_ splits: [String: ForkGlanceSplit]) -> [String: ForkGlanceSplit] {
+        guard settings.mode == .zones, splits.values.contains(.windows) else { return splits }
+        if windowSplit.timer == nil { readWindowSplits(oneOff: true) }
+        return ForkGlanceZones.resolving(splits, with: windowSplits)
+    }
+
+    private func windowSplitTick() {
+        guard followsWindowSplit else {
+            syncWindowSplitWatch()
+            return
+        }
+        if readWindowSplits() { windowSplitChanged() }
+    }
+
+    /// Reads the windows (the app's own left out) and hands the watch what
+    /// they draw; publishes the split in force. True when it changed.
+    @discardableResult
+    private func readWindowSplits(oneOff: Bool = false) -> Bool {
+        let own = ProcessInfo.processInfo.processIdentifier
+        let input = WindowSplitInput(layout: layout,
+                                     windows: ForkGlanceWindowIndex.shared.windows().filter { $0.pid != own },
+                                     usable: Self.usableFrames())
+        let deduced: [String: ForkGlanceSplit]
+        if input == windowSplit.lastInput {
+            deduced = windowSplit.lastDeduced
+        } else {
+            deduced = ForkGlanceZones.deducedSplits(layout: input.layout, windows: input.windows, usable: input.usable)
+            windowSplit.lastInput = input
+            windowSplit.lastDeduced = deduced
+        }
+        let changed = oneOff
+            ? windowSplit.watch.take(deduced)
+            : windowSplit.watch.observe(deduced, buttonsDown: NSEvent.pressedMouseButtons != 0, now: clock.now)
+        if let applied = windowSplit.watch.applied, applied != windowSplits { windowSplits = applied }
+        return changed
+    }
+
+    /// A new split is in force: the zones follow it. The machine is told
+    /// which zone the keyboard is in now (the key window's, else the one
+    /// that took over the old zone): like after ⌘-Tab, it then waits for the
+    /// gaze to move on rather than switching to a zone only renamed.
+    private func windowSplitChanged() {
+        guard settings.mode == .zones, profile?.splits.values.contains(.windows) == true else { return }
+        let before = machine?.currentZone.flatMap { id in zones.first { $0.id == id } }
+        let zonesBefore = zones
+        recomputeZones()
+        guard isUp, machine != nil, let before, zones != zonesBefore else { return }
+        Self.log.debug("window split changed")
+        let index = ForkGlanceWindowIndex.shared
+        let windows = index.windows()
+        let key = index.recentWindowIDs().first.flatMap { id in windows.first { $0.id == id } }
+        let anchor = key.flatMap { ForkGlanceTargeting.zone(of: $0, in: zones) }
+            ?? ForkGlanceZones.successor(of: before, in: zones)
+        // Our last switch's zone id may name another rectangle now.
+        lastSwitched = nil
+        guard let anchor, anchor.id != machine?.currentZone else { return }
+        mark(.focusChanged(time: 0, zone: anchor.id))
+        send(.focusChanged(zone: anchor.id))
+    }
+
+    /// Each display's visible frame (no menu bar, no Dock), global points.
+    private static func usableFrames() -> [String: CGRect] {
+        let screens = NSScreen.screens
+        guard let mainHeight = screens.first?.frame.height else { return [:] }
+        var frames: [String: CGRect] = [:]
+        for screen in screens {
+            guard let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber,
+                  let uuid = CGDisplayCreateUUIDFromDisplayID(CGDirectDisplayID(number.uint32Value))?.takeRetainedValue(),
+                  let text = CFUUIDCreateString(nil, uuid) as String? else { continue }
+            frames[text] = ForkGlanceZones.cocoaToGlobal(screen.visibleFrame, mainHeight: mainHeight)
+        }
+        return frames
     }
 }
 

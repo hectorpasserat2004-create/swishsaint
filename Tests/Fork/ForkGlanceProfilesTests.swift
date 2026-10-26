@@ -184,7 +184,8 @@ enum ForkGlanceProfilesTests {
         let profile = ForkGlanceProfiles.newProfile(layout: desk, cameraID: camera, now: now)
         suite.expect(profile.id == ForkGlanceProfiles.signature(layout: desk, cameraID: camera), "a new profile's id is the signature")
         suite.expect(profile.title == "LG HDR WQHD + MacBook", "it carries the layout's title")
-        suite.expect(profile.splits == ["LG-UUID": .columns2, "BUILTIN-UUID": .whole], "it starts with the default splits")
+        suite.expect(profile.splits == ["LG-UUID": .windows, "BUILTIN-UUID": .windows],
+                     "it starts with the default splits: each display follows its windows")
         suite.expect(profile.calibration == nil && profile.learning.pairs.isEmpty, "it starts uncalibrated, with nothing learned")
         suite.expect(profile.lastUsed == now && profile.layout == desk, "it keeps its layout and when it was made")
     }

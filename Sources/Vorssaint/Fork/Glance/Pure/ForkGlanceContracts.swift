@@ -159,6 +159,9 @@ enum ForkGlanceSplit: String, Sendable, Codable, CaseIterable {
     case columns3
     case rows2
     case grid2x2
+    /// « Selon mes fenêtres »: the fixed split the display's windows draw,
+    /// followed live (`ForkGlanceZones.deducedSplits`); never a zone shape of its own.
+    case windows
 }
 
 /// Where a zone sits on its display, to name it (« Zone gauche du LG »).

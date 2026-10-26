@@ -97,6 +97,9 @@ struct ForkGlanceLayoutMap: View {
                     .frame(width: rect.width * 0.12, height: max(3, rect.height * 0.045))
                     .offset(x: rect.width * 0.44, y: 2)
             }
+            if style == .settings && splits[screen.display.uuid] == .windows && rect.width > 90 && rect.height > 34 {
+                windowSplitNote(screen.display, in: rect)
+            }
             if style == .settings && rect.height > 34 {
                 // In the bottom-left zone, never across a border between zones.
                 Text(displayName(screen.display))
@@ -155,6 +158,27 @@ struct ForkGlanceLayoutMap: View {
         let corner = CGPoint(x: rect.minX + 4, y: rect.maxY - 4)
         let zone = own.compactMap { map.rect(of: $0) }.first { $0.contains(corner) }
         return max(0, min(rect.width, zone?.width ?? rect.width) - 12)
+    }
+
+    /// « d’après vos fenêtres », top right, under the notch: the zones drawn
+    /// are the ones the display's windows give now.
+    private func windowSplitNote(_ display: ForkGlanceDisplay, in rect: CGRect) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: "macwindow")
+            Text(ForkGlanceStrings.strings(l10n.language).splitFromWindows)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .font(.system(size: rect.height > 70 ? 10 : 9, weight: .medium))
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 5)
+        .padding(.vertical, 1.5)
+        .background(.regularMaterial, in: Capsule())
+        .frame(maxWidth: max(0, rect.width - 12), alignment: .trailing)
+        .padding(.top, display.hasNotch ? max(3, rect.height * 0.045) + 6 : 6)
+        .padding(.trailing, 6)
+        .frame(width: rect.width, height: rect.height, alignment: .topTrailing)
+        .allowsHitTesting(false)
     }
 
     private func displayName(_ display: ForkGlanceDisplay) -> String {
@@ -230,7 +254,7 @@ struct ForkGlanceLayoutMap: View {
     }
 }
 
-/// A display's split menu: the five splits, each with its drawing (also
+/// A display's split menu: the six splits, each with its drawing (also
 /// drawn alone by the render harness: a popover never shows off screen).
 struct ForkGlanceSplitMenu: View {
     let display: String
@@ -272,7 +296,8 @@ struct ForkGlanceSplitMenu: View {
     }
 }
 
-/// A split drawn small: the display's outline and its zones.
+/// A split drawn small: the display's outline and its zones; a window
+/// split, a window in the outline (its zones are the windows').
 struct ForkGlanceSplitGlyph: View {
     let split: ForkGlanceSplit
     var selected = false
@@ -280,9 +305,15 @@ struct ForkGlanceSplitGlyph: View {
     var body: some View {
         GeometryReader { proxy in
             let display = ForkGlanceDisplay(uuid: "glyph", name: "", frame: CGRect(origin: .zero, size: proxy.size))
-            let zones = ForkGlanceZones.zones(layout: ForkGlanceDisplayLayout(displays: [display]), mode: .zones,
-                                              splits: ["glyph": split], windows: [])
+            let zones = split == .windows ? [] : ForkGlanceZones.zones(
+                layout: ForkGlanceDisplayLayout(displays: [display]), mode: .zones, splits: ["glyph": split], windows: [])
             ZStack(alignment: .topLeading) {
+                if split == .windows {
+                    Image(systemName: "macwindow")
+                        .font(.system(size: max(6, min(12, proxy.size.height * 0.6)), weight: .semibold))
+                        .foregroundStyle(selected ? Color.accentColor : Color.primary.opacity(0.5))
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                }
                 ForEach(zones, id: \.id) { zone in
                     RoundedRectangle(cornerRadius: 1.5, style: .continuous)
                         .fill(selected ? Color.accentColor.opacity(0.85) : Color.primary.opacity(0.22))
