@@ -20,6 +20,19 @@ enum ForkSettingsPages {
                                      icon: feature.symbol, keywords: feature.searchKeywords(language))
     }
 
+    /// Adds the fork pages after the official directory is built, outside
+    /// the function extracted by the official tests.
+    static func sections(_ official: [(title: String, items: [SettingsDirectoryItem])],
+                         language: AppLanguage) -> [(title: String, items: [SettingsDirectoryItem])] {
+        ForkSettingsDirectory.inserting(official, mouse: [
+            item(.trackpadGestures, language: language),
+            item(.glanceFocus, language: language),
+        ], utilitiesAfterCapture: [item(.meetings, language: language)], utilitiesAtEnd: [
+            item(.dictation, language: language),
+            item(.macBackup, language: language),
+        ], app: [ForkExtrasSettings.directoryItem(language: language)])
+    }
+
     /// The page's content (seam `settings2`). An unknown id, from a newer or
     /// an older build, shows nothing rather than a wrong page.
     @ViewBuilder

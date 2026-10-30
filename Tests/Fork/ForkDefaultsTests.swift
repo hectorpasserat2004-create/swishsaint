@@ -9,6 +9,7 @@ enum ForkDefaultsTests {
         backup(suite)
         legacy(suite)
         strings(suite)
+        ForkSettingsDirectoryTests.run(suite)
     }
 
     private static func keys(_ suite: TestSuite) {
@@ -162,12 +163,17 @@ enum ForkDefaultsTests {
                         && current[ForkDefaultsKey.previewEnabled] as? Bool == true
                         && current[ForkDefaultsKey.updatePostponedBuild] == nil,
                      "an export writes the fork settings, never the postponed update")
+        suite.expect(Set(current.keys) == Set(ForkDefaults.registered.keys)
+                        && current[ForkDefaultsKey.linkedResizeEnabled] as? Bool
+                            == ForkDefaults.registered[ForkDefaultsKey.linkedResizeEnabled] as? Bool
+                        && defaults.object(forKey: ForkDefaultsKey.linkedResizeEnabled) == nil,
+                     "CLI export includes untouched defaults without registering them or changing preferences")
         defaults.removePersistentDomain(forName: name)
 
         let service = source("Sources/Vorssaint/Services/SettingsBackup.swift")
         suite.expect(service.contains("try data.write(to: url, options: .atomic)\n            ForkBackup.addForkSettings(toBackupAt: url) // FORK(backup)")
                         && service.contains("static func readSettings(at url: URL) -> [String: Any]? {\n        ForkBackup.rememberForkSettings(inBackupAt: url) // FORK(backup)")
-                        && service.contains("ForkBackup.applyRememberedForkSettings() // FORK(backup)\n        FeatureRuntime.shared.relaunchApp()"),
+                        && service.contains("ForkBackup.applyRememberedForkSettings() // FORK(backup)\n    }"),
                      "export adds the fork settings to the file, import reads and applies them before relaunching (seam backup)")
     }
 

@@ -47,9 +47,9 @@ enum SettingsDirectory {
                                 superKeySource: SuperKeySource = SuperKeyService.shared.source,
                                 isAvailable: (AppFeature) -> Bool) -> [SettingsSidebarSection] {
         let hub = FeatureStrings.hub(language)
-        let grouped: [SettingsSidebarSection] = sections(
+        let grouped: [SettingsSidebarSection] = ForkSettingsPages.sections(sections( // FORK(settings4)
             s, language: language, superKeySource: superKeySource
-        ).enumerated().compactMap { index, section -> SettingsSidebarSection? in
+        ), language: language).enumerated().compactMap { index, section -> SettingsSidebarSection? in
                 let items = section.items.flatMap { pageItem -> [SettingsSidebarItem] in
                     var rows = SettingsSidebarSupport.items(
                         page: pageItem.page, title: pageItem.title, icon: pageItem.icon,
@@ -139,7 +139,7 @@ enum SettingsDirectory {
     static func searchItems(_ s: Strings,
                             language: AppLanguage,
                             superKeySource: SuperKeySource = SuperKeyService.shared.source) -> [SettingsSearchItem] {
-        let pageItems = sections(s, language: language, superKeySource: superKeySource)
+        let pageItems = ForkSettingsPages.sections(sections(s, language: language, superKeySource: superKeySource), language: language) // FORK(settings3)
             .flatMap(\.items).map { item in
                 SettingsSearchItem(id: .page(item.page),
                                    destination: FeatureSettingsDestination(item.page),
@@ -247,8 +247,6 @@ enum SettingsDirectory {
                                           FeatureStrings.mouseClickDebounce(language).windowLabel,
                                           "debounce"]),
                                        ]),
-                ForkSettingsPages.item(.trackpadGestures, language: language), // FORK(settings4)
-                ForkSettingsPages.item(.glanceFocus, language: language), // FORK(settings4)
                 SettingsDirectoryItem(page: .switcher, title: s.tabSwitcher, icon: "rectangle.on.rectangle",
                                        featureKeywords: [
                                         (.switcher, [s.switcherEnable, s.switcherInstantSelection,
@@ -422,7 +420,6 @@ enum SettingsDirectory {
                                        icon: "camera.viewfinder",
                                        featureKeywords: SettingsSearchSupport
                                         .screenCaptureFeatureKeywords(s, language: language)),
-                ForkSettingsPages.item(.meetings, language: language), // FORK(settings4)
                 SettingsDirectoryItem(page: .urlCleaner, title: s.urlCleanerName, icon: "link"),
                 SettingsDirectoryItem(page: .keyDebounce, title: s.keyDebounceName, icon: "keyboard"),
                 SettingsDirectoryItem(page: .superKey,
@@ -446,14 +443,11 @@ enum SettingsDirectory {
                                                  FeatureStrings.radialMenu(language).kindMedia,
                                                  FeatureStrings.radialMenu(language).kindSubmenu,
                                                  FeatureStrings.radialMenu(language).mouseTriggerRequirement]),
-                ForkSettingsPages.item(.dictation, language: language), // FORK(settings4)
-                ForkSettingsPages.item(.macBackup, language: language), // FORK(settings4)
             ]),
             (categories.app, [
                 SettingsDirectoryItem(page: .shortcuts, title: s.shortcutsPageTitle, icon: "command",
                                       keywords: [s.hotkeyToggle]),
                 SettingsDirectoryItem(page: .advanced, title: s.tabAdvanced, icon: "wrench.and.screwdriver"),
-                ForkExtrasSettings.directoryItem(language: language), // FORK(settings3)
                 SettingsDirectoryItem(page: .about, title: s.tabAbout, icon: "info.circle",
                                       keywords: [s.reviewIntro, s.reviewHighlights]),
                 SettingsDirectoryItem(page: .releaseNotes, title: s.tabReleaseNotes, icon: "sparkles"),

@@ -201,9 +201,6 @@ enum CommandBarCatalog {
                                          automationDenied: automationDenied)
             entries = includingEnglishNames(entries, english: english)
         }
-        entries.append(contentsOf: ForkMeetingCommandBar.entries()) // FORK(command-bar-meeting)
-        entries.append(contentsOf: ForkMacBackupCommandBar.entries()) // FORK(command-bar-macbackup)
-        entries.append(contentsOf: ForkGlanceCommandBar.entries()) // FORK(command-bar-glance)
         entries.append(contentsOf: snippetEntries(bar))
         entries.append(contentsOf: linkEntries(
             CommandBarLinks.decode(UserDefaults.standard.data(forKey: DefaultsKey.commandBarLinks)),
@@ -219,6 +216,9 @@ enum CommandBarCatalog {
             + toggleEntries(s, language: language, bar: bar)
             + systemAnswerEntries(s, bar: bar)
             + settingsEntries(s, language: language, bar: bar)
+            + ForkMeetingCommandBar.entries() // FORK(command-bar-meeting)
+            + ForkMacBackupCommandBar.entries() // FORK(command-bar-macbackup)
+            + ForkGlanceCommandBar.entries() // FORK(command-bar-glance)
     }
 
     /// Read both languages from the same definitions, including live action

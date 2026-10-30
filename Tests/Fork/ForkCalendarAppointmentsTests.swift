@@ -342,7 +342,7 @@ enum ForkCalendarAppointmentsTests {
     private static func countdown(_ suite: TestSuite) {
         let later = calendarEvent("a", title: "Standup", start: 50 * 60)
         let events = merged([later], [booking(1, start: 20 * 60)]).events
-        let next = NotchCalendarSupport.countdown(events, now: now, starts: true, ends: false)
+        let next = NotchCalendarSupport.countdown(events, now: now, starts: true, ends: false, leadTime: 30 * 60)
         suite.expect(next?.event.title == "ACME" && next?.ongoing == false,
                      "the closed island counts down to the next appointment, the CRM's when it comes first")
         suite.expect(NotchCalendarSupport.tileEvent(events, now: now)?.title == "ACME",
