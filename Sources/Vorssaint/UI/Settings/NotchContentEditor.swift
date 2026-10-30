@@ -180,6 +180,7 @@ struct NotchPagePreview: View {
         case .watch: NotchWatchView(size: size)
         case .meetings: ForkMeetingIslandSection(service: notch, size: size) // FORK(notch-meetings6)
         case .macBackup: ForkMacBackupIslandSection(service: notch, size: size) // FORK(notch-macbackups6)
+        case .glance: ForkGlanceIslandSection(service: notch, size: size) // FORK(notch-glance6)
         }
     }
 
@@ -410,6 +411,7 @@ extension NotchModule {
         case .watch: return .purple
         case .meetings: return .red // FORK(notch-meetings6)
         case .macBackup: return .teal // FORK(notch-macbackups6)
+        case .glance: return .indigo // FORK(notch-glance6)
         }
     }
 

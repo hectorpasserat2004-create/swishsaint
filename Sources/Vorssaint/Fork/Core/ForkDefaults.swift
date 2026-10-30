@@ -175,6 +175,8 @@ enum ForkDefaultsKey {
     // Mac Backup (`fork.macbackup.*`): its keys, the registered ones and its
     // machine state (repository, sources, profile, engine version, kit
     // dates…) are declared in `Fork/MacBackup/Core/ForkMacBackupDefaults.swift`.
+    // Glance Focus (`fork.glance.*`): its keys, the registered ones and its
+    // machine state are declared in `Fork/Glance/Pure/ForkGlanceDefaults.swift`.
 }
 
 enum ForkDefaults {
@@ -239,6 +241,7 @@ enum ForkDefaults {
         ForkDefaultsKey.meetingsLookback: false,
         ForkDefaultsKey.meetingsIslandAppointments: true,
     ].merging(ForkMacBackupDefaults.registered) { fork, _ in fork }
+        .merging(ForkGlanceDefaults.registered) { fork, _ in fork }
 
     /// Where each setting lived in the test builds made before the fork
     /// ("Vorssaint (Developer)"): a backup exported from one of them still

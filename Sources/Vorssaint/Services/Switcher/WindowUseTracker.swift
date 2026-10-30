@@ -28,6 +28,7 @@ import CoreGraphics
 /// thread here would freeze typing system wide (issues #189 and #275).
 final class WindowUseTracker {
     static let shared = WindowUseTracker()
+    static var forkDemand: () -> Bool = { false } // FORK(glance-mru)
 
     /// Ceiling for a single Accessibility round trip to an app that may not be
     /// servicing its run loop.
@@ -133,6 +134,7 @@ final class WindowUseTracker {
     /// The history feeds the switcher and Window Layout's "every app" actions;
     /// with both features off in the hub, nothing observes anything.
     func syncWithFeatures() {
+        if Self.forkDemand() { start(); return } // FORK(glance-mru)
         if AppFeature.switcher.isAvailable || AppFeature.windowLayout.isAvailable {
             start()
         } else {

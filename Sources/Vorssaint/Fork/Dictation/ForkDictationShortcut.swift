@@ -141,11 +141,13 @@ enum ForkDictationShortcuts {
 
     /// A combination macOS, the apps or Vorssaint already use: a system
     /// shortcut, a feature's own, or Command (with or without Shift) and a
-    /// key that types, which every app's menus answer to.
+    /// key that types, which every app's menus answer to. Glance Focus's
+    /// own count too (the Meetings' check goes through this one).
     static func isTakenElsewhere(_ shortcut: GlobalShortcut) -> Bool {
         isAppMenuShortcut(shortcut)
             || shortcut.conflictsWithSystemShortcut(for: nil)
             || GlobalShortcutRole.conflict(for: shortcut, excluding: nil) != nil
+            || ForkGlanceShortcuts.usedByGlance(shortcut)
     }
 
     static func isAppMenuShortcut(_ shortcut: GlobalShortcut) -> Bool {

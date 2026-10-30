@@ -247,6 +247,7 @@ enum SettingsDirectory {
                                           "debounce"]),
                                        ]),
                 ForkSettingsPages.item(.trackpadGestures, language: language), // FORK(settings4)
+                ForkSettingsPages.item(.glanceFocus, language: language), // FORK(settings4)
                 SettingsDirectoryItem(page: .switcher, title: s.tabSwitcher, icon: "rectangle.on.rectangle",
                                        featureKeywords: [
                                         (.switcher, [s.switcherEnable, s.switcherInstantSelection,

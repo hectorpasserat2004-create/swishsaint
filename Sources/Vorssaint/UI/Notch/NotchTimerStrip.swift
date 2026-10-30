@@ -140,6 +140,7 @@ struct NotchCompanionMark: View {
             EmptyView()
         case .meeting: EmptyView() // FORK(notch-meeting6)
         case .macBackup: EmptyView() // FORK(notch-macbackup6)
+        case .glance: EmptyView() // FORK(notch-glance-activity6)
         }
     }
 
@@ -181,6 +182,7 @@ struct NotchCompanionMark: View {
             return geometry.compactActivityEdgeInset(boxHeight: side, radius: side / 2)
         case .meeting: return 0 // FORK(notch-meeting6)
         case .macBackup: return 0 // FORK(notch-macbackup6)
+        case .glance: return 0 // FORK(notch-glance-activity6)
         }
     }
 
@@ -203,6 +205,7 @@ struct NotchCompanionMark: View {
             return companion.title(language)
         case .meeting: return companion.title(language) // FORK(notch-meeting6)
         case .macBackup: return companion.title(language) // FORK(notch-macbackup6)
+        case .glance: return companion.title(language) // FORK(notch-glance-activity6)
         }
     }
 }

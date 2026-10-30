@@ -433,6 +433,7 @@ private struct NotchCapsuleCompanionMark: View {
             EmptyView()
         case .meeting: EmptyView() // FORK(notch-meeting7)
         case .macBackup: EmptyView() // FORK(notch-macbackup7)
+        case .glance: EmptyView() // FORK(notch-glance-activity7)
         }
     }
 }

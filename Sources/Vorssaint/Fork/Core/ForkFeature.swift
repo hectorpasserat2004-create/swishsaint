@@ -14,6 +14,7 @@ enum ForkFeature: String, CaseIterable, Identifiable {
     case dictation
     case meetings
     case macBackup
+    case glanceFocus
 
     var id: String { rawValue }
 
@@ -24,6 +25,7 @@ enum ForkFeature: String, CaseIterable, Identifiable {
         case .dictation: return ForkDefaultsKey.dictationEnabled
         case .meetings: return ForkDefaultsKey.meetingsEnabled
         case .macBackup: return ForkDefaultsKey.macBackupEnabled
+        case .glanceFocus: return ForkDefaultsKey.glanceEnabled
         }
     }
 
@@ -33,6 +35,7 @@ enum ForkFeature: String, CaseIterable, Identifiable {
         case .dictation: return "waveform"
         case .meetings: return "record.circle"
         case .macBackup: return "clock.arrow.circlepath"
+        case .glanceFocus: return "eyes"
         }
     }
 
@@ -43,6 +46,7 @@ enum ForkFeature: String, CaseIterable, Identifiable {
         case .dictation: return .purple
         case .meetings: return .red
         case .macBackup: return .teal
+        case .glanceFocus: return .indigo
         }
     }
 
@@ -50,7 +54,7 @@ enum ForkFeature: String, CaseIterable, Identifiable {
     /// Accessibility.
     var needsAccessibility: Bool {
         switch self {
-        case .trackpadGestures, .dictation: return true
+        case .trackpadGestures, .dictation, .glanceFocus: return true
         case .meetings, .macBackup: return false
         }
     }
@@ -60,7 +64,7 @@ enum ForkFeature: String, CaseIterable, Identifiable {
     var needsScreenRecording: Bool {
         switch self {
         case .meetings: return true
-        case .trackpadGestures, .dictation, .macBackup: return false
+        case .trackpadGestures, .dictation, .macBackup, .glanceFocus: return false
         }
     }
 
@@ -69,7 +73,7 @@ enum ForkFeature: String, CaseIterable, Identifiable {
     var needsMicrophone: Bool {
         switch self {
         case .meetings: return true
-        case .trackpadGestures, .dictation, .macBackup: return false
+        case .trackpadGestures, .dictation, .macBackup, .glanceFocus: return false
         }
     }
 
@@ -79,6 +83,7 @@ enum ForkFeature: String, CaseIterable, Identifiable {
         case .dictation: return text.dictationTitle
         case .meetings: return text.meetingsTitle
         case .macBackup: return text.macBackupTitle
+        case .glanceFocus: return text.glanceTitle
         }
     }
 
@@ -88,6 +93,7 @@ enum ForkFeature: String, CaseIterable, Identifiable {
         case .dictation: return text.dictationSummary
         case .meetings: return text.meetingsSummary
         case .macBackup: return text.macBackupSummary
+        case .glanceFocus: return text.glanceSummary
         }
     }
 
@@ -100,6 +106,7 @@ enum ForkFeature: String, CaseIterable, Identifiable {
         case .dictation: ForkDictationService.sync()
         case .meetings: ForkMeetingService.sync()
         case .macBackup: ForkMacBackupApp.sync()
+        case .glanceFocus: ForkGlance.sync()
         }
     }
 }

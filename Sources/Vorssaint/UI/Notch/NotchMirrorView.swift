@@ -52,6 +52,7 @@ struct NotchMirrorView: View {
             case .keepAwake: NotchCapsuleKeepAwakeStrip(service: service, size: size, displayGeometry: geometry)
             case .meeting: ForkMeetingIslandStrip(service: service, size: size, displayGeometry: geometry) // FORK(notch-meeting5)
             case .macBackup: ForkMacBackupIslandStrip(service: service, size: size, displayGeometry: geometry) // FORK(notch-macbackup5)
+            case .glance: ForkGlanceIslandStrip(service: service, size: size, displayGeometry: geometry) // FORK(notch-glance-activity5)
             }
         } else {
             switch activity {
@@ -64,6 +65,7 @@ struct NotchMirrorView: View {
             case .keepAwake: NotchKeepAwakeStrip(service: service, displayGeometry: mirror.strip)
             case .meeting: ForkMeetingIslandStrip(service: service, displayGeometry: mirror.strip) // FORK(notch-meeting5)
             case .macBackup: ForkMacBackupIslandStrip(service: service, displayGeometry: mirror.strip) // FORK(notch-macbackup5)
+            case .glance: ForkGlanceIslandStrip(service: service, displayGeometry: mirror.strip) // FORK(notch-glance-activity5)
             }
         }
     }
