@@ -11,6 +11,7 @@ struct ForkMacBackupHealthView: View {
     @ObservedObject var model: ForkMacBackupWindowModel
     @ObservedObject var status: ForkMacBackupStatusModel
     @ObservedObject private var engineStore = ForkMacBackupEngineStore.shared
+    @ObservedObject private var link = ForkMacBackupAgentLink.shared
 
     private var text: ForkMacBackupWindowStrings { model.text }
     private var shared: ForkMacBackupStrings { model.shared }
@@ -246,10 +247,24 @@ struct ForkMacBackupHealthView: View {
     private var agent: some View {
         ForkMacBackupCard(title: text.agentTitle, symbol: "gearshape.2") {
             HStack(spacing: 6) {
-                Circle().fill(status.agentAlive ? ForkMacBackupWindowStyle.teal : Color.red).frame(width: 8, height: 8)
-                Text(status.agentAlive ? text.agentRunning : text.agentStopped).font(.callout.weight(.semibold))
+                Circle().fill(agentRuns ? ForkMacBackupWindowStyle.teal : Color.red).frame(width: 8, height: 8)
+                Text(agentRuns ? text.agentRunning : text.agentStopped).font(.callout.weight(.semibold))
             }
             .accessibilityElement(children: .combine)
+            // Registered, yet macOS does not start it (after an update):
+            // being registered again, or to be allowed again.
+            if let line = ForkMacBackupAgentHealthStrings.strings(model.language).line(link.health) {
+                Text(line)
+                    .font(.callout)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                if link.health == .stoppedBySystem {
+                    Button(ForkMacBackupAgentHealthStrings.strings(model.language).openLoginItems) {
+                        link.openApprovalSettings()
+                    }
+                    .controlSize(.small)
+                }
+            }
             VStack(alignment: .leading, spacing: 3) {
                 if let build = status.agentBuild {
                     Text(String(format: text.agentBuild, build))
@@ -266,6 +281,12 @@ struct ForkMacBackupHealthView: View {
             .font(.callout)
             .foregroundStyle(.secondary)
         }
+    }
+
+    /// The state comes from the agent itself, not from the app backing up
+    /// in its place (both write `state.json`).
+    private var agentRuns: Bool {
+        status.agentAlive && link.mode == .agent && link.health != .stoppedBySystem
     }
 
     private var engineLine: String {

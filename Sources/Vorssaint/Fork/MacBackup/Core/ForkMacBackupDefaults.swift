@@ -97,6 +97,11 @@ extension ForkDefaultsKey {
     /// absolute paths (`ForkMacBackupSparsePolicy`). Any other sparse image
     /// is backed up, except Docker Desktop's and Apple Container's.
     static let macBackupSparseExcluded = "fork.macbackup.sparse.excluded"
+    /// `ForkMacBackupAgentStamp` of the code launchd was told to run at the
+    /// last registration (build + cdhash). This Mac only: never registered,
+    /// so never exported; not in `machineKeys` either, since the agent has
+    /// nothing to reload when it changes.
+    static let macBackupAgentStamp = "fork.macbackup.agent.registeredStamp"
 }
 
 /// `fork.macbackup.schedule.mode`.
