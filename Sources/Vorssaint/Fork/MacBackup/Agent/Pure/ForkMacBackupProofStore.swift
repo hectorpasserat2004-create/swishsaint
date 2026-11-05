@@ -15,6 +15,9 @@ struct ForkMacBackupProofStore: Codable, Equatable {
     var updatedAt: Date
     /// By manifest ID.
     var proofs: [String: ForkMacBackupSnapshotProof]
+    /// When the last `snapshot list` that reconciled it was asked: what
+    /// a run proved after that cannot be missing from it yet.
+    var reconciledAt: Date?
 
     init(proofs: [String: ForkMacBackupSnapshotProof] = [:], updatedAt: Date = .distantPast) {
         formatVersion = Self.formatVersion
@@ -72,8 +75,13 @@ struct ForkMacBackupProofStore: Codable, Equatable {
     /// those of `paths` that are gone are dropped, the levels already
     /// raised are kept. Other sources (another Mac, another account) are
     /// left out by the caller's filter.
+    ///
+    /// `listedAt`: when the list was asked. A snapshot recorded after that
+    /// (a run that ended while a long `snapshot list --all` was on its way)
+    /// is kept: the list could not know it.
     mutating func reconcile(with manifests: [ForkMacBackupKopia.SnapshotManifest], paths: [String],
-                            identity: ForkMacBackupRepository.Identity?, iCloud: ForkMacBackupICloudMode, now: Date) {
+                            identity: ForkMacBackupRepository.Identity?, iCloud: ForkMacBackupICloudMode, now: Date,
+                            listedAt: Date? = nil) {
         let paths = Set(paths.map(ForkMacBackupSourcePath.normalized))
         let mine = manifests.filter { manifest in
             guard let path = manifest.source?.path, paths.contains(ForkMacBackupSourcePath.normalized(path)) else { return false }
@@ -83,11 +91,15 @@ struct ForkMacBackupProofStore: Codable, Equatable {
             return host == identity.hostName && user == identity.userName
         }
         let present = Set(mine.map(\.id))
-        proofs = proofs.filter { !paths.contains(ForkMacBackupSourcePath.normalized($0.value.sourcePath)) || present.contains($0.key) }
+        proofs = proofs.filter { entry in
+            !paths.contains(ForkMacBackupSourcePath.normalized(entry.value.sourcePath)) || present.contains(entry.key)
+                || listedAt.map { entry.value.endTime >= $0 } == true
+        }
         for manifest in mine {
             proofs[manifest.id] = merged(ForkMacBackupSnapshotProof(manifest: manifest, iCloud: iCloud))
         }
         updatedAt = now
+        reconciledAt = listedAt ?? now
     }
 
     /// A verification or a restore test succeeded on `manifestIDs`. Only

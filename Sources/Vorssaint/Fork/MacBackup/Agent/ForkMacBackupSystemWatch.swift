@@ -232,20 +232,6 @@ final class ForkMacBackupSystemWatch {
         return Date(timeIntervalSince1970: TimeInterval(time.tv_sec) + TimeInterval(time.tv_usec) / 1_000_000)
     }
 
-    /// false only when Full Disk Access is known to be refused: the TCC
-    /// database exists and cannot be read. Anything unclear never blocks a
-    /// backup (a refused file would show as a named failure anyway).
-    static func diskAccessKnownRefused(home: String = NSHomeDirectory()) -> Bool {
-        let database = (home as NSString).appendingPathComponent("Library/Application Support/com.apple.TCC/TCC.db")
-        guard FileManager.default.fileExists(atPath: database) else { return false }
-        let descriptor = open(database, O_RDONLY)
-        if descriptor >= 0 {
-            close(descriptor)
-            return false
-        }
-        return errno == EPERM || errno == EACCES
-    }
-
     /// Kopia's cache could fill the Mac: below the floor, wait.
     static func localSpaceLow(at url: URL) -> Bool {
         guard let free = freeBytes(at: url) else { return false }

@@ -180,6 +180,27 @@ enum ForkMacBackupPresenter {
         }
     }
 
+    /// The snapshots of `path` this Mac's runs made since the proofs were
+    /// last reconciled, newest first. A run's snapshot is « Dernière » even
+    /// before the proofs hold it (they may lag: read at start, emptied by
+    /// a list asked before the run ended). Older ones are the proofs' word
+    /// alone (retention, another repository).
+    static func recentProofs(of path: String, runs: [ForkMacBackupRunRecord],
+                             after: Date?) -> [ForkMacBackupSnapshotProof] {
+        let path = ForkMacBackupSourcePath.normalized(path)
+        let floor = after ?? .distantPast
+        return runs.filter { $0.kind == .backup && ($0.outcome == .complete || $0.outcome == .partial) }
+            .flatMap(\.proofs)
+            .filter { $0.incomplete == nil && $0.endTime > floor && ForkMacBackupSourcePath.normalized($0.sourcePath) == path }
+            .sorted { $0.endTime > $1.endTime }
+    }
+
+    private static func newest(_ a: ForkMacBackupSnapshotProof?, _ b: ForkMacBackupSnapshotProof?) -> ForkMacBackupSnapshotProof? {
+        guard let a else { return b }
+        guard let b else { return a }
+        return b.endTime > a.endTime ? b : a
+    }
+
     static func presentation(_ machine: ForkMacBackupMachine, context: Context, now: Date) -> ForkMacBackupPresentation {
         let settings = context.settings
         let phase = machine.phase(now: now)
@@ -188,8 +209,10 @@ enum ForkMacBackupPresenter {
             return false
         }()
         let sources = settings.sources.map { source -> ForkMacBackupPresentation.SourceStatus in
-            let last = context.proofs.last(of: source.path)
-            let complete = context.proofs.lastComplete(of: source.path)
+            let ran = recentProofs(of: source.path, runs: context.runs, after: context.proofs.reconciledAt)
+            let last = newest(context.proofs.last(of: source.path), ran.first)
+            let complete = newest(context.proofs.lastComplete(of: source.path),
+                                  ran.first { !$0.isPartial && $0.level >= .complete })
             var state: ForkMacBackupPresentation.SourceState
             if let live = machine.sourceState(source.path) {
                 state = live

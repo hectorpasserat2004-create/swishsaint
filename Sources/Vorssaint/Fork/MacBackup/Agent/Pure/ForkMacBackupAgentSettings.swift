@@ -73,6 +73,9 @@ enum ForkMacBackupAgentTuning {
     static let otherEngineRecheck: TimeInterval = 2 * 60
     static let localSpaceRecheck: TimeInterval = 15 * 60
     static let diskAccessRecheck: TimeInterval = 10 * 60
+    /// The same probe in the app's runner (the fallback while the agent is
+    /// away): before each run it may start.
+    static let appDiskAccessRecheck: TimeInterval = 30
     /// Below this free space on the Mac, Kopia's cache could fill it.
     static let minimumLocalFreeBytes: Int64 = 5_000_000_000
     /// The update hold: the updater waits at most this long for a backup…
