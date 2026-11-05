@@ -14,10 +14,11 @@ import Foundation
 enum ForkBackup {
     /// The fork settings to write in a backup: every registered one, at its
     /// current value (registered defaults included, like the official ones).
+    /// CLI export precedes bootstrap; use defaults without registering services.
     static func currentSettings(_ defaults: UserDefaults = .standard) -> [String: Any] {
         var settings: [String: Any] = [:]
         for key in ForkDefaults.registered.keys {
-            if let value = defaults.object(forKey: key) { settings[key] = value }
+            settings[key] = defaults.object(forKey: key) ?? ForkDefaults.registered[key]
         }
         return settings
     }

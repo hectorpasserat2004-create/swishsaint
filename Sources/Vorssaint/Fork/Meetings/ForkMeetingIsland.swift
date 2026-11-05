@@ -116,7 +116,7 @@ enum ForkMeetingIsland {
         }
         return NotchService.shared.presentCapture(
             id: id, content: content, actions: actions, height: height,
-            takeFocus: false, closeOnCollapse: true, fallback: fallback, close: close, hover: hover)
+            takeFocus: false, closeOnCollapse: true, fallback: fallback, close: close, dismiss: {}, hover: hover)
     }
 
     /// Whether the island still shows the card `id`, as it was presented.

@@ -33,7 +33,11 @@ enum ClipboardFeatureTests {
     final class QuickPasteHost {
         final class App {
             let isTerminated: Bool
-            init(isTerminated: Bool) { self.isTerminated = isTerminated }
+            let bundleIdentifier: String?
+            init(isTerminated: Bool, bundleIdentifier: String? = "com.example.writer") {
+                self.isTerminated = isTerminated
+                self.bundleIdentifier = bundleIdentifier
+            }
             func activate(options: [Int]) { host?.events.append("activate") }
         }
         typealias NSRunningApplication = App
@@ -88,6 +92,7 @@ enum ClipboardFeatureTests {
     static func run(_ suite: TestSuite) {
         ClipboardSensitiveTextPreferenceTests.run(suite)
         ClipboardPreviewContract.run(suite)
+        ClipboardCaptureRestoreTests.run(suite)
         let source = SourceHost()
         func sourceCheck(declared: String? = nil, remote: Bool = false,
                          panelIsKey: Bool = false, panelClosing: Bool = false)
@@ -186,6 +191,7 @@ enum ClipboardFeatureTests {
                      && cleanerBoard.string(forType: .string) == "https://example.com/path?id=42"
                      && cleanerBoard.string(forType: .source) == nil,
                      "a rewritten copy that named no app gains no mark, so the app that copied it is still credited")
+        URLCleanerMetadataTests.run(suite)
         cleanerBoard.releaseGlobally()
         func expectEqual(_ actual: String, _ expected: String, _ label: String,
                          file: StaticString = #filePath, line: UInt = #line) {
@@ -664,6 +670,9 @@ enum ClipboardFeatureTests {
         suite.expect(Defaults.registeredDefaults[DefaultsKey.clipboardHistoryQuickPreview] as? Bool == false,
                "clipboard history quick preview is closed by default")
 
+        suite.expect(Defaults.registeredDefaults[DefaultsKey.clipboardHistoryShowSourceAppIcons] as? Bool == false,
+                     "source app icons are opt-in, preserving the existing list by default")
+
         // MARK: Clipboard history layout
 
         suite.expect(Defaults.registeredDefaults[DefaultsKey.clipboardHistoryLayout] as? String
@@ -935,6 +944,8 @@ enum ClipboardFeatureTests {
                          "\(language.rawValue) copy-selected button format")
             expectFormat(clipboardStrings.clearRecentConfirmFormat, ["d"],
                          "\(language.rawValue) clear-unpinned confirmation format")
+            expectFormat(FeatureStrings.clipboardRetention(language).daysFormat, ["d"],
+                         "\(language.rawValue) clipboard retention day format")
             suite.expect(!clipboardStrings.autoClearEnable.isEmpty
                    && !clipboardStrings.autoClearSecondsSuffix.isEmpty
                    && !clipboardStrings.autoClearOnSleep.isEmpty
@@ -947,6 +958,10 @@ enum ClipboardFeatureTests {
                    && !clipboardStrings.historyLayoutList.isEmpty
                    && clipboardStrings.historyLayoutCards != clipboardStrings.historyLayoutList,
                    "\(language.rawValue) clipboard history layout choice is localized")
+            suite.expect(!clipboardStrings.showSourceAppIconsInList.isEmpty
+                         && (language == .enUS || clipboardStrings.showSourceAppIconsInList
+                             != FeatureStrings.clipboard(.enUS).showSourceAppIconsInList),
+                         "\(language.rawValue) source app icons setting is localized")
             let layoutStrings = FeatureStrings.windowLayout(language)
             suite.expect(!layoutStrings.sixths.isEmpty
                    && !layoutStrings.topLeftSixth.isEmpty
@@ -1151,6 +1166,70 @@ enum ClipboardFeatureTests {
             textByteLimit: 1_000)
         suite.expect(tenThousandHistory.count == 2,
                "clipboard history retainedEntries preserves entries with 10_000 limit")
+        let retentionNow = Date(timeIntervalSince1970: 1_000_000_000)
+        let freshRecent = ClipboardHistoryEntry(text: "fresh",
+                                                copiedAt: retentionNow.addingTimeInterval(-86_400))
+        let staleRecent = ClipboardHistoryEntry(text: "stale",
+                                                copiedAt: retentionNow.addingTimeInterval(-8 * 86_400))
+        let stalePinned = ClipboardHistoryEntry(text: "old pin",
+                                                copiedAt: retentionNow.addingTimeInterval(-400 * 86_400),
+                                                pinnedAt: retentionNow.addingTimeInterval(-400 * 86_400))
+        let weekHistory = ClipboardHistoryEditing.retainedEntries(
+            [stalePinned, freshRecent, staleRecent],
+            recentLimit: 0,
+            retentionDays: 7,
+            now: retentionNow)
+        suite.expect(weekHistory.map(\.id) == [stalePinned.id, freshRecent.id],
+               "clipboard history drops recent entries older than the retention days but keeps pinned ones")
+        let foreverHistory = ClipboardHistoryEditing.retainedEntries(
+            [freshRecent, staleRecent],
+            recentLimit: 0,
+            retentionDays: 0,
+            now: retentionNow)
+        suite.expect(foreverHistory.count == 2,
+               "clipboard history keeps entries of any age when retention is 0 (forever)")
+        let limitAndRetention = ClipboardHistoryEditing.retainedEntries(
+            [freshRecent, staleRecent],
+            recentLimit: 20,
+            retentionDays: 30,
+            now: retentionNow)
+        suite.expect(limitAndRetention.count == 2,
+               "clipboard history keeps entries that are inside both the limit and the retention window")
+        suite.expect(Defaults.registeredDefaults[DefaultsKey.clipboardHistoryRetentionDays] as? Int == 0
+                && Defaults.sanitizedClipboardHistoryRetentionDays(30) == 30
+                && Defaults.sanitizedClipboardHistoryRetentionDays(0) == 0
+                && Defaults.sanitizedClipboardHistoryRetentionDays(12) == 0,
+               "clipboard history retention defaults to forever and only accepts the offered day counts")
+        let retentionLabels = FeatureStrings.clipboardRetention(.enUS)
+        suite.expect(retentionLabels.label(days: 0) == "Forever"
+                && retentionLabels.label(days: 1) == "1 day"
+                && retentionLabels.label(days: 30) == "30 days",
+               "clipboard history retention labels name forever, one day and several days")
+        let unpinnedOld = ClipboardHistoryEditing.unpinned(stalePinned, now: retentionNow)
+        let afterUnpin = ClipboardHistoryEditing.retainedEntries(
+            [freshRecent, unpinnedOld, staleRecent],
+            recentLimit: 0,
+            retentionDays: 7,
+            now: retentionNow)
+        suite.expect(!unpinnedOld.isPinned
+                && afterUnpin.contains { $0.id == stalePinned.id }
+                && !afterUnpin.contains { $0.id == staleRecent.id },
+               "unpinning an item older than the retention window keeps it as a just-used recent entry")
+        let duringEdit = ClipboardHistoryEditing.retainedEntries(
+            [freshRecent, staleRecent],
+            recentLimit: 0,
+            retentionDays: 7,
+            ageExemptIDs: [staleRecent.id],
+            now: retentionNow)
+        suite.expect(duringEdit.map(\.id) == [freshRecent.id, staleRecent.id],
+               "an entry open in the editor does not expire while its draft is unsaved")
+        let afterEdit = ClipboardHistoryEditing.retainedEntries(
+            duringEdit,
+            recentLimit: 0,
+            retentionDays: 7,
+            now: retentionNow)
+        suite.expect(afterEdit.map(\.id) == [freshRecent.id],
+               "an expired entry is dropped on the first trim after the editor lets it go")
         let previewID = UUID(uuidString: "00000000-0000-0000-0000-000000000101")!
         let nextPreviewID = UUID(uuidString: "00000000-0000-0000-0000-000000000102")!
         let updatedPreview = ClipboardHistoryEntry(id: previewID, text: "updated")
@@ -1391,6 +1470,15 @@ enum ClipboardFeatureTests {
         expectEqual(ClipboardHistorySensitiveText.concealedPasteboardType,
                     "org.nspasteboard.ConcealedType",
                     "the secret mark keeps the exact name the apps that write it use")
+        // A dictation app marks the text it pastes and then takes back.
+        suite.expect(ClipboardHistorySensitiveText.isTransient(["public.utf8-plain-text",
+                                                          "org.nspasteboard.TransientType"]),
+               "clipboard history leaves out content its app is about to take back")
+        suite.expect(ClipboardHistorySensitiveText.isTransient(["org.nspasteboard.AutoGeneratedType"]),
+               "clipboard history leaves out content an app made up rather than copied")
+        suite.expect(!ClipboardHistorySensitiveText.isTransient(["public.utf8-plain-text",
+                                                           "NSStringPboardType"]),
+               "ordinary copied text is not a paste about to be taken back")
 
         // MARK: Separated link copies
 
@@ -1543,6 +1631,16 @@ enum ClipboardFeatureTests {
             suite.expect(host.events == expected,
                    "quick paste beeps or asks for Accessibility when it cannot paste, found \(host.events)")
         }
+        for bundleID in ["com.microsoft.rdc.macos", "com.microsoft.rdc.mac"] {
+            let host = QuickPasteHost()
+            host.pasteIntoPreviousApp(QuickPasteHost.App(isTerminated: false, bundleIdentifier: bundleID))
+            suite.expect(host.events == ["activate"],
+                   "quick paste into a remote desktop session leaves the pick on the clipboard, found \(host.events)")
+        }
+        let unnamed = QuickPasteHost()
+        unnamed.pasteIntoPreviousApp(QuickPasteHost.App(isTerminated: false, bundleIdentifier: nil))
+        suite.expect(unnamed.events == ["activate", "paste"],
+               "quick paste still pastes into an app without a bundle identifier, found \(unnamed.events)")
         for trusted in [true, false] {
             let host = QuickPasteHost()
             host.trusted = trusted

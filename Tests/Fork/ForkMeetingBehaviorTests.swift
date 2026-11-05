@@ -832,13 +832,6 @@ enum ForkMeetingBehaviorTests {
     // MARK: - Seams
 
     private static func seams(_ suite: TestSuite) {
-        let directory = ForkMeetingFinalizeTests.source("Sources/Vorssaint/UI/Settings/SettingsDirectory.swift")
-        let screenshot = directory.range(of: "SettingsDirectoryItem(page: .screenshot,")
-        let meetings = directory.range(of: "ForkSettingsPages.item(.meetings, language: language), // FORK(settings4)")
-        let next = directory.range(of: "SettingsDirectoryItem(page: .urlCleaner,")
-        suite.expect(screenshot != nil && meetings != nil && next != nil
-                        && screenshot!.upperBound < meetings!.lowerBound && meetings!.upperBound < next!.lowerBound
-                        && directory.components(separatedBy: "ForkSettingsPages.item(.meetings,").count == 2,
-                     "the Meetings row sits right after Screen Capture in the Settings sidebar, once")
+        ForkSettingsDirectoryTests.meetingsPlacement(suite)
     }
 }

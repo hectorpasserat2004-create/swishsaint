@@ -215,6 +215,7 @@ final class ForkDictationPaster {
         let holder = SecureInputSupport.holder(
             isEnabled: enabled,
             read: enabled ? recordedHolder() : .noHolder,
+            ownPid: getpid(),
             runningApp: { pid in
                 guard let app = ResponsibleProcess.regularAppOwner(of: pid) else { return nil }
                 return (ResponsibleProcess.displayName(pid: app.processIdentifier, fallback: ""),

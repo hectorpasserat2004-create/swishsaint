@@ -38,6 +38,10 @@ Si `ForkDefaults`, `ForkFeature` ou la page « Extras » n'existent pas encore, 
    sans le code du fork), sauf si elle ne nomme aucun type du fork : sinon les tests officiels ne compilent plus
    et le CI officiel, contrôle obligatoire, passe au rouge. Exemple : la couture `backup` est dans
    `Services/SettingsBackup.swift`, pas dans `Core/SettingsBackupSupport.swift`.
+7. `Tests/generate_sources.py` extrait aussi `CommandBarCatalog.build` et `SettingsDirectory.sections`.
+   Les commandes du fork passent par `builtInEntries`, hors extraction. Les pages du fork sont ajoutées
+   par `ForkSettingsPages.sections` dans `sidebarSections` et `searchItems`, après le catalogue officiel ;
+   leur placement est testé par `ForkSettingsDirectoryTests`. Ne remets aucun type du fork dans les fonctions extraites.
 
 ## Fichiers officiels à ne JAMAIS modifier
 

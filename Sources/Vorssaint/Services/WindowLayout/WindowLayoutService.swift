@@ -290,12 +290,12 @@ final class WindowLayoutService: ObservableObject {
                 return finish(.failure(.failed))
             }
             let rect = WindowLayoutGeometry.rectForDisplay(current: currentRect,
-                                                           sourceVisibleFrame: screen.visibleFrame,
-                                                           destinationVisibleFrame: destination.visibleFrame)
+                                                           sourceVisibleFrame: screen.windowLayoutVisibleFrame,
+                                                           destinationVisibleFrame: destination.windowLayoutVisibleFrame)
             frameHistory.record(target.frame, for: target.key)
             if setFrame(axFrame(fromAppKit: rect),
                         targetRect: rect,
-                        screenVisibleFrame: destination.visibleFrame,
+                        screenVisibleFrame: destination.windowLayoutVisibleFrame,
                         action: action,
                         on: target.window,
                         windowKey: target.key) {
@@ -312,7 +312,7 @@ final class WindowLayoutService: ObservableObject {
            accepted(actual: target.frame,
                     targetRect: placement(for: action,
                                           current: target.frame,
-                                          visibleFrame: screen.visibleFrame).rect,
+                                          visibleFrame: screen.windowLayoutVisibleFrame).rect,
                     action: action),
            let destination = neighbourScreen(to: screen,
                                              screens: screens,
@@ -322,12 +322,12 @@ final class WindowLayoutService: ObservableObject {
             // the placement below keeps its normal repeated-action behavior.
             return applyPlacement(crossing.action,
                                   to: target,
-                                  visibleFrame: destination.visibleFrame,
+                                  visibleFrame: destination.windowLayoutVisibleFrame,
                                   cyclesRepeatedAction: false)
         }
         return applyPlacement(action,
                               to: target,
-                              visibleFrame: screen.visibleFrame,
+                              visibleFrame: screen.windowLayoutVisibleFrame,
                               sideRepeatCyclesThirds: sideRepeatCyclesThirds)
     }
 
@@ -544,7 +544,7 @@ final class WindowLayoutService: ObservableObject {
                           windowKey: WindowLayoutWindowKey) -> Bool {
         setFrame(frame,
                  targetRect: appKitFrame(fromAX: frame),
-                 screenVisibleFrame: appKitFrame(fromAX: frame),
+                 screenVisibleFrame: bestScreen(for: frame)?.visibleFrame ?? appKitFrame(fromAX: frame),
                  action: .restore,
                  on: window,
                  windowKey: windowKey)
@@ -564,7 +564,7 @@ final class WindowLayoutService: ObservableObject {
 
         let original = self.frame(of: window)
         settledFrames.removeValue(forKey: windowKey)
-        if attempt(frame, targetRect: targetRect, action: action, on: window) {
+        if attempt(frame, targetRect: targetRect, visibleFrame: screenVisibleFrame, action: action, on: window) {
             assistiveModeSuspensions.removeValue(forKey: windowID)?.resume()
             // Only the side size cycle uses the settled frame, so the read-back
             // and its later refresh run only for a press that may cycle.
@@ -654,6 +654,7 @@ final class WindowLayoutService: ObservableObject {
         }
         if self.attempt(context.frame,
                         targetRect: context.targetRect,
+                        visibleFrame: context.screenVisibleFrame,
                         action: context.action,
                         on: context.window) {
             concludeSettle(context, success: true)
@@ -673,6 +674,7 @@ final class WindowLayoutService: ObservableObject {
             applyFrame(maxFrame, on: context.window)
             if self.attempt(context.frame,
                             targetRect: context.targetRect,
+                            visibleFrame: context.screenVisibleFrame,
                             action: context.action,
                             on: context.window) {
                 concludeSettle(context, success: true)
@@ -728,9 +730,9 @@ final class WindowLayoutService: ObservableObject {
 
     private func attempt(_ frame: WindowLayoutFrame,
                          targetRect: NSRect,
+                         visibleFrame: NSRect,
                          action: WindowLayoutAction,
                          on window: AXUIElement) -> Bool {
-        let visibleFrame = bestScreen(for: frame)?.visibleFrame ?? targetRect
         for _ in 0..<3 {
             applyFrame(frame,
                        targetRect: targetRect,
@@ -1006,7 +1008,7 @@ final class WindowLayoutService: ObservableObject {
            directionalModifierHold?.ownership != modifierOwnership { return }
         directionalSession = WindowDirectionalSession(
             target: target,
-            visibleFrame: screen.visibleFrame,
+            visibleFrame: screen.windowLayoutVisibleFrame,
             pointerOrigin: NSEvent.mouseLocation,
             action: nil,
             manualOverride: nil,
@@ -1196,8 +1198,10 @@ final class WindowLayoutService: ObservableObject {
         guard var session = directionalSession else { return Unmanaged.passUnretained(event) }
 
         if type == .scrollWheel {
-            let deltaY = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis1)
-            let fixedDeltaY = event.getIntegerValueField(.scrollWheelEventDeltaAxis1)
+            // Read the wheel as Scroll Direction delivers it everywhere else.
+            let wheel = ScrollInverter.directionApplied(to: event)
+            let deltaY = wheel.getDoubleValueField(.scrollWheelEventPointDeltaAxis1)
+            let fixedDeltaY = wheel.getIntegerValueField(.scrollWheelEventDeltaAxis1)
             let scrollY = deltaY != 0 ? deltaY : Double(fixedDeltaY)
 
             if scrollY > 0.5 {
@@ -1877,7 +1881,7 @@ final class WindowLayoutService: ObservableObject {
     private func edgeSnapTarget(atQuartzPoint point: CGPoint, velocity: CGVector) -> WindowEdgeSnapTarget? {
         let appKitPoint = CGPoint(x: point.x, y: menuBarScreenTopY - point.y)
         let screens = NSScreen.screens.map {
-            WindowEdgeSnapScreen(frame: $0.frame, visibleFrame: $0.visibleFrame)
+            WindowEdgeSnapScreen(frame: $0.frame, visibleFrame: $0.windowLayoutVisibleFrame)
         }
         return WindowEdgeSnapSupport.target(at: appKitPoint,
                                             screens: screens,
@@ -2508,17 +2512,30 @@ final class WindowLayoutService: ObservableObject {
         // No cap here: on the system-wide element a timeout is the default for
         // every question this process asks, whoever asks it (#938).
         var rawElement: AXUIElement?
-        guard AXUIElementCopyElementAtPosition(system, Float(point.x), Float(point.y), &rawElement) == .success,
-              let element = rawElement
-        else { return nil }
-        AXUIElementSetMessagingTimeout(element, 0.25)
-
-        let window: AXUIElement?
-        if role(of: element) == (kAXWindowRole as String) {
-            window = element
-        } else {
-            window = windowAttribute(element, kAXWindowAttribute as String)
-                ?? windowAttribute(element, kAXTopLevelUIElementAttribute as String)
+        var window: AXUIElement?
+        if AXUIElementCopyElementAtPosition(system, Float(point.x), Float(point.y), &rawElement) == .success,
+           let element = rawElement {
+            AXUIElementSetMessagingTimeout(element, 0.25)
+            if role(of: element) == (kAXWindowRole as String) {
+                window = element
+            } else {
+                window = windowAttribute(element, kAXWindowAttribute as String)
+                    ?? windowAttribute(element, kAXTopLevelUIElementAttribute as String)
+            }
+        }
+        if window == nil {
+            // Custom-drawn content may expose no AX child at the press point.
+            // Resolve the exact click receiver, never a focused or covered window.
+            guard let windowID = WindowServerSupport.receivingWindow(at: point),
+                  let pid = WindowServerSupport.ownerProcessID(ofWindowID: windowID),
+                  pid != ProcessInfo.processInfo.processIdentifier,
+                  let app = NSRunningApplication(processIdentifier: pid),
+                  !app.isTerminated, app.activationPolicy == .regular else { return nil }
+            let axApp = AXUIElementCreateApplication(pid)
+            // This extra search runs inside the mouse tap. Its whole scan must
+            // fit one short budget, not a fresh timeout for every app window.
+            window = AXWindowResolver.publishedElement(for: windowID, in: axApp,
+                deadline: ProcessInfo.processInfo.systemUptime + 0.1)
         }
         guard let window else { return nil }
         AXUIElementSetMessagingTimeout(window, 0.25)
@@ -2535,7 +2552,8 @@ final class WindowLayoutService: ObservableObject {
               app.activationPolicy == .regular,
               let frame = frame(of: window),
               frame.size.width > 80,
-              frame.size.height > 80
+              frame.size.height > 80,
+              CGRect(origin: frame.origin, size: frame.size).contains(point)
         else { return nil }
         return WindowGestureTarget(window: window, app: app, frame: frame)
     }

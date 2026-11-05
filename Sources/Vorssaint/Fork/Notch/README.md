@@ -141,6 +141,12 @@ visible par défaut.
 - Carte : `NotchService.presentCapture(id:content:actions:height:takeFocus: false, closeOnCollapse: true, …)` ; mesure sa
   hauteur à la largeur de l'île (`ForkMeetingIsland.height(of:)`), rends le clavier après un bouton qui la laisse ouverte
   (`resignPanelKey`).
+  Depuis la base officielle 3.4.3, le paramètre `dismiss` traite les clics à l'extérieur. Les cartes Réunions et
+  Sauvegarde passent `{}` pour conserver leur comportement : leurs propres présentateurs décident quand les fermer.
+
+Les commandes du fork sont ajoutées dans `CommandBarCatalog.builtInEntries`, car `build` est désormais extrait par
+les tests officiels. Pour les pages de réglages, `ForkSettingsPages.sections` décore les sections officielles dans les
+lectures du menu latéral et de la recherche ; `SettingsDirectory.sections` reste sans dépendance aux types du fork.
 
 ### Réglages (onglets de l'île)
 

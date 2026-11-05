@@ -110,7 +110,7 @@ enum ForkMacBackupIsland {
         let content = ForkMacBackupIslandCardView(card: card)
         return NotchService.shared.presentCapture(
             id: id, content: AnyView(content), actions: nil, height: height(of: content, minimum: 64),
-            takeFocus: false, closeOnCollapse: true, fallback: close, close: close, hover: { _ in })
+            takeFocus: false, closeOnCollapse: true, fallback: close, close: close, dismiss: {}, hover: { _ in })
     }
 
     static func remove(id: UUID) {
