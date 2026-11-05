@@ -180,7 +180,7 @@ enum ForkGlanceStringsTests {
         \.zoneWhole, \.zoneLeft, \.zoneCenter, \.zoneRight, \.zoneTop, \.zoneBottom, \.zoneTopLeft, \.zoneTopRight,
         \.zoneBottomLeft, \.zoneBottomRight, \.zoneWindowOn, \.zoneWindowApp, \.builtInDisplay,
         \.modeScreens, \.modeZones, \.modeWindows,
-        \.splitWhole, \.splitColumns2, \.splitColumns3, \.splitRows2, \.splitGrid2x2,
+        \.splitWhole, \.splitColumns2, \.splitColumns3, \.splitRows2, \.splitGrid2x2, \.splitWindows,
         \.gradeExcellent, \.gradeGood, \.gradeFair, \.gradePoor,
         \.durationFifteenMinutes, \.durationOneHour, \.durationUntilTomorrow, \.durationUntilResumed,
         \.noticePaused, \.noticeResumed, \.noticeNewLayout, \.noticeCameraUnavailable, \.noticeRecentered,

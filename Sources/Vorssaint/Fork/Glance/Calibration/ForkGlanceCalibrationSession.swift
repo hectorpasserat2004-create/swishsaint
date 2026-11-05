@@ -34,6 +34,16 @@ protocol ForkGlanceCalibrationBackend: AnyObject {
     func estimate(_ sample: ForkGlanceSample) -> ForkGlanceEstimate?
     /// A preview of the running camera; nil when it is not running.
     func makePreviewLayer() -> AVCaptureVideoPreviewLayer?
+    /// Display uuid → the split its windows draw now, for a window split
+    /// (`ForkGlanceService.windowSplits`).
+    var windowSplits: [String: ForkGlanceSplit] { get }
+    /// Keeps the windows followed while the assistant is open.
+    func windowSplitLease() -> ForkGlanceLease?
+}
+
+extension ForkGlanceCalibrationBackend {
+    var windowSplits: [String: ForkGlanceSplit] { [:] }
+    func windowSplitLease() -> ForkGlanceLease? { nil }
 }
 
 /// The real one: `ForkGlanceService.shared` and its camera.
@@ -78,6 +88,8 @@ final class ForkGlanceServiceCalibrationBackend: ForkGlanceCalibrationBackend {
 
     func finishValidation(zoneAccuracy: [String: Double]) { service.finishValidation(zoneAccuracy: zoneAccuracy) }
     func finishQuickRecenter(points: [ForkGlanceCalibrationPoint]) { service.finishQuickRecenter(points: points) }
+    var windowSplits: [String: ForkGlanceSplit] { service.windowSplits }
+    func windowSplitLease() -> ForkGlanceLease? { service.windowSplitLease() }
     func cancelCalibration() { service.cancelCalibration() }
     func estimate(_ sample: ForkGlanceSample) -> ForkGlanceEstimate? { service.estimate(sample) }
     func makePreviewLayer() -> AVCaptureVideoPreviewLayer? { ForkGlanceCamera.shared.makePreviewLayer() }
@@ -186,6 +198,8 @@ final class ForkGlanceCalibrationSession: ObservableObject {
     /// The layout last compared, so a change of anything else costs nothing.
     private var lastLayout: ForkGlanceDisplayLayout?
     private var seed = UInt64.random(in: 0...UInt64.max)
+    /// The windows are followed while the assistant is open (a window split).
+    private var windowSplitLease: ForkGlanceLease?
 
     init(entry: ForkGlanceCalibrationEntry, backend: ForkGlanceCalibrationBackend,
          language: AppLanguage? = nil, preview: Bool = false, clock: ForkGlanceClock = ForkGlanceSystemClock()) {
@@ -205,6 +219,7 @@ final class ForkGlanceCalibrationSession: ObservableObject {
                 .sink { [weak self] in self?.language = $0 }
         }
         guard !preview else { return }
+        windowSplitLease = backend.windowSplitLease()
         backend.onChange = { [weak self] in self?.backendChanged() }
         enter(step)
     }
@@ -233,9 +248,13 @@ final class ForkGlanceCalibrationSession: ObservableObject {
     var layout: ForkGlanceDisplayLayout { backend.layout }
 
     /// The zones of the layout and mode chosen. Windows mode validates the
-    /// Zones split: its windows come and go, the displays' parts stay.
+    /// Zones split: its windows come and go, the displays' parts stay. A
+    /// window split gives the split its windows draw now: the quick recenter
+    /// and the validation use the zones of the moment, while the points
+    /// (`planTargets`) never depend on the windows.
     var zones: [ForkGlanceZone] {
-        ForkGlanceZones.zones(layout: layout, mode: mode == .windows ? .zones : mode, splits: splits, windows: [])
+        ForkGlanceZones.zones(layout: layout, mode: mode == .windows ? .zones : mode,
+                              splits: ForkGlanceZones.resolving(splits, with: backend.windowSplits), windows: [])
     }
 
     var stepNumber: Int { (steps.firstIndex(of: step) ?? 0) + 1 }
@@ -683,6 +702,8 @@ final class ForkGlanceCalibrationSession: ObservableObject {
         overlay = nil
         if began { backend.calibrationFeed = nil }
         backend.onChange = nil
+        windowSplitLease?.release()
+        windowSplitLease = nil
         run = nil
         previewLayer = nil
     }
@@ -741,6 +762,8 @@ final class ForkGlancePreviewCalibrationBackend: ForkGlanceCalibrationBackend {
     var cameraPermission: ForkGlanceCameraPermission
     var onChange: (() -> Void)?
     var calibrationFeed: ((ForkGlanceSample, ForkGlanceObservation?) -> Void)?
+    /// What the renders show as the windows' splits.
+    var windowSplits: [String: ForkGlanceSplit] = [:]
 
     init(layout: ForkGlanceDisplayLayout = ForkGlancePreviewCalibrationBackend.desk,
          permission: ForkGlanceCameraPermission = .granted) {

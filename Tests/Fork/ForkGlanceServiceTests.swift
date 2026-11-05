@@ -139,8 +139,8 @@ enum ForkGlanceServiceTests {
         suite.expect(first.isNew && first.need == .firstTime && first.profile.calibration == nil
                         && first.profile.id == ForkGlanceProfiles.signature(layout: desk, cameraID: camera),
                      "nothing calibrated on this Mac: a new profile for this desk, calibration needed for the first time")
-        suite.expect(first.profile.splits[lg.uuid] == .columns2 && first.profile.splits[macBook.uuid] == .whole,
-                     "a new profile starts with the default splits: the LG in two columns, the MacBook whole")
+        suite.expect(first.profile.splits[lg.uuid] == .windows && first.profile.splits[macBook.uuid] == .windows,
+                     "a new profile starts with the default splits: each display follows its windows")
 
         let newCamera = Rules.choose(.unknown, layout: desk, cameraID: "IPHONE", profiles: [profile], now: now)
         suite.expect(newCamera.need == .newCamera, "these very displays calibrated with another camera: a new camera")

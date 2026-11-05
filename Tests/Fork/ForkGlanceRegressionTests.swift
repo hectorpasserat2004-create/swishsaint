@@ -21,10 +21,15 @@ enum ForkGlanceRegressionTests {
 
     private static func expansion(_ suite: TestSuite) {
         suite.expect(ForkGlanceRegression.expand([2, 3]) == [1, 2, 3, 4, 6, 9],
-                     "the degree-2 terms are 1, each component, then each product with i ≤ j")
-        suite.expect(ForkGlanceRegression.expand(Array(repeating: 1, count: 6)).count == 28
-                        && ForkGlanceRegression.expand(Array(repeating: 1, count: 11)).count == 78,
-                     "head only gives 28 terms, head and eyes 78")
+                     "yaw and pitch alone get every degree-2 term: 1, each, then each product with i ≤ j")
+        suite.expect(ForkGlanceRegression.expand([2, 3, 5, 7]) == [1, 2, 3, 5, 7, 4, 6, 9],
+                     "past yaw and pitch, a component only enters linearly")
+        suite.expect(ForkGlanceRegression.expand(Array(repeating: 1, count: 6)).count == 10
+                        && ForkGlanceRegression.expand(Array(repeating: 1, count: 11)).count == 15,
+                     "head only gives 10 terms, head and eyes 15")
+        suite.expect((0...11).allSatisfy { ForkGlanceRegression.termCount($0)
+                        == ForkGlanceRegression.expand(Array(repeating: 1, count: $0)).count },
+                     "the term count says how many terms the expansion makes")
         let model = ForkGlanceRidgeModel(coefficients: [1, 2, 3, 0, 0, 0], lambda: 0)
         suite.expect(model.predict([1, 1]) == 6 && model.predict([1, 1, 1]).isNaN,
                      "a model predicts from its own length of vector only")
@@ -61,11 +66,11 @@ enum ForkGlanceRegressionTests {
             cleanInputs.append([a, b])
             cleanTargets.append(f(a, b))
         }
-        // Six components, few rows, targets with no relation to them: the
-        // best guess is the mean, so the strongest shrinkage should win.
+        // Eleven components (15 terms), few rows, targets with no relation to
+        // them: the best guess is the mean, so the strongest shrinkage should win.
         var noiseInputs: [[Double]] = [], noiseTargets: [Double] = []
         for _ in 0..<14 {
-            noiseInputs.append((0..<6).map { _ in random.gaussian() })
+            noiseInputs.append((0..<11).map { _ in random.gaussian() })
             noiseTargets.append(random.gaussian())
         }
         let clean = try? ForkGlanceRegression.crossValidated(inputs: cleanInputs, targets: cleanTargets)

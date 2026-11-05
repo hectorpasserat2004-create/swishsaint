@@ -159,6 +159,13 @@ struct ForkGlanceStrings {
     let splitColumns3: String
     let splitRows2: String
     let splitGrid2x2: String
+    /// The window split's name (« Selon mes fenêtres »).
+    let splitWindows: String
+    /// Settings and assistant maps, on a display with the window split:
+    /// its zones come from the windows of the moment.
+    let splitFromWindows: String
+    /// Under the settings' and the assistant's map, when a display follows its windows.
+    let splitFromWindowsCaption: String
 
     // MARK: Grades and calibration (island)
     let gradeExcellent: String
@@ -553,6 +560,7 @@ extension ForkGlanceStrings {
         case .columns3: return splitColumns3
         case .rows2: return splitRows2
         case .grid2x2: return splitGrid2x2
+        case .windows: return splitWindows
         }
     }
 
@@ -901,6 +909,9 @@ extension ForkGlanceStrings {
         splitColumns3: "3 columns",
         splitRows2: "2 rows",
         splitGrid2x2: "2×2 grid",
+        splitWindows: "Match my windows",
+        splitFromWindows: "from your windows",
+        splitFromWindowsCaption: "Zones from your windows, updated as you arrange them.",
         gradeExcellent: "Excellent",
         gradeGood: "Good",
         gradeFair: "Fair",
@@ -1091,6 +1102,9 @@ extension ForkGlanceStrings {
         splitColumns3: "3 colonnes",
         splitRows2: "2 lignes",
         splitGrid2x2: "Grille 2×2",
+        splitWindows: "Selon mes fenêtres",
+        splitFromWindows: "d’après vos fenêtres",
+        splitFromWindowsCaption: "Zones d’après vos fenêtres, mises à jour quand vous les rangez.",
         gradeExcellent: "Excellente",
         gradeGood: "Bonne",
         gradeFair: "Moyenne",
@@ -1281,6 +1295,9 @@ extension ForkGlanceStrings {
         splitColumns3: "3 colunas",
         splitRows2: "2 linhas",
         splitGrid2x2: "Grade 2×2",
+        splitWindows: "Conforme minhas janelas",
+        splitFromWindows: "conforme suas janelas",
+        splitFromWindowsCaption: "Zonas conforme suas janelas, atualizadas quando você as organiza.",
         gradeExcellent: "Excelente",
         gradeGood: "Boa",
         gradeFair: "Razoável",
@@ -1471,6 +1488,9 @@ extension ForkGlanceStrings {
         splitColumns3: "3 sütun",
         splitRows2: "2 satır",
         splitGrid2x2: "2×2 ızgara",
+        splitWindows: "Pencerelerime göre",
+        splitFromWindows: "pencerelerinize göre",
+        splitFromWindowsCaption: "Bölgeler pencerelerinize göre, onları düzenledikçe güncellenir.",
         gradeExcellent: "Mükemmel",
         gradeGood: "İyi",
         gradeFair: "Orta",
@@ -1661,6 +1681,9 @@ extension ForkGlanceStrings {
         splitColumns3: "3 столбца",
         splitRows2: "2 строки",
         splitGrid2x2: "Сетка 2×2",
+        splitWindows: "По моим окнам",
+        splitFromWindows: "по вашим окнам",
+        splitFromWindowsCaption: "Зоны по вашим окнам, обновляются, когда вы их расставляете.",
         gradeExcellent: "Отлично",
         gradeGood: "Хорошо",
         gradeFair: "Средне",
@@ -1851,6 +1874,9 @@ extension ForkGlanceStrings {
         splitColumns3: "3 columnas",
         splitRows2: "2 filas",
         splitGrid2x2: "Cuadrícula 2×2",
+        splitWindows: "Según mis ventanas",
+        splitFromWindows: "según tus ventanas",
+        splitFromWindowsCaption: "Zonas según tus ventanas, actualizadas al ordenarlas.",
         gradeExcellent: "Excelente",
         gradeGood: "Buena",
         gradeFair: "Regular",
@@ -2041,6 +2067,9 @@ extension ForkGlanceStrings {
         splitColumns3: "3 stĺpce",
         splitRows2: "2 riadky",
         splitGrid2x2: "Mriežka 2×2",
+        splitWindows: "Podľa mojich okien",
+        splitFromWindows: "podľa vašich okien",
+        splitFromWindowsCaption: "Zóny podľa vašich okien, aktualizované pri ich usporiadaní.",
         gradeExcellent: "Výborná",
         gradeGood: "Dobrá",
         gradeFair: "Priemerná",
@@ -2231,6 +2260,9 @@ extension ForkGlanceStrings {
         splitColumns3: "3 Spalten",
         splitRows2: "2 Zeilen",
         splitGrid2x2: "2×2-Raster",
+        splitWindows: "Nach meinen Fenstern",
+        splitFromWindows: "nach deinen Fenstern",
+        splitFromWindowsCaption: "Zonen nach deinen Fenstern, aktualisiert, wenn du sie anordnest.",
         gradeExcellent: "Ausgezeichnet",
         gradeGood: "Gut",
         gradeFair: "Mittel",
@@ -2421,6 +2453,9 @@ extension ForkGlanceStrings {
         splitColumns3: "3 colonne",
         splitRows2: "2 righe",
         splitGrid2x2: "Griglia 2×2",
+        splitWindows: "Secondo le mie finestre",
+        splitFromWindows: "secondo le tue finestre",
+        splitFromWindowsCaption: "Zone secondo le tue finestre, aggiornate quando le disponi.",
         gradeExcellent: "Eccellente",
         gradeGood: "Buona",
         gradeFair: "Discreta",
@@ -2611,6 +2646,9 @@ extension ForkGlanceStrings {
         splitColumns3: "3列",
         splitRows2: "2行",
         splitGrid2x2: "2×2グリッド",
+        splitWindows: "ウインドウに合わせる",
+        splitFromWindows: "ウインドウの配置から",
+        splitFromWindowsCaption: "ゾーンはウインドウの配置に合わせて更新されます。",
         gradeExcellent: "非常に良い",
         gradeGood: "良い",
         gradeFair: "普通",
@@ -2801,6 +2839,9 @@ extension ForkGlanceStrings {
         splitColumns3: "3열",
         splitRows2: "2행",
         splitGrid2x2: "2×2 격자",
+        splitWindows: "내 윈도우에 맞춤",
+        splitFromWindows: "윈도우 배치 기준",
+        splitFromWindowsCaption: "영역은 윈도우를 배치할 때마다 그에 맞춰 업데이트됩니다.",
         gradeExcellent: "매우 좋음",
         gradeGood: "좋음",
         gradeFair: "보통",
@@ -2991,6 +3032,9 @@ extension ForkGlanceStrings {
         splitColumns3: "3 стовпці",
         splitRows2: "2 рядки",
         splitGrid2x2: "Сітка 2×2",
+        splitWindows: "За моїми вікнами",
+        splitFromWindows: "за вашими вікнами",
+        splitFromWindowsCaption: "Зони за вашими вікнами, оновлюються, коли ви їх розставляєте.",
         gradeExcellent: "Відмінно",
         gradeGood: "Добре",
         gradeFair: "Середньо",
@@ -3181,6 +3225,9 @@ extension ForkGlanceStrings {
         splitColumns3: "3 列",
         splitRows2: "2 行",
         splitGrid2x2: "2×2 网格",
+        splitWindows: "按我的窗口",
+        splitFromWindows: "根据你的窗口",
+        splitFromWindowsCaption: "区域根据你的窗口排列，随你整理窗口而更新。",
         gradeExcellent: "优秀",
         gradeGood: "良好",
         gradeFair: "一般",
@@ -3371,6 +3418,9 @@ extension ForkGlanceStrings {
         splitColumns3: "3 欄",
         splitRows2: "2 列",
         splitGrid2x2: "2×2 格線",
+        splitWindows: "依照我的視窗",
+        splitFromWindows: "依據你的視窗",
+        splitFromWindowsCaption: "區域依據你的視窗排列，會在你整理視窗時更新。",
         gradeExcellent: "優異",
         gradeGood: "良好",
         gradeFair: "普通",
@@ -3561,6 +3611,9 @@ extension ForkGlanceStrings {
         splitColumns3: "3 欄",
         splitRows2: "2 列",
         splitGrid2x2: "2×2 格線",
+        splitWindows: "依照我的視窗",
+        splitFromWindows: "依據你的視窗",
+        splitFromWindowsCaption: "區域依據你的視窗排列，會在你整理視窗時更新。",
         gradeExcellent: "優異",
         gradeGood: "良好",
         gradeFair: "一般",

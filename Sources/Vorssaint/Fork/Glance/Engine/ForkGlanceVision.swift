@@ -171,7 +171,7 @@ final class ForkGlanceVision: @unchecked Sendable {
         var box: CGRect
     }
 
-    /// The faces in `region`, their boxes brought back to the whole image. Nil: Vision failed.
+    /// The faces in `region`, their boxes in the whole image. Nil: Vision failed.
     private func detect(_ handler: VNImageRequestHandler, in region: CGRect) -> [Face]? {
         rectangles.regionOfInterest = region
         do {
@@ -181,10 +181,16 @@ final class ForkGlanceVision: @unchecked Sendable {
             return nil
         }
         noteSuccess()
-        // Detection results are normalized to the region of interest
-        // (`VNImageRectForNormalizedRectUsingRegionOfInterest`).
+        // The region only limits where Vision looks: the boxes it gives are
+        // already normalized to the whole image (« normalized to the
+        // dimensions of the processed image », `VNObservation.h`), measured on
+        // macOS 27 with revisions 1 to 3 (on a 16:9 still, the same face 0.244
+        // wide in the whole image, 0.242 inside a region 0.44 wide). Mapping
+        // them through the region again shrank the face to 0.106 then 0.046 of
+        // the image, two images in three, and the framing step asked to come
+        // closer forever.
         return (rectangles.results ?? []).map { face in
-            Face(face: face, box: Self.inImage(face.boundingBox, region: region))
+            Face(face: face, box: face.boundingBox)
         }
     }
 
@@ -255,11 +261,6 @@ final class ForkGlanceVision: @unchecked Sendable {
         let region = CGRect(x: box.midX - width / 2, y: box.midY - height / 2, width: width, height: height)
             .intersection(unit)
         return region.isNull || region.width <= 0 || region.height <= 0 ? unit : region
-    }
-
-    static func inImage(_ box: CGRect, region: CGRect) -> CGRect {
-        CGRect(x: region.minX + box.minX * region.width, y: region.minY + box.minY * region.height,
-               width: box.width * region.width, height: box.height * region.height)
     }
 
     private static func area(_ box: CGRect) -> CGFloat {

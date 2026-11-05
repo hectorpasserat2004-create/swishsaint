@@ -238,7 +238,8 @@ enum ForkGlanceCalibrationPlan {
         let frame = display.frame
         let verticals: [CGFloat], horizontals: [CGFloat]
         switch split {
-        case .whole: verticals = []; horizontals = []
+        // A window split's borders move with the windows: the grid alone (its 1/2 column) serves.
+        case .whole, .windows: verticals = []; horizontals = []
         case .columns2: verticals = [0.5]; horizontals = []
         case .columns3: verticals = [1.0 / 3, 2.0 / 3]; horizontals = []
         case .rows2: verticals = []; horizontals = [0.5]
@@ -854,5 +855,53 @@ enum ForkGlanceFraming {
             guard let since else { return false }
             return now - since >= ForkGlanceFraming.hold
         }
+    }
+}
+
+// MARK: - Preview geometry
+
+/// Where Vision's geometry (normalized in the camera's image, origin at the
+/// bottom left, the camera's own view) lands in a camera preview of `size`
+/// (points, origin at the top left), the image mirrored like a mirror and
+/// either filling the preview, cropped (`.resizeAspectFill`, the framing
+/// step), or fitting it, letterboxed (`.resizeAspect`, the diagnostics).
+///
+/// The Mac's cameras film 16:9 (`ForkGlanceCamera` keeps the full field)
+/// while both previews are 4:3, so the image's size matters: unknown (`nil`),
+/// the image is taken to fill the preview exactly. Computed here rather than
+/// by `AVCaptureVideoPreviewLayer.layerRectConverted(fromMetadataOutputRect:)`,
+/// whose rectangle has its origin at the top left while a layer-hosting
+/// view's layer has it at the bottom left: the frame came out upside down.
+struct ForkGlancePreviewGeometry: Sendable, Equatable {
+    var size: CGSize
+    var imageSize: CGSize?
+    var fills: Bool
+    var mirrored: Bool = true
+
+    /// The whole image in the preview: wider or taller than it when filling,
+    /// inside it when fitting.
+    var imageFrame: CGRect {
+        guard let imageSize, imageSize.width > 0, imageSize.height > 0, size.width > 0, size.height > 0 else {
+            return CGRect(origin: .zero, size: size)
+        }
+        let scaleX = size.width / imageSize.width
+        let scaleY = size.height / imageSize.height
+        let scale = fills ? max(scaleX, scaleY) : min(scaleX, scaleY)
+        let width = imageSize.width * scale
+        let height = imageSize.height * scale
+        return CGRect(x: (size.width - width) / 2, y: (size.height - height) / 2, width: width, height: height)
+    }
+
+    func point(_ point: CGPoint) -> CGPoint {
+        let unit = ForkGlanceSettingsRules.previewPoint(point, mirrored: mirrored)
+        let frame = imageFrame
+        return CGPoint(x: frame.minX + unit.x * frame.width, y: frame.minY + unit.y * frame.height)
+    }
+
+    func rect(_ rect: CGRect) -> CGRect {
+        let unit = ForkGlanceSettingsRules.previewRect(rect, mirrored: mirrored)
+        let frame = imageFrame
+        return CGRect(x: frame.minX + unit.minX * frame.width, y: frame.minY + unit.minY * frame.height,
+                      width: unit.width * frame.width, height: unit.height * frame.height)
     }
 }

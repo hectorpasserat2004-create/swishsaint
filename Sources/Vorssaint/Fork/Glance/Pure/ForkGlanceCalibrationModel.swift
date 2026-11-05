@@ -9,6 +9,14 @@ import Foundation
 // one row (its vector, the point's target); the vector is reduced by the
 // calibration's ranges, then one ridge regression per screen axis maps it to
 // global points. σ is the cross-validated error, per axis.
+//
+// The calibration is taken with a still head, so a component like the face's
+// size barely moves during it, then leaves by 3 to 13 of its deviations as
+// soon as the person shifts in their chair. Two guards keep such a sample on
+// the desk: each component's scale has a floor (`minimumScales`), so the
+// calibration's stillness is not mistaken for its range, and each reduced
+// value is bounded (`reducedBound`) before the regression, at the fit as at
+// the estimate.
 
 enum ForkGlanceCalibrationModel {
     /// « Tête + yeux » is kept when its cross-validated error is at least this
@@ -19,9 +27,26 @@ enum ForkGlanceCalibrationModel {
     /// σ never goes below this, in points: a perfect fit would otherwise make
     /// every margin infinite.
     static let minimumSigma = 2.0
-    /// A component that barely moves keeps a unit scale instead of blowing its
-    /// noise up (`ForkGlanceRange.scale` is never 0).
-    static let minimumScale = 1e-6
+    /// The smallest scale of each component (`ForkGlanceVectorLayout` order),
+    /// in its raw unit: roughly the spread a person sitting naturally shows
+    /// while looking around, larger than the still calibration's own. Below
+    /// it, a component's noise would be blown up into a signal.
+    static let minimumScales: [Double] = [
+        0.05,   // yaw, radians (≈ 3°)
+        0.05,   // pitch, radians
+        0.03,   // roll, radians
+        0.03,   // face center x, image share
+        0.03,   // face center y, image share
+        0.006,  // distance between the eyes, image share
+        0.04,   // left pupil x, share of the eye
+        0.04,   // left pupil y
+        0.04,   // right pupil x
+        0.04,   // right pupil y
+        0.05,   // eye opening, height over width
+    ]
+    /// A reduced value goes no further than this many scales from the
+    /// calibration's mean: past it, the model would extrapolate.
+    static let reducedBound = 3.0
     /// Two displays are stacked when one lies below the other over at least
     /// this share of the narrower one's width.
     static let stackedOverlap = 0.25
@@ -62,6 +87,23 @@ enum ForkGlanceCalibrationModel {
         let result = try fitted(points: kept, learned: learned, usesEyes: choice)
         return calibration(result, usesEyes: choice, points: kept, cameraID: cameraID,
                            layoutSignature: layoutSignature, date: date)
+    }
+
+    /// A calibration of an older version fitted again on the points it was
+    /// made from (no new calibration asked for): the same « yeux » choice,
+    /// camera, layout, date and validation scores, with the clicks learned
+    /// since, or without them when they no longer fit. The bias goes: it was
+    /// measured against the old model. Nil when the points cannot calibrate.
+    static func upgraded(_ old: ForkGlanceCalibration, points: [ForkGlanceCalibrationPoint],
+                         learned: [(ForkGlanceCalibrationPoint, Double)],
+                         layout: ForkGlanceDisplayLayout) -> ForkGlanceCalibration? {
+        func refit(_ learned: [(ForkGlanceCalibrationPoint, Double)]) -> ForkGlanceCalibration? {
+            try? fit(points: points, learned: learned, usesEyes: old.usesEyes, layout: layout,
+                     cameraID: old.cameraID, layoutSignature: old.layoutSignature, date: old.date)
+        }
+        guard var fitted = refit(learned) ?? (learned.isEmpty ? nil : refit([])) else { return nil }
+        fitted.zoneAccuracy = old.zoneAccuracy
+        return fitted
     }
 
     /// The point a sample looks at, the recenter bias included; nil without a
@@ -200,7 +242,7 @@ enum ForkGlanceCalibrationModel {
             weights.append(balanced[row])
         }
 
-        let reduced = inputs.map { row in row.indices.map { normalization[$0].reduce(row[$0]) } }
+        let reduced = inputs.map { row in row.indices.map { bounded(normalization[$0].reduce(row[$0])) } }
         let result = try ForkGlanceRegression.crossValidated(inputs: reduced, targets: [xs, ys], weights: weights,
                                                              groups: groups)
         let sigma = CGSize(width: max(result.residualSDs[0], minimumSigma),
@@ -208,17 +250,21 @@ enum ForkGlanceCalibrationModel {
         return Fitted(x: result.models[0], y: result.models[1], sigma: sigma, normalization: normalization)
     }
 
-    /// Center = mean, scale = standard deviation (`minimumScale` floor: 1).
+    /// Center = mean, scale = standard deviation, never under the
+    /// component's `minimumScales` floor.
     private static func ranges(of rows: [[Double]]) -> [ForkGlanceRange] {
         guard let width = rows.first?.count else { return [] }
         let count = Double(rows.count)
         return (0..<width).map { column in
             let mean = rows.reduce(0) { $0 + $1[column] } / count
             let variance = rows.reduce(0) { $0 + ($1[column] - mean) * ($1[column] - mean) } / count
-            let deviation = variance.squareRoot()
-            return ForkGlanceRange(center: mean, scale: deviation >= minimumScale ? deviation : 1)
+            let floor = column < minimumScales.count ? minimumScales[column] : 1e-6
+            return ForkGlanceRange(center: mean, scale: max(variance.squareRoot(), floor))
         }
     }
+
+    /// A reduced value within ±`reducedBound`.
+    private static func bounded(_ reduced: Double) -> Double { min(max(reduced, -reducedBound), reducedBound) }
 
     private static func calibration(_ fitted: Fitted, usesEyes: Bool, points: [ForkGlanceCalibrationPoint],
                                      cameraID: String, layoutSignature: String, date: Date) -> ForkGlanceCalibration {
@@ -236,7 +282,8 @@ enum ForkGlanceCalibrationModel {
     }
 
     /// The regression's point, without the bias; nil when the sample is short
-    /// of components or the result is not finite.
+    /// of components, the calibration's terms are not the model's (an older
+    /// version, refitted at load) or the result is not finite.
     private static func unbiasedPoint(_ sample: ForkGlanceSample,
                                       with calibration: ForkGlanceCalibration) -> (x: Double, y: Double)? {
         let width = calibration.normalization.count
@@ -246,7 +293,7 @@ enum ForkGlanceCalibrationModel {
         for index in 0..<width {
             let value = sample.vector[index]
             guard value.isFinite else { return nil }
-            reduced.append(calibration.normalization[index].reduce(value))
+            reduced.append(bounded(calibration.normalization[index].reduce(value)))
         }
         let terms = ForkGlanceRegression.expand(reduced)
         guard terms.count == calibration.coefficientsX.count, terms.count == calibration.coefficientsY.count else {

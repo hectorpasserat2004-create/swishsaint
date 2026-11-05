@@ -13,9 +13,16 @@ import SwiftUI
 /// feed it fake states and nothing starts.
 struct ForkGlanceSettingsView: View {
     @ObservedObject private var service = ForkGlanceService.shared
+    /// The windows are followed while the page shows (a window split's map).
+    @State private var windowSplitLease: ForkGlanceLease?
 
     var body: some View {
         ForkGlanceSettingsContent(state: ForkGlanceSettingsState(service), actions: .live)
+            .onAppear { windowSplitLease = windowSplitLease ?? service.windowSplitLease() }
+            .onDisappear {
+                windowSplitLease?.release()
+                windowSplitLease = nil
+            }
     }
 
     /// The « Dynamic Island » row (plan §11.6, §12.9): the island's settings,
@@ -44,6 +51,8 @@ struct ForkGlanceSettingsState {
     var cameraPermission: ForkGlanceCameraPermission
     var live: ForkGlanceLive?
     var zoneName: (String) -> String? = { _ in nil }
+    /// Display uuid → the split its windows draw now (a window split).
+    var windowSplits: [String: ForkGlanceSplit] = [:]
 
     init(phase: ForkGlancePhase, status: ForkGlanceStatusLine, layout: ForkGlanceDisplayLayout,
          profile: ForkGlanceProfile? = nil, profiles: [ForkGlanceProfile] = [], zones: [ForkGlanceZone] = [],
@@ -51,7 +60,7 @@ struct ForkGlanceSettingsState {
          recentSwitches: [ForkGlanceSwitchRecord] = [], driftSuggested: Bool = false, layoutMoved: Bool = false,
          cameraDevices: [ForkGlanceCameraDevice] = [], cameraID: String? = nil,
          cameraPermission: ForkGlanceCameraPermission = .granted, live: ForkGlanceLive? = nil,
-         zoneName: @escaping (String) -> String? = { _ in nil }) {
+         zoneName: @escaping (String) -> String? = { _ in nil }, windowSplits: [String: ForkGlanceSplit] = [:]) {
         self.phase = phase
         self.status = status
         self.layout = layout
@@ -68,6 +77,7 @@ struct ForkGlanceSettingsState {
         self.cameraPermission = cameraPermission
         self.live = live
         self.zoneName = zoneName
+        self.windowSplits = windowSplits
     }
 
     init(_ service: ForkGlanceService) {
@@ -77,7 +87,7 @@ struct ForkGlanceSettingsState {
                   driftSuggested: service.driftSuggested, layoutMoved: service.layoutMoved,
                   cameraDevices: service.cameraDevices, cameraID: service.cameraID,
                   cameraPermission: service.cameraPermission, live: service.live,
-                  zoneName: { service.zoneName($0) })
+                  zoneName: { service.zoneName($0) }, windowSplits: service.windowSplits)
     }
 }
 
@@ -471,7 +481,9 @@ struct ForkGlanceSettingsContent: View {
 
     private func layoutSection(_ text: ForkGlanceSettingsStrings, _ core: ForkGlanceStrings) -> some View {
         let splits = ForkGlanceSettingsRules.splits(profile: state.profile, layout: state.layout)
-        let zones = ForkGlanceSettingsRules.mapZones(mode: mode, layout: state.layout, splits: splits,
+        // A window split draws the zones its windows give now.
+        let zones = ForkGlanceSettingsRules.mapZones(mode: mode, layout: state.layout,
+                                                     splits: ForkGlanceZones.resolving(splits, with: state.windowSplits),
                                                      liveZones: state.zones)
         let watching = enabled && state.phase.isWatching
         let fit = ForkGlanceSettingsRules.fit(mode, layout: state.layout, calibration: state.profile?.calibration)
@@ -491,6 +503,12 @@ struct ForkGlanceSettingsContent: View {
                         Text(text.mapCaption)
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                        if splits.values.contains(.windows) {
+                            Label(core.splitFromWindowsCaption, systemImage: "macwindow")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                 }
                 .padding(.vertical, 4)

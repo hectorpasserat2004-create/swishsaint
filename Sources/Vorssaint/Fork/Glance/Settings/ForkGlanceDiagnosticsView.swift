@@ -14,13 +14,16 @@ struct ForkGlanceDiagnosticsActions {
     var makePreviewLayer: () -> AVCaptureVideoPreviewLayer?
     var recordTrace: (TimeInterval, @escaping (URL?) -> Void) -> Void
     var reportText: () -> String
+    /// The live journal's file, or its folder, in the Finder.
+    var revealJournal: () -> Void = {}
 
     static var live: ForkGlanceDiagnosticsActions {
         ForkGlanceDiagnosticsActions(
             liveLease: { ForkGlanceService.shared.liveLease() },
             makePreviewLayer: { ForkGlanceCamera.shared.makePreviewLayer() },
             recordTrace: { ForkGlanceService.shared.recordTrace(seconds: $0, completion: $1) },
-            reportText: { ForkGlanceService.shared.reportText() })
+            reportText: { ForkGlanceService.shared.reportText() },
+            revealJournal: { ForkGlanceService.shared.revealJournal() })
     }
 
     static let inert = ForkGlanceDiagnosticsActions(liveLease: { ForkGlanceLease {} }, makePreviewLayer: { nil },
@@ -50,9 +53,15 @@ struct ForkGlanceDiagnosticsView: View {
     @State private var recording = false
     @State private var traceResult: Bool?
     @State private var reportCopied = false
+    /// The camera's image size, read from the preview's layer: the 16:9 image
+    /// is letterboxed in the 4:3 panel and the landmarks must follow it.
+    @State private var previewImageSize: CGSize?
     /// The gaze dot over every display (plan §6.4): the service reads the
     /// key again as it changes and shows or hides the dot.
     @AppStorage(ForkDefaultsKey.glanceGazeDot) private var gazeDot = false
+    /// The live journal (`ForkGlanceJournal`): the service starts and stops
+    /// it as the key changes, and turns the key off after 30 min.
+    @AppStorage(ForkDefaultsKey.glanceLiveJournal) private var liveJournal = false
 
     init(live: ForkGlanceLive?, phase: ForkGlancePhase, layout: ForkGlanceDisplayLayout, zones: [ForkGlanceZone],
          currentZone: String?, lastSwitch: Date?, text: ForkGlanceSettingsStrings, core: ForkGlanceStrings,
@@ -91,6 +100,7 @@ struct ForkGlanceDiagnosticsView: View {
                 .controlSize(.small)
                 .font(.caption)
             buttons
+            journal
         }
         .padding(.vertical, 4)
         .onAppear { lease = actions.liveLease() }
@@ -112,14 +122,15 @@ struct ForkGlanceDiagnosticsView: View {
         ZStack {
             Color.black.opacity(0.85)
             if cameraRunning {
-                ForkGlanceCameraPreview(makeLayer: actions.makePreviewLayer, running: cameraRunning)
+                ForkGlanceCameraPreview(makeLayer: actions.makePreviewLayer, running: cameraRunning,
+                                        imageSize: { if previewImageSize != $0 { previewImageSize = $0 } })
             } else {
                 Label(text.previewUnavailable, systemImage: "video.slash")
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.6))
             }
             if let observation = live?.observation {
-                ForkGlanceLandmarks(observation: observation)
+                ForkGlanceLandmarks(observation: observation, imageSize: previewImageSize)
             }
         }
         .aspectRatio(4.0 / 3.0, contentMode: .fit)
@@ -264,22 +275,62 @@ struct ForkGlanceDiagnosticsView: View {
     }
 }
 
+// MARK: - Live journal
+
+extension ForkGlanceDiagnosticsView {
+    /// `~/Library/Application Support/<bundle id>/Glance/journal`.
+    private var journalFolder: String? {
+        ForkGlanceService.journalFolder.map { ($0.path as NSString).abbreviatingWithTildeInPath }
+    }
+
+    /// The switch, what it writes and where, and the way to the file. It
+    /// only turns on while the feature runs.
+    private var journal: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Toggle(text.liveJournal, isOn: $liveJournal)
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .font(.caption)
+                .disabled(phase == .off && !liveJournal)
+            Text(text.liveJournalCaption)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                if let journalFolder {
+                    Text(journalFolder)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .textSelection(.enabled)
+                }
+                Spacer(minLength: 0)
+                Button {
+                    actions.revealJournal()
+                } label: {
+                    Label(text.showJournalInFinder, systemImage: "folder")
+                }
+                .controlSize(.small)
+            }
+        }
+        .padding(.top, 4)
+    }
+}
+
 // MARK: - Landmarks
 
 /// The face box, the eyes' outlines and the pupils over the mirrored
-/// preview, in the image's 4:3 frame.
+/// preview, where the letterboxed image really lies.
 private struct ForkGlanceLandmarks: View {
     let observation: ForkGlanceObservation
+    let imageSize: CGSize?
 
     var body: some View {
         Canvas { context, size in
-            func place(_ point: CGPoint) -> CGPoint {
-                let unit = ForkGlanceSettingsRules.previewPoint(point, mirrored: true)
-                return CGPoint(x: unit.x * size.width, y: unit.y * size.height)
-            }
-            let box = ForkGlanceSettingsRules.previewRect(observation.faceBox, mirrored: true)
-            let frame = CGRect(x: box.minX * size.width, y: box.minY * size.height,
-                               width: box.width * size.width, height: box.height * size.height)
+            let geometry = ForkGlancePreviewGeometry(size: size, imageSize: imageSize, fills: false)
+            let place = geometry.point
+            let frame = geometry.rect(observation.faceBox)
             context.stroke(Path(roundedRect: frame, cornerRadius: 4), with: .color(.yellow), lineWidth: 1.5)
             for eye in [observation.leftEye, observation.rightEye] where eye.count > 1 {
                 var path = Path()
@@ -304,6 +355,9 @@ private struct ForkGlanceLandmarks: View {
 private struct ForkGlanceCameraPreview: NSViewRepresentable {
     let makeLayer: () -> AVCaptureVideoPreviewLayer?
     let running: Bool
+    /// The installed layer's image size, told after each update (it changes
+    /// with the camera).
+    let imageSize: (CGSize?) -> Void
 
     final class Host: NSView {
         var preview: AVCaptureVideoPreviewLayer?
@@ -342,6 +396,10 @@ private struct ForkGlanceCameraPreview: NSViewRepresentable {
             host.install(nil)
         }
         host.wasRunning = running
+        // Told once this update is over: SwiftUI's state cannot change during one.
+        let size = host.preview.flatMap(ForkGlanceFramingPreview.imageSize)
+        let report = imageSize
+        DispatchQueue.main.async { report(size) }
     }
 
     static func dismantleNSView(_ host: Host, coordinator: ()) {

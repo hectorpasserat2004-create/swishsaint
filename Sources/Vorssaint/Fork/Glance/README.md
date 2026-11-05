@@ -185,7 +185,8 @@ Réactif 15 / 10 / 5 / 6 ; Économe 8 / 4 / 2 / 3. « En mouvement » au-delà d
 | λ candidats, points minimum | 1e-3…1, 6 | `ForkGlanceRegression.defaultLambdas`, `.minimumPoints` |
 | apprentissage : capacité, demi-vie, réajustement, confiance, âge, dégradation, fenêtre d'accord | 400, 3 j, 25, 0,7, 250 ms, 15 %, 60 | `ForkGlanceLearning.*` |
 | appartenance d'une fenêtre à une zone | 40 % de la fenêtre ou 50 % de la zone | `ForkGlanceTargeting.windowShare`, `.zoneShare` |
-| découpage par défaut en 2 colonnes | rapport ≥ 2,1 | `ForkGlanceZones.wideRatio` |
+| découpage de repli en 2 colonnes (le défaut d'un nouveau profil est « Selon mes fenêtres ») | rapport ≥ 2,1 | `ForkGlanceZones.wideRatio` |
+| « Selon mes fenêtres » : recouvrement d'une cellule, gain d'un découpage plus fin, stabilité | 0,78, 3 % de l'aire utile, 1 s | `ForkGlanceZones`, `ForkGlanceWindowSplitWatch.settle` |
 | mode Fenêtres « adapté » | σ ≤ 8 % de la largeur | `ForkGlanceSettingsRules.windowsSigmaShare` |
 | vérification du focus, échecs avant mise de côté, durée | 150 ms, 3, 5 min | `ForkGlanceFocuser.*` |
 | calibrage : trajet, stabilisation, collecte, échantillons, lacet max | 0,35 s, 0,45 s, 0,9 s, 8, 2,5° | `ForkGlanceCalibrationPlan.*` |
@@ -222,6 +223,32 @@ phase, calibrage (σ, score, biais), apprentissage, réglages, énergie, coût.
   baisser les retours rapides sans faire chuter les bascules. Avant de committer une trace : vérifier qu'elle ne
   contient rien d'autre que des nombres, des identifiants d'écrans et de zones, des noms d'écrans et des identifiants de
   bundle, et garder les plus parlantes (la taille d'un fichier de 60 s n'a pas encore été mesurée).
+
+### Journal en direct
+
+Pour régler la feature en direct : la personne travaille, un terminal lit le fichier (`tail -f`), sans caméra ni
+interface pilotée. Diagnostic › « Journal en direct pour l'analyse » (`fork.glance.liveJournal`, état machine dans
+`machineKeys`, jamais sauvegardé) ; ne s'allume que feature en marche, s'éteint seul après 30 min (horloge murale),
+quand la feature s'arrête ou l'app quitte, et n'est jamais repris au lancement. « Afficher dans le Finder » montre le
+fichier courant (sinon le plus récent, sinon le dossier).
+
+- **Fichiers** : `PrivateFileStore.containerURL/Glance/journal/glance-live-AAAA-MM-JJ-HHmmss.jsonl` (heure locale,
+  dossier 0700, fichiers 0600), JSON Lines (un objet par ligne, clés triées, dates ISO 8601, non-finis écrits `"inf"`).
+  50 Mo au plus par fichier, puis un nouveau qui recommence par les lignes `start`, puis le dernier `layout` et le
+  dernier `zones` ; on garde les 5 derniers fichiers. Tout passe sur une file série utilitaire (encodage, écriture,
+  rotation, ménage) ; le fil principal ne touche jamais le disque.
+- **Lignes** (`Pure/ForkGlanceJournal.swift`) : chacune a `t` (secondes depuis le début, à la ms) et `kind` :
+  `start` (heure murale `wall`, version, macOS, `hw.model`, réglages résolus, disposition, signature, zones, zone et
+  phase courantes, profil : titre, calibrage résumé — date, σ, erreur √(σx²+σy²), biais, yeux, précision par zone —,
+  clics appris et accord ; caméra : `modelID`, type, taille du format actif, cadence demandée et mesurée), `frame`
+  (à chaque image : les champs d'une image de trace `sample`, `gaze`, `input`, `guards`, plus `face` — boîte, angles,
+  pupilles trouvées, visages — et `phase`), `click` (point, zone, où était le regard, app au premier plan), `switch`
+  (zone, zone quittée, réussie ou non, app ciblée), `phase`, `layout`, `zones`, `calibration` (calibrage, validation,
+  recentrage, recalage rapide, réajustement par les clics : avant/après, gardé ou non, erreur RMS sur les points de
+  calibrage pour un réajustement), `notice`, `cameraFps` (nouveau palier de cadence), `stop` (raison).
+- **Confidentialité** : des mesures seulement. Ni image, ni titre de fenêtre, ni touche, ni nom de caméra ; il contient
+  en revanche des identifiants de bundle (clics, bascules, listes d'apps des réglages). Éteint, chaque crochet coûte un
+  test de booléen : rien n'est construit ni encodé.
 
 ## 7. Coutures
 
