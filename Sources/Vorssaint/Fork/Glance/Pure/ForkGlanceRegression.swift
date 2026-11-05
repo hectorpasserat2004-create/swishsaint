@@ -4,10 +4,14 @@
 import Foundation
 
 // Glance Focus: the regression under the calibration (plan §8.3). A ridge
-// regression over the degree-2 terms of the reduced vector, one per screen
-// axis, with λ picked by cross-validation. Pure and small: the calibration
-// has a few hundred rows and at most 78 terms, so plain normal equations and
-// a Cholesky solve are enough, and every case replays in tests.
+// regression, one per screen axis, with λ picked by cross-validation, over
+// every component of the reduced vector plus the squares and the product of
+// the first two (yaw and pitch). Degree 2 on every component (78 terms with
+// the eyes) learned the calibration's still head and extrapolated thousands
+// of points away as soon as the head moved; the head's turn is the one curve
+// worth bending. Pure and small: the calibration has a few hundred rows and
+// at most 15 terms, so plain normal equations and a Cholesky solve are
+// enough, and every case replays in tests.
 
 enum ForkGlanceRegressionError: Error, Equatable {
     /// Fewer than `ForkGlanceRegression.minimumPoints` rows (or groups, for
@@ -41,23 +45,30 @@ enum ForkGlanceRegression {
     static let minimumPoints = 6
     /// The λ ladder of the cross-validation (plan §8.3).
     static let defaultLambdas: [Double] = [1e-3, 3e-3, 1e-2, 3e-2, 0.1, 0.3, 1]
+    /// Only the first this many components get degree-2 terms: yaw and
+    /// pitch (`ForkGlanceVectorLayout.yaw`, `.pitch`).
+    static let curvedCount = 2
 
-    /// The degree-2 terms of a reduced vector: 1, each xᵢ, then each xᵢ·xⱼ
-    /// with i ≤ j, in that order. 6 components give 28 terms, 11 give 78.
+    /// The terms of a reduced vector: 1, each xᵢ, then each xᵢ·xⱼ with
+    /// i ≤ j < `curvedCount`, in that order: yaw², yaw·pitch, pitch². 6
+    /// components give 10 terms, 11 give 15.
     static func expand(_ reduced: [Double]) -> [Double] {
-        let count = reduced.count
+        let count = reduced.count, curved = min(count, curvedCount)
         var terms = [Double]()
-        terms.reserveCapacity(1 + count + count * (count + 1) / 2)
+        terms.reserveCapacity(termCount(count))
         terms.append(1)
         terms.append(contentsOf: reduced)
-        for i in 0..<count {
-            for j in i..<count { terms.append(reduced[i] * reduced[j]) }
+        for i in 0..<curved {
+            for j in i..<curved { terms.append(reduced[i] * reduced[j]) }
         }
         return terms
     }
 
     /// The number of terms `expand` makes from `count` components.
-    static func termCount(_ count: Int) -> Int { 1 + count + count * (count + 1) / 2 }
+    static func termCount(_ count: Int) -> Int {
+        let curved = min(max(count, 0), curvedCount)
+        return 1 + count + curved * (curved + 1) / 2
+    }
 
     /// Minimizes the weighted mean squared error plus `lambda` times the
     /// squared coefficients, the intercept excepted. Dividing the error by the

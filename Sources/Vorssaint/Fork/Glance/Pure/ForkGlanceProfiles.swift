@@ -19,6 +19,17 @@ enum ForkGlanceProfiles {
     /// The version `encode` writes. `decode` reads any.
     static let fileVersion = 1
 
+    /// The oldest calibration version still read: the service fits it again
+    /// on its points at load (`calibrationOutdated`), no new calibration asked.
+    static let oldestCalibrationVersion = 1
+
+    /// The profile's calibration was made by an older model: its terms no
+    /// longer match, it gives no estimate until fitted again.
+    static func calibrationOutdated(_ profile: ForkGlanceProfile) -> Bool {
+        guard let version = profile.calibration?.version else { return false }
+        return version < ForkGlanceCalibration.currentVersion
+    }
+
     // MARK: - Signature and title
 
     /// The camera's `uniqueID`, then each display (sorted by uuid, so the
@@ -158,9 +169,11 @@ enum ForkGlanceProfiles {
 
     /// Whatever can be read: the current file, a bare array (an early
     /// format), a profile with fields missing or of another version. A
-    /// profile without an id or a display is dropped, a calibration of
-    /// another version too (the model could not read it), an unknown split
-    /// is forgotten. Unreadable bytes give an empty list, never a failure.
+    /// profile without an id or a display is dropped, a calibration of a
+    /// newer version or older than `oldestCalibrationVersion` too (the model
+    /// could not read it), an unknown split is forgotten. An older readable
+    /// calibration is kept for the service to fit again. Unreadable bytes
+    /// give an empty list, never a failure.
     static func decode(_ data: Data) -> [ForkGlanceProfile] {
         let decoder = JSONDecoder()
         decoder.nonConformingFloatDecodingStrategy = .convertFromString(positiveInfinity: "inf",
@@ -211,7 +224,10 @@ enum ForkGlanceProfiles {
                 displays: displays, lidClosed: (try? layoutContainer.decode(Bool.self, forKey: .lidClosed)) ?? false)
             let rawSplits = (try? container.decode([String: String].self, forKey: .splits)) ?? [:]
             var calibration = try? container.decode(ForkGlanceCalibration.self, forKey: .calibration)
-            if calibration?.version != ForkGlanceCalibration.currentVersion { calibration = nil }
+            if let version = calibration?.version,
+               !(ForkGlanceProfiles.oldestCalibrationVersion...ForkGlanceCalibration.currentVersion).contains(version) {
+                calibration = nil
+            }
             profile = ForkGlanceProfile(
                 id: id,
                 title: (try? container.decode(String.self, forKey: .title)) ?? ForkGlanceProfiles.title(for: layout),

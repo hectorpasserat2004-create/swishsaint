@@ -100,11 +100,11 @@ enum ForkGlanceSettingsTests {
 
     private static func mapZones(_ suite: TestSuite) {
         let defaults = ForkGlanceSettingsRules.splits(profile: nil, layout: setup)
-        suite.expect(defaults == ["LG": .columns2, "BUILTIN": .whole],
-                     "without a profile the LG is cut in two columns and the MacBook stays whole")
+        suite.expect(defaults == ["LG": .windows, "BUILTIN": .windows],
+                     "without a profile each display follows its windows")
         let edited = ForkGlanceSettingsRules.splits(profile: profile("p", used: 0, splits: ["BUILTIN": .rows2, "GONE": .grid2x2]),
                                                     layout: setup)
-        suite.expect(edited == ["LG": .columns2, "BUILTIN": .rows2],
+        suite.expect(edited == ["LG": .windows, "BUILTIN": .rows2],
                      "the profile's splits win, a display that is gone is not listed")
 
         let zones = ForkGlanceSettingsRules.mapZones(mode: .zones, layout: setup, splits: defaults, liveZones: [])

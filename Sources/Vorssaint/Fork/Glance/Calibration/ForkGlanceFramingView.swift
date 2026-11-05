@@ -3,6 +3,7 @@
 
 import AVFoundation
 import AppKit
+import CoreMedia
 import SwiftUI
 
 /// The framing step (plan §8.4, step 3; also « Vérifier le cadrage… » on its
@@ -58,11 +59,16 @@ struct ForkGlanceFramingView: View {
         ZStack {
             Color.black
             if let layer = session.previewLayer {
-                ForkGlanceFramingPreview(previewLayer: layer, observation: session.observation)
+                ForkGlanceFramingPreview(previewLayer: layer)
                     .id(ObjectIdentifier(layer))
+                if let box = Self.mirroredBox(session.observation, in: size,
+                                              imageSize: ForkGlanceFramingPreview.imageSize(of: layer),
+                                              mirrored: layer.connection?.isVideoMirrored ?? true) {
+                    faceFrame(box)
+                }
             } else if session.receiving {
                 // No live image to draw on (the renders): the frame alone, mirrored.
-                if let box = Self.mirroredBox(session.observation, in: size) {
+                if let box = Self.mirroredBox(session.observation, in: size, imageSize: nil) {
                     Image(systemName: "person.fill")
                         .resizable()
                         .scaledToFit()
@@ -95,11 +101,13 @@ struct ForkGlanceFramingView: View {
     }
 
     /// Vision's box (normalized, origin at the bottom left, the camera's own
-    /// view) in a mirrored preview of `size` filled by a 4:3 image.
-    static func mirroredBox(_ observation: ForkGlanceObservation?, in size: CGSize) -> CGRect? {
+    /// view) in the preview of `size`, mirrored like the layer, which an
+    /// image of `imageSize` fills (cropped); unknown, the image is taken to
+    /// fill it exactly.
+    static func mirroredBox(_ observation: ForkGlanceObservation?, in size: CGSize, imageSize: CGSize?,
+                            mirrored: Bool = true) -> CGRect? {
         guard let box = observation?.faceBox, !box.isEmpty else { return nil }
-        return CGRect(x: (1 - box.maxX) * size.width, y: (1 - box.maxY) * size.height,
-                      width: box.width * size.width, height: box.height * size.height)
+        return ForkGlancePreviewGeometry(size: size, imageSize: imageSize, fills: true, mirrored: mirrored).rect(box)
     }
 
     private func gaugeRow(_ gauge: ForkGlanceFraming.Gauge) -> some View {
@@ -130,15 +138,23 @@ struct ForkGlanceFramingView: View {
     }
 }
 
-/// The running camera's preview, mirrored, with the face's frame converted by
-/// the layer itself (its gravity and mirroring included).
+/// The running camera's preview, mirrored, filling its frame (cropped). The
+/// face's frame is drawn over it in SwiftUI (`ForkGlancePreviewGeometry`),
+/// from the image's size this layer's camera films.
 struct ForkGlanceFramingPreview: NSViewRepresentable {
     let previewLayer: AVCaptureVideoPreviewLayer
-    let observation: ForkGlanceObservation?
+
+    /// The size of the images the layer's camera films; nil before it is known.
+    static func imageSize(of layer: AVCaptureVideoPreviewLayer) -> CGSize? {
+        guard let format = layer.connection?.inputPorts.first(where: { $0.mediaType == .video })?.formatDescription
+        else { return nil }
+        let dimensions = CMVideoFormatDescriptionGetDimensions(format)
+        guard dimensions.width > 0, dimensions.height > 0 else { return nil }
+        return CGSize(width: CGFloat(dimensions.width), height: CGFloat(dimensions.height))
+    }
 
     final class LayerHostView: NSView {
         let previewLayer: AVCaptureVideoPreviewLayer
-        private let frameLayer = CAShapeLayer()
 
         init(previewLayer: AVCaptureVideoPreviewLayer) {
             self.previewLayer = previewLayer
@@ -146,10 +162,6 @@ struct ForkGlanceFramingPreview: NSViewRepresentable {
             previewLayer.videoGravity = .resizeAspectFill
             layer = previewLayer
             wantsLayer = true
-            frameLayer.fillColor = nil
-            frameLayer.lineWidth = 2
-            frameLayer.strokeColor = NSColor.systemYellow.cgColor
-            previewLayer.addSublayer(frameLayer)
             mirror()
         }
 
@@ -162,34 +174,13 @@ struct ForkGlanceFramingPreview: NSViewRepresentable {
             if connection.automaticallyAdjustsVideoMirroring { connection.automaticallyAdjustsVideoMirroring = false }
             if !connection.isVideoMirrored { connection.isVideoMirrored = true }
         }
-
-        override func layout() {
-            super.layout()
-            frameLayer.frame = previewLayer.bounds
-        }
-
-        func update(_ observation: ForkGlanceObservation?) {
-            CATransaction.begin()
-            CATransaction.setDisableActions(true)
-            defer { CATransaction.commit() }
-            guard let box = observation?.faceBox, !box.isEmpty else {
-                frameLayer.path = nil
-                return
-            }
-            // Vision's origin is at the bottom left, the metadata space's at the top left.
-            let metadata = CGRect(x: box.minX, y: 1 - box.maxY, width: box.width, height: box.height)
-            let rect = previewLayer.layerRectConverted(fromMetadataOutputRect: metadata)
-            frameLayer.path = CGPath(roundedRect: rect, cornerWidth: 8, cornerHeight: 8, transform: nil)
-        }
     }
 
     func makeNSView(context: Context) -> LayerHostView {
         LayerHostView(previewLayer: previewLayer)
     }
 
-    func updateNSView(_ view: LayerHostView, context: Context) {
-        view.update(observation)
-    }
+    func updateNSView(_ view: LayerHostView, context: Context) {}
 
     static func dismantleNSView(_ view: LayerHostView, coordinator: ()) {
         view.previewLayer.session = nil

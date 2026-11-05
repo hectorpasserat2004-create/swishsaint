@@ -184,7 +184,8 @@ enum ForkGlanceProfilesTests {
         let profile = ForkGlanceProfiles.newProfile(layout: desk, cameraID: camera, now: now)
         suite.expect(profile.id == ForkGlanceProfiles.signature(layout: desk, cameraID: camera), "a new profile's id is the signature")
         suite.expect(profile.title == "LG HDR WQHD + MacBook", "it carries the layout's title")
-        suite.expect(profile.splits == ["LG-UUID": .columns2, "BUILTIN-UUID": .whole], "it starts with the default splits")
+        suite.expect(profile.splits == ["LG-UUID": .windows, "BUILTIN-UUID": .windows],
+                     "it starts with the default splits: each display follows its windows")
         suite.expect(profile.calibration == nil && profile.learning.pairs.isEmpty, "it starts uncalibrated, with nothing learned")
         suite.expect(profile.lastUsed == now && profile.layout == desk, "it keeps its layout and when it was made")
     }
@@ -287,7 +288,29 @@ enum ForkGlanceProfilesTests {
         }
         let recalibrate = ForkGlanceProfiles.decode(data([futureCalibration])).first
         suite.expect(recalibrate?.id == good.id && recalibrate?.calibration == nil && recalibrate?.learning == good.learning,
-                     "a calibration of another version is dropped, the profile and what it learned kept")
+                     "a calibration of a newer version is dropped, the profile and what it learned kept")
+        suite.expect(!ForkGlanceProfiles.calibrationOutdated(good)
+                        && !ForkGlanceProfiles.calibrationOutdated(profile("D2", lastUsed: 0)),
+                     "a current calibration, or none, has nothing to upgrade")
+
+        var versionOne = list[0]
+        if var calibration = versionOne["calibration"] as? [String: Any] {
+            calibration["version"] = 1
+            versionOne["calibration"] = calibration
+        }
+        let upgrade = ForkGlanceProfiles.decode(data([versionOne])).first
+        suite.expect(upgrade?.calibration?.version == 1 && upgrade?.calibration?.coefficientsX == good.calibration?.coefficientsX
+                        && upgrade?.learning == good.learning,
+                     "a version-1 calibration is kept as it was, to be fitted again on its points")
+        suite.expect(upgrade.map(ForkGlanceProfiles.calibrationOutdated) == true,
+                     "and it is the one marked for the upgrade")
+        var versionZero = list[0]
+        if var calibration = versionZero["calibration"] as? [String: Any] {
+            calibration["version"] = 0
+            versionZero["calibration"] = calibration
+        }
+        suite.expect(ForkGlanceProfiles.decode(data([versionZero])).first?.calibration == nil,
+                     "a calibration older than any model still read is dropped")
 
         var badCalibration = list[0]
         badCalibration["calibration"] = ["version": 1, "coefficientsX": "garbage"]
