@@ -2551,6 +2551,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
     }
 
     private func showSupportUpdateIntro(isReview: Bool = false) {
+        if ForkSupportPopup.skip(isReview: isReview, markSeen: markSupportUpdateIntroSeen, next: { [weak self] in self?.presentUpdateIntros() }) { return } // FORK(no-support-popup)
         guard !isTerminating, isReview || !AppInfo.isBeta else { return }
         closePopover()
         if let window = supportIntroWindow {
