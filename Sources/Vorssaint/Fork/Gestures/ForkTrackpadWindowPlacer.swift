@@ -93,7 +93,7 @@ final class ForkTrackpadWindowPlacer {
             // Like ⌘Q: the app may ask to save, or refuse.
             return app.terminate()
         case .emptyTrash, .showAppWindows, .restoreMinimizedWindow, .closeMinimizedWindow,
-             .showNextWindow, .showPreviousWindow:
+             .showNextWindow, .showPreviousWindow, .openAppLeftHalf, .openAppRightHalf, .minimizeApp:
             // Dock gestures: the gesture service carries them out itself,
             // and never hands them a window.
             return false
@@ -205,6 +205,30 @@ final class ForkTrackpadWindowPlacer {
                                    on: target.window, windowID: target.key.windowID)
             if applied { recordCycle(effective, target: target) }
             return applied
+        }
+    }
+
+    /// Moves a minimized window to where `action`'s half would put it, so it
+    /// unminimizes straight into place; `apply` settles it once on screen.
+    func preplace(_ action: ForkTrackpadGestureAction, minimized window: AXUIElement) {
+        guard let layoutAction = action.layoutAction,
+              let current = frame(of: window),
+              let screen = bestScreen(for: current)
+        else { return }
+        // Back from the Dock it is a fresh placement, never a repeat stepping
+        // the cycle on to the next size.
+        if let windowID = AXWindowResolver.windowID(for: window) {
+            cycleMemory = cycleMemory.filter { $0.key.windowID != windowID }
+        }
+        let rect = placementRect(for: layoutAction, current: current, visibleFrame: screen.visibleFrame).integral
+        let target = axFrame(fromAppKit: rect)
+        var origin = target.origin
+        var size = target.size
+        if let value = AXValueCreate(.cgPoint, &origin) {
+            AXUIElementSetAttributeValue(window, kAXPositionAttribute as CFString, value)
+        }
+        if let value = AXValueCreate(.cgSize, &size) {
+            AXUIElementSetAttributeValue(window, kAXSizeAttribute as CFString, value)
         }
     }
 

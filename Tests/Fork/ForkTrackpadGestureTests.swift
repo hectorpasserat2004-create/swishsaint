@@ -232,8 +232,8 @@ enum ForkTrackpadGestureTests {
                  "a diagonal overrides whatever came before")
 
         suite.expect(ForkTrackpadGestureSequence.resolve(swipes: [.up, .right, .down], on: .dockApp) == nil
-                        && ForkTrackpadGestureSequence.resolve(swipes: [.upRight], on: .dockApp) == nil,
-                     "swipes do nothing on a Dock icon")
+                        && ForkTrackpadGestureSequence.resolve(swipes: [.upRight], on: .dockApp) == .openAppRightHalf,
+                     "on a Dock icon, only its own swipes mean something")
         suite.expect(ForkTrackpadGestureSequence.resolve(pinches: [.in, .in]) == .quitWindowApp
                         && ForkTrackpadGestureSequence.resolve(pinches: [.in, .in], on: .dockApp) == nil
                         && ForkTrackpadGestureSequence.resolve(pinches: [.out, .out]) == nil
@@ -307,6 +307,7 @@ enum ForkTrackpadGestureTests {
             .topLeftSixth: .topLeftSixth, .topRightSixth: .topRightSixth,
             .bottomLeftSixth: .bottomLeftSixth, .bottomRightSixth: .bottomRightSixth,
             .topCenterSixth: .topCenterSixth, .bottomCenterSixth: .bottomCenterSixth,
+            .openAppLeftHalf: .leftHalf, .openAppRightHalf: .rightHalf,
         ]
         for action in Action.allCases {
             suite.expect(action.layoutAction == placements[action],
@@ -869,6 +870,42 @@ enum ForkTrackpadGestureTests {
         upUp.wait(0.2)
         suite.expect(upUp.commits.isEmpty && Set(upUp.dispositions) == [.pass],
                      "a sequence a Dock icon has no action for does nothing and is left to the Dock")
+
+        var upLeft = Driver(suite, blocks: false)
+        upLeft.onTarget = .dockApp
+        upLeft.scroll(.began)
+        for _ in 0..<10 { upLeft.move(dx: 2, dy: -15) }
+        for _ in 0..<5 { upLeft.move(dx: -8, dy: -1) }
+        let previewedLeft = upLeft.lastPreview == .some(.action(.openAppLeftHalf))
+        upLeft.scroll(.ended)
+        upLeft.momentum()
+        upLeft.wait(0.2)
+        suite.expect(previewedLeft && upLeft.commits == [.openAppLeftHalf],
+                     "↑ then ← in one movement on a Dock icon sends the app's window to the left half")
+        var upRight = Driver(suite, blocks: false)
+        upRight.onTarget = .dockFinder
+        upRight.scroll(.began)
+        for _ in 0..<10 { upRight.move(dy: -15) }
+        for _ in 0..<5 { upRight.move(dx: 8) }
+        upRight.scroll(.ended)
+        upRight.momentum()
+        upRight.wait(0.2)
+        suite.expect(upRight.commits == [.openAppRightHalf], "↑ then → sends it to the right half")
+        var down = Driver(suite, blocks: false)
+        down.onTarget = .dockApp
+        down.swipe(dy: 40)
+        down.momentum()
+        down.wait(0.2)
+        suite.expect(down.commits == [.minimizeApp], "swiping down on a Dock icon minimizes the app's windows")
+        var drift = Driver(suite, blocks: false)
+        drift.onTarget = .dockApp
+        drift.scroll(.began)
+        for _ in 0..<20 { drift.move(dx: -4, dy: -15) }
+        drift.scroll(.ended)
+        drift.momentum()
+        drift.wait(0.2)
+        suite.expect(drift.commits == [.showAppWindows],
+                     "the sideways drift of a long ↑ on a Dock icon only brings the windows back")
         var trash = Driver(suite, blocks: true)
         trash.onTarget = .dockTrash
         trash.swipe(dy: 40)
@@ -1537,7 +1574,7 @@ enum ForkTrackpadGestureTests {
                         && !Action.showAppWindows.isWindowAction && !Action.restoreMinimizedWindow.isWindowAction
                         && !Action.closeMinimizedWindow.isWindowAction,
                      "the Dock's own gestures never reach a window")
-        suite.expect(Action.allCases.filter { !$0.isWindowAction }.count == 7
+        suite.expect(Action.allCases.filter { !$0.isWindowAction }.count == 10
                         && [Action.leftHalf, .minimize, .centerReduced, .minimizeAllWindows, .marginMaximize,
                             .moveToPreviousDisplay, .moveToNextDisplay, .restorePlacement]
                             .allSatisfy(\.isWindowAction),
@@ -2415,13 +2452,17 @@ enum ForkTrackpadGestureTests {
         typealias Sequence = ForkTrackpadGestureSequence
         suite.expect(Sequence.resolve(swipes: [.up], on: .dockApp) == .showAppWindows
                         && Sequence.resolve(swipes: [.up], on: .dockFinder) == .showAppWindows
-                        && Sequence.resolve(swipes: [.down], on: .dockApp) == nil
+                        && Sequence.resolve(swipes: [.down], on: .dockApp) == .minimizeApp
+                        && Sequence.resolve(swipes: [.down], on: .dockFinder) == .minimizeApp
+                        && Sequence.resolve(swipes: [.down, .down], on: .dockApp) == nil
                         && Sequence.resolve(swipes: [.up, .up], on: .dockFinder) == nil
-                        && Sequence.resolve(swipes: [.upLeft], on: .dockApp) == nil
+                        && Sequence.resolve(swipes: [.upLeft], on: .dockApp) == .openAppLeftHalf
+                        && Sequence.resolve(swipes: [.up, .right], on: .dockFinder) == .openAppRightHalf
                         && Sequence.resolve(swipes: [.up], on: .dockTrash) == nil
                         && Sequence.accepts(.swipe, on: .dockApp) && Sequence.accepts(.swipe, on: .dockFinder)
                         && !Sequence.accepts(.swipe, on: .dockFinder,
-                                             disabled: [.showAppWindows, .showNextWindow, .showPreviousWindow])
+                                             disabled: [.showAppWindows, .showNextWindow, .showPreviousWindow,
+                                                        .openAppLeftHalf, .openAppRightHalf, .minimizeApp])
                         && Sequence.accepts(.swipe, on: .dockFinder, disabled: [.showAppWindows])
                         && !Sequence.accepts(.swipe, on: .dockTrash),
                      "swiping up on a running app's icon, Finder's included, brings its windows back")

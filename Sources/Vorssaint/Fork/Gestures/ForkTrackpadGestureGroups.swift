@@ -119,9 +119,13 @@ enum ForkTrackpadGestureTitle {
         case .showAppWindows: return text.actionShowAppWindows
         case .showNextWindow: return text.actionShowNextWindow
         case .showPreviousWindow: return text.actionShowPreviousWindow
+        // Both names already exist in every language: windows back, then the half.
+        case .openAppLeftHalf, .openAppRightHalf:
+            return "\(text.actionShowAppWindows) · \(action.layoutAction?.title(layoutText) ?? action.rawValue)"
         case .restoreMinimizedWindow: return text.actionRestoreMinimizedWindow
         case .closeMinimizedWindow: return text.actionCloseMinimizedWindow
         case .minimizeAllWindows: return text.actionMinimizeAllWindows
+        case .minimizeApp: return text.actionMinimizeApp
         case .restorePlacement: return text.actionRestorePlacement
         case .topLeftTwoSixths: return text.actionTopLeftTwoSixths
         case .topRightTwoSixths: return text.actionTopRightTwoSixths

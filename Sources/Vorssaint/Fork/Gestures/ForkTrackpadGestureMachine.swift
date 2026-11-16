@@ -173,7 +173,21 @@ struct ForkTrackpadGestureMachine {
         /// second stop on the horizontal for two thirds, and sixths where
         /// it meets a vertical half.
         var grid: GridTracking?
+        /// On an app's Dock icon, set once the swipe reads as ↑: the sideways
+        /// strokes are followed from there, so ↑ then ← or → in one movement,
+        /// with no pause, sends the app's window to that half.
+        var dockRise: DockRise?
     }
+
+    /// The sideways part of a swipe up from a Dock icon. Only strokes that go
+    /// mostly sideways count: the drift of a long ↑ never adds up to a side.
+    struct DockRise: Equatable {
+        var accX: Double = 0
+        var side: ForkTrackpadSwipeDirection?
+    }
+
+    /// How much further than a plain step a Dock swipe must go sideways.
+    static let dockSideThresholdFactor: Double = 3
 
     /// Two axis zones, each tracked on its own once a quarter has formed:
     /// a reversal flips only the axis that reverses, and easing an axis back
@@ -454,6 +468,14 @@ struct ForkTrackpadGestureMachine {
         t.lastMovementAt = now
         let enter = configuration.swipeThreshold
         let release = enter * configuration.combinedReleaseShare
+        if var rise = t.dockRise {
+            if abs(dx) > abs(dy) { rise.accX += dx }
+            let sideEnter = enter * Self.dockSideThresholdFactor
+            rise.side = Self.axisZone(current: rise.side, accumulated: rise.accX, enter: sideEnter,
+                                      release: sideEnter * configuration.combinedReleaseShare,
+                                      negative: .left, positive: .right)
+            t.dockRise = rise
+        }
         if var grid = t.grid {
             grid.accX += dx
             grid.accY += dy
@@ -486,6 +508,10 @@ struct ForkTrackpadGestureMachine {
         t.candidate = max(abs(t.accX), abs(t.accY)) >= configuration.swipeThreshold
             ? Self.direction(dx: t.accX, dy: t.accY, diagonalRatio: configuration.diagonalRatio)
             : nil
+        if t.dockRise == nil, t.steps.isEmpty, t.candidate == .up,
+           t.target == .dockApp || t.target == .dockFinder {
+            t.dockRise = DockRise()
+        }
     }
 
     /// Where one axis sits, given where it already was. Already at an
@@ -613,6 +639,9 @@ struct ForkTrackpadGestureMachine {
     /// (ask the chain instead) or while held but naming nothing (hold the
     /// preview as it is, see `preview(for:)`).
     private func rawAction(for t: SwipeTracking) -> Action? {
+        if let side = t.dockRise?.side {
+            return side == .left ? .openAppLeftHalf : .openAppRightHalf
+        }
         if let grid = t.grid {
             return ForkTrackpadGestureSequence.resolveGrid(
                 horizontal: grid.horizontal.map { (column: $0.column, span: $0.span) },

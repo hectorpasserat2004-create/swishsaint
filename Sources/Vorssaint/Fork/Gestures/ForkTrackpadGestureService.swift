@@ -330,6 +330,11 @@ final class ForkTrackpadGestureService {
                     showAdjacentWindow(pid: pid, forward: true)
                 case (.dockApp(let pid)?, .showPreviousWindow), (.dockFinder(let pid)?, .showPreviousWindow):
                     showAdjacentWindow(pid: pid, forward: false)
+                case (.dockApp(let pid)?, .openAppLeftHalf), (.dockFinder(let pid)?, .openAppLeftHalf),
+                     (.dockApp(let pid)?, .openAppRightHalf), (.dockFinder(let pid)?, .openAppRightHalf):
+                    Self.openApp(pid: pid, to: action == .openAppLeftHalf ? .leftHalf : .rightHalf)
+                case (.dockApp(let pid)?, .minimizeApp), (.dockFinder(let pid)?, .minimizeApp):
+                    Self.minimizeAppWindows(pid: pid)
                 case (.dockMinimizedWindow(let item, _)?, .restoreMinimizedWindow):
                     // A click on the thumbnail: the Dock brings that window back.
                     AXUIElementPerformAction(item, kAXPressAction as CFString)
@@ -515,6 +520,74 @@ final class ForkTrackpadGestureService {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true
         NSWorkspace.shared.openApplication(at: url, configuration: configuration)
+    }
+
+    /// ↑ then a side on an app's Dock icon. Only the window that goes to the
+    /// side comes forward: a visible one is placed at once, a minimized one
+    /// is placed before it unminimizes so it lands there, and an app without
+    /// windows opens one, placed as soon as it shows.
+    private static func openApp(pid: pid_t, to half: ForkTrackpadGestureAction) {
+        guard pid != ProcessInfo.processInfo.processIdentifier,
+              let running = NSRunningApplication(processIdentifier: pid), !running.isTerminated
+        else { return }
+        running.unhide()
+        let now = ProcessInfo.processInfo.systemUptime
+        let windows = standardWindows(pid: pid)
+        if windows.contains(where: { bool($0, kAXMinimizedAttribute) != true }) {
+            placeFrontWindow(pid: pid, as: half, until: now + 0.5)
+        } else if let minimized = windows.first {
+            ForkTrackpadWindowPlacer.shared.preplace(half, minimized: minimized)
+            AXUIElementSetAttributeValue(minimized, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
+            _ = running.activate(options: [])
+            placeFrontWindow(pid: pid, as: half, until: now + unminimizeDuration + 0.4)
+        } else {
+            showAppWindows(pid: pid)
+            placeFrontWindow(pid: pid, as: half, until: now + 1.5)
+        }
+    }
+
+    /// The app's standard windows, focused and main first: Finder's focus
+    /// can sit on the desktop, which is no window to place. A minimized
+    /// window reads as a dialog, so it counts whatever its subrole.
+    private static func standardWindows(pid: pid_t) -> [AXUIElement] {
+        let app = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(app, 0.35)
+        let candidates = [element(app, kAXFocusedWindowAttribute), element(app, kAXMainWindowAttribute)]
+            .compactMap { $0 } + (elements(app, kAXWindowsAttribute) ?? [])
+        return candidates.filter {
+            string($0, kAXSubroleAttribute) == kAXStandardWindowSubrole as String
+                || bool($0, kAXMinimizedAttribute) == true
+        }
+    }
+
+    private static func minimizeAppWindows(pid: pid_t) {
+        let app = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(app, 0.35)
+        for window in elements(app, kAXWindowsAttribute) ?? [] where bool(window, kAXMinimizedAttribute) != true {
+            AXUIElementSetAttributeValue(window, kAXMinimizedAttribute as CFString, kCFBooleanTrue)
+        }
+    }
+
+    /// The Dock's unminimize animation, with a little margin.
+    private static let unminimizeDuration: TimeInterval = 0.6
+
+    /// The app's front window goes to `half`, and is
+    /// put back there until `deadline`: a window still unminimizing ends its
+    /// animation where it was, and a new window takes a moment to appear.
+    private static func placeFrontWindow(pid: pid_t, as half: ForkTrackpadGestureAction,
+                                         until deadline: TimeInterval, placed: CGRect? = nil) {
+        var placed = placed
+        if let window = standardWindows(pid: pid).first(where: { bool($0, kAXMinimizedAttribute) != true }),
+           placed == nil || frame(of: window) != placed {
+            // Only when it moved away: placing a window already there again
+            // would step the placer's own cycle on to the next size.
+            _ = ForkTrackpadWindowPlacer.shared.apply(half, to: window)
+            placed = frame(of: window)
+        }
+        guard ProcessInfo.processInfo.systemUptime < deadline else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            placeFrontWindow(pid: pid, as: half, until: deadline, placed: placed)
+        }
     }
 
     /// Brings the window after (or before) the app's current one to the

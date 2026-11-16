@@ -73,6 +73,12 @@ enum ForkTrackpadGestureAction: String, CaseIterable, Equatable {
     case showNextWindow
     /// The same, swiping left, to its previous window.
     case showPreviousWindow
+    /// From an app's Dock icon, ↑ then ← (or →) in one movement: its windows
+    /// come back as with ↑ alone, and the front one goes to that half.
+    case openAppLeftHalf, openAppRightHalf
+    /// From an app's Dock icon, swiping down: every window of the app is
+    /// minimized, as ↓ with the stronger key held does from a title bar.
+    case minimizeApp
 
     /// A held modifier's stronger reach of `minimize`: every window of the
     /// app, not only the one the gesture began on.
@@ -120,8 +126,8 @@ enum ForkTrackpadGestureAction: String, CaseIterable, Equatable {
     /// one. The other actions act on the window or the app directly.
     var layoutAction: WindowLayoutAction? {
         switch self {
-        case .leftHalf: return .leftHalf
-        case .rightHalf: return .rightHalf
+        case .leftHalf, .openAppLeftHalf: return .leftHalf
+        case .rightHalf, .openAppRightHalf: return .rightHalf
         case .topHalf: return .topHalf
         case .bottomHalf: return .bottomHalf
         case .topLeftQuarter: return .topLeft
@@ -146,7 +152,7 @@ enum ForkTrackpadGestureAction: String, CaseIterable, Equatable {
         case .bottomCenterSixth: return .bottomCenterSixth
         case .minimize, .close, .centerReduced, .quitApp, .quitWindowApp, .emptyTrash,
              .showAppWindows, .restoreMinimizedWindow, .closeMinimizedWindow,
-             .showNextWindow, .showPreviousWindow,
+             .showNextWindow, .showPreviousWindow, .minimizeApp,
              .minimizeAllWindows, .restorePlacement,
              .topLeftTwoSixths, .topRightTwoSixths, .bottomLeftTwoSixths, .bottomRightTwoSixths:
             // No official geometry matches two of a row's three sixths
@@ -162,7 +168,7 @@ enum ForkTrackpadGestureAction: String, CaseIterable, Equatable {
     var isWindowAction: Bool {
         switch self {
         case .quitApp, .emptyTrash, .showAppWindows, .restoreMinimizedWindow, .closeMinimizedWindow,
-             .showNextWindow, .showPreviousWindow:
+             .showNextWindow, .showPreviousWindow, .openAppLeftHalf, .openAppRightHalf, .minimizeApp:
             return false
         default:
             return true
@@ -354,6 +360,11 @@ enum ForkTrackpadGestureCatalog {
         Entry(action: .showAppWindows, targets: [.dockApp, .dockFinder], triggers: [.swipes([.up])]),
         Entry(action: .showNextWindow, targets: [.dockApp, .dockFinder], triggers: [.swipes([.right])]),
         Entry(action: .showPreviousWindow, targets: [.dockApp, .dockFinder], triggers: [.swipes([.left])]),
+        Entry(action: .openAppLeftHalf, targets: [.dockApp, .dockFinder],
+              triggers: [.swipes([.up, .left]), .swipes([.upLeft])]),
+        Entry(action: .openAppRightHalf, targets: [.dockApp, .dockFinder],
+              triggers: [.swipes([.up, .right]), .swipes([.upRight])]),
+        Entry(action: .minimizeApp, targets: [.dockApp, .dockFinder], triggers: [.swipes([.down])]),
         Entry(action: .restoreMinimizedWindow, target: .dockMinimizedWindow, triggers: [.swipes([.up])]),
         Entry(action: .closeMinimizedWindow, target: .dockMinimizedWindow, triggers: [.pinches([.in])]),
     ]
@@ -483,6 +494,9 @@ enum ForkTrackpadGestureSequence {
             case [.up]: return .showAppWindows
             case [.right]: return .showNextWindow
             case [.left]: return .showPreviousWindow
+            case [.upLeft], [.up, .left]: return .openAppLeftHalf
+            case [.upRight], [.up, .right]: return .openAppRightHalf
+            case [.down]: return .minimizeApp
             default: return nil
             }
         case .dockMinimizedWindow: return steps == [.up] ? .restoreMinimizedWindow : nil
@@ -1034,7 +1048,7 @@ enum ForkTrackpadPreviewContent: Equatable {
         let edgeShare = 0.08
         let rect: CGRect
         switch action {
-        case .minimize, .minimizeAllWindows:
+        case .minimize, .minimizeAllWindows, .minimizeApp:
             self = .light(.minimize)
             return
         case .toggleFullScreen:
