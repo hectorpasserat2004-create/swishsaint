@@ -102,6 +102,7 @@ FORK_SOURCES=(
     Sources/Vorssaint/Fork/Update/ForkUpdateNotes.swift
     Sources/Vorssaint/Fork/Update/ForkUpdateStrings.swift
     Sources/Vorssaint/Fork/Update/ForkUpdateSupport.swift
+    Sources/Vorssaint/Fork/Update/ForkSupportPopup.swift
 )
 # Mac Backup: its pure files are found by folder (Core/ and each work package's Pure/), so
 # its packages never edit this list. An empty folder adds nothing.

@@ -6,6 +6,7 @@
 # fork/check-seams.sh refuse toute modification d'un fichier officiel qui n'est pas listée ici.
 #
 bootstrap      Sources/Vorssaint/App/AppDelegate.swift                        # démarre le code du fork au lancement
+no-support-popup Sources/Vorssaint/App/AppDelegate.swift                      # jamais la fenêtre « Me soutenir / Buy Me a Coffee » après une mise à jour (showSupportUpdateIntro n’est pas extrait par les tests officiels)
 update         Sources/Vorssaint/Services/Update/UpdateService.swift          # coupe l'updater officiel, branche celui du fork
 backup         Sources/Vorssaint/Services/SettingsBackup.swift                # les réglages du fork partent dans la sauvegarde et en reviennent
 feedback       Sources/Vorssaint/Services/Feedback/FeedbackService.swift      # n'envoie pas nos rapports de bug au dev officiel
