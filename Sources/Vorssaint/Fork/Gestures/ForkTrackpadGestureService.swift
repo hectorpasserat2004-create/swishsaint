@@ -792,11 +792,16 @@ final class ForkTrackpadGestureService {
     }
 
     /// Front to back. Reads the window server only, never an app.
+    /// Our own click-through windows are left out: the extra brightness
+    /// overlay covers every screen and would otherwise hide every title bar.
     private static func onScreenWindows() -> [ForkTrackpadWindowStack.Window] {
         let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements],
                                               kCGNullWindowID) as? [[String: Any]] ?? []
+        let clickThrough = Set(NSApp.windows.filter(\.ignoresMouseEvents).map(\.windowNumber))
         return list.compactMap { info in
             guard let pid = (info[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value,
+                  let number = (info[kCGWindowNumber as String] as? NSNumber)?.intValue,
+                  !clickThrough.contains(number),
                   let boundsInfo = info[kCGWindowBounds as String] as? NSDictionary,
                   let bounds = CGRect(dictionaryRepresentation: boundsInfo)
             else { return nil }
