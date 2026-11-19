@@ -68,6 +68,7 @@ final class WindowLayoutService: ObservableObject {
     private var edgeSnapPressOrigin: CGPoint?
     private var edgeSnapPressCandidate: WindowServerWindowCandidate?
     private var edgeSnapSequenceSuppressed = false
+    private var edgeSnapSystemDrag = WindowEdgeSnapSystemDrag.idle
     private var edgeSnapResolveAttempts = 0
     private var edgeSnapLastResolveAt: TimeInterval = 0
     private var edgeSnapDrag: WindowEdgeSnapDrag?
@@ -1455,6 +1456,7 @@ final class WindowLayoutService: ObservableObject {
         let mask = CGEventMask(1 << CGEventType.leftMouseDown.rawValue)
             | CGEventMask(1 << CGEventType.leftMouseDragged.rawValue)
             | CGEventMask(1 << CGEventType.leftMouseUp.rawValue)
+            | CGEventMask(1 << CGEventType.flagsChanged.rawValue)
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
@@ -1486,6 +1488,7 @@ final class WindowLayoutService: ObservableObject {
         edgeSnapLastPointer = nil
         resetEdgeSnapTrail()
         edgeSnapSequenceSuppressed = false
+        edgeSnapSystemDrag = .idle
         edgeSnapResolveAttempts = 0
         edgeSnapDrag = nil
         edgeSnapFollowsMoveGesture = false
@@ -1519,11 +1522,21 @@ final class WindowLayoutService: ObservableObject {
 
         if type == .leftMouseDown {
             edgeSnapSequenceSuppressed = WindowEdgeSnapSupport.isSystemTilingEnabled
-        } else if edgeSnapSequenceSuppressed {
+            edgeSnapSystemDrag = !edgeSnapSequenceSuppressed && WindowEdgeSnapSupport.systemTilingEnabledForDrag(optionHeld: true)
+                ? .watchingOption : .idle
+        }
+        if edgeSnapSystemDrag == .watchingOption && event.flags.contains(.maskAlternate) {
+            // Stop pending lookups and any visible preview. The entire gesture
+            // belongs to macOS even if Option is released before the mouse.
+            edgeSnapSystemDrag = .claimed
+            DispatchQueue.main.async { [weak self] in self?.cancelEdgeSnapTracking() }
+        }
+        let systemClaimed = edgeSnapSystemDrag == .claimed
+        if type == .leftMouseUp { edgeSnapSystemDrag = .idle }
+        if systemClaimed || type == .flagsChanged || edgeSnapSequenceSuppressed {
             if type == .leftMouseUp { edgeSnapSequenceSuppressed = false }
             return Unmanaged.passUnretained(event)
         }
-        guard !edgeSnapSequenceSuppressed else { return Unmanaged.passUnretained(event) }
 
         let input: WindowEdgeSnapPointerInput
         switch type {
