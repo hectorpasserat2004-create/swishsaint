@@ -314,7 +314,7 @@ private struct ForkTranscribeJobRow: View {
                     ProgressView(value: queue.progress)
                         .frame(maxWidth: 180)
                         .animation(.linear(duration: 0.3), value: queue.progress)
-                    caption("\(text.stageTranscribing) \(Int(queue.progress * 100)) %" + remaining(now: context.date))
+                    caption("\(text.stageTranscribing) \(percent)" + remaining(now: context.date))
                 }
             }
         case .writing:
@@ -333,6 +333,13 @@ private struct ForkTranscribeJobRow: View {
             caption(text.stageCancelled)
         }
     }
+
+    /// "58 %" in French, "58%" in English: the person's own way.
+    private var percent: String {
+        queue.progress.formatted(.percent.precision(.fractionLength(0)).locale(Locale(identifier: l10nLocale)))
+    }
+
+    private var l10nLocale: String { L10n.shared.language.rawValue.replacingOccurrences(of: "-", with: "_") }
 
     private var doneLine: String {
         var parts: [String] = []
@@ -429,6 +436,7 @@ struct ForkTranscribeReader: View {
                 .padding(12)
         }
         .frame(minWidth: 620, idealWidth: 720, minHeight: 460, idealHeight: 620)
+        .background(Color(nsColor: .windowBackgroundColor))
         .onAppear { document = queue.document(id) }
     }
 
