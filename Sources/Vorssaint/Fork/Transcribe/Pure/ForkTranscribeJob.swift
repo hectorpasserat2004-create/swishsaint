@@ -8,6 +8,11 @@ import Foundation
 enum ForkTranscribeEngine: String, Codable, CaseIterable {
     /// Parakeet on this Mac: nothing leaves it.
     case local
+    /// The Studio's transcriber (Whisper, and who speaks), on the tailnet.
+    case studio
+    /// Any service with OpenAI's `audio/transcriptions` (OpenAI, Groq, a
+    /// Whisper server of one's own).
+    case openAI
 
     static let fallback: ForkTranscribeEngine = .local
 
@@ -54,6 +59,20 @@ enum ForkTranscribeFailure: String, Codable, Equatable, CaseIterable, Error {
     case writeFailed
     /// The app ended in the middle of the job.
     case interrupted
+    /// The remote engine has no address or no key yet.
+    case notConfigured
+    /// The server refused the token or the key.
+    case unauthorized
+    /// The server could not be reached, or the connection broke.
+    case network
+    /// The server stayed full, asleep or stopping for too long.
+    case serverBusy
+    /// Over what the server takes (400 MiB for the Studio).
+    case tooLarge
+    /// Over what the server takes (2 h of sound for the Studio).
+    case tooLong
+    /// The server failed on its side.
+    case remoteFailed
 
     init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
@@ -63,8 +82,9 @@ enum ForkTranscribeFailure: String, Codable, Equatable, CaseIterable, Error {
     /// Whether trying again as it is can work: a file gone stays gone.
     var isRetryable: Bool {
         switch self {
-        case .fileMissing, .unreadable, .noAudio: return false
-        case .notDownloaded, .modelMissing, .engine, .nothingHeard, .writeFailed, .interrupted: return true
+        case .fileMissing, .unreadable, .noAudio, .tooLarge, .tooLong: return false
+        case .notDownloaded, .modelMissing, .engine, .nothingHeard, .writeFailed, .interrupted,
+             .notConfigured, .unauthorized, .network, .serverBusy, .remoteFailed: return true
         }
     }
 }
@@ -78,6 +98,15 @@ enum ForkTranscribeStage: Equatable, Codable {
     /// Another transcription holds the engine (a meeting's).
     case waitingForEngine
     case loading
+    /// Remote: the sound is taken out of the file, light enough to send.
+    case preparing
+    /// Remote: the Studio wakes up (30 to 60 s after 10 min without work).
+    case waking
+    case uploading
+    /// Remote: the server is full; it is asked again after the time it said.
+    case waitingForServer
+    /// Remote: sent, waiting its turn on the server.
+    case remoteQueued
     case transcribing
     case writing
     case done
@@ -86,7 +115,8 @@ enum ForkTranscribeStage: Equatable, Codable {
 
     var isActive: Bool {
         switch self {
-        case .queued, .waitingForModel, .waitingForEngine, .loading, .transcribing, .writing: return true
+        case .queued, .waitingForModel, .waitingForEngine, .loading, .preparing, .waking, .uploading,
+             .waitingForServer, .remoteQueued, .transcribing, .writing: return true
         case .done, .failed, .cancelled: return false
         }
     }
@@ -94,7 +124,8 @@ enum ForkTranscribeStage: Equatable, Codable {
     /// Whether the job holds the engine: it is the one at work.
     var isRunning: Bool {
         switch self {
-        case .loading, .transcribing, .writing: return true
+        case .loading, .preparing, .waking, .uploading, .waitingForServer, .remoteQueued, .transcribing, .writing:
+            return true
         default: return false
         }
     }
@@ -122,6 +153,11 @@ struct ForkTranscribeJob: Codable, Equatable, Identifiable {
     var finished: Date?
     /// Seconds of work, for the diagnostic and the "1 h in 42 s" line.
     var processingSeconds: Double?
+    /// The Studio's id for the job once sent: a relaunch follows it again
+    /// instead of sending the file twice.
+    var remoteID: String?
+    /// Who speaks, as asked when it was dropped (`ForkTranscribeSpeakers`).
+    var speakers: String?
 
     var name: String { source.lastPathComponent }
 }
@@ -171,9 +207,12 @@ enum ForkTranscribeRules {
     }
 
     /// The next job to start: the first queued (or waiting) one, in the
-    /// order they were dropped.
-    static func next(in jobs: [ForkTranscribeJob]) -> UUID? {
-        jobs.first { [.queued, .waitingForModel, .waitingForEngine].contains($0.stage) }?.id
+    /// order they were dropped. Without Parakeet, a file for this Mac waits
+    /// and the remote ones behind it go.
+    static func next(in jobs: [ForkTranscribeJob], modelReady: Bool = true) -> UUID? {
+        jobs.first {
+            [.queued, .waitingForModel, .waitingForEngine].contains($0.stage) && ($0.engine != .local || modelReady)
+        }?.id
     }
 
     /// What a list read at launch becomes: a job the app left in the middle
@@ -183,6 +222,9 @@ enum ForkTranscribeRules {
         let fixed = jobs.map { job -> ForkTranscribeJob in
             var job = job
             switch job.stage {
+            // A remote job goes again on its own: the server kept it (its id
+            // is followed again) or it is sent again.
+            case _ where job.engine != .local && job.stage.isActive: job.stage = .queued
             case .loading, .transcribing, .writing: job.stage = .failed(.interrupted)
             case .waitingForModel, .waitingForEngine: job.stage = .queued
             default: break

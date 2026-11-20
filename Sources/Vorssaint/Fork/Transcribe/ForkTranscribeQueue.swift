@@ -104,9 +104,13 @@ final class ForkTranscribeQueue: ObservableObject {
         }
         let engine = ForkTranscribeEngine(stored: defaults.string(forKey: ForkDefaultsKey.transcribeEngine))
         let language = ForkTranscribeLanguage(stored: defaults.string(forKey: ForkDefaultsKey.transcribeLanguage))
+        let speakers = defaults.string(forKey: ForkDefaultsKey.transcribeSpeakers) ?? ForkTranscribeSpeakers.auto
         let now = Date()
-        let added = files.map {
-            ForkTranscribeJob(id: UUID(), source: $0, engine: engine, language: language, added: now, stage: .queued)
+        let added = files.map { url -> ForkTranscribeJob in
+            var job = ForkTranscribeJob(id: UUID(), source: url, engine: engine, language: language, added: now,
+                                        stage: .queued)
+            job.speakers = speakers
+            return job
         }
         guard !added.isEmpty else { return 0 }
         jobs.append(contentsOf: added)
@@ -131,14 +135,19 @@ final class ForkTranscribeQueue: ObservableObject {
         for job in jobs where job.stage.isActive { cancel(job.id) }
     }
 
-    /// Back in the queue with its own choices: a failed or cancelled job.
-    func retry(_ id: UUID) {
+    /// Back in the queue with its own choices, or with another engine ("Try
+    /// on the Studio" for a file this Mac cannot read).
+    func retry(_ id: UUID, engine: ForkTranscribeEngine? = nil) {
         dispatchPrecondition(condition: .onQueue(.main))
         guard enabled, let job = jobs.first(where: { $0.id == id }), !job.stage.isActive else { return }
         update(id) {
             $0.stage = .queued
             $0.finished = nil
             $0.started = nil
+            if let engine, engine != $0.engine {
+                $0.engine = engine
+                $0.remoteID = nil
+            }
         }
         startNext()
     }
@@ -172,42 +181,41 @@ final class ForkTranscribeQueue: ObservableObject {
     private func startNext() {
         dispatchPrecondition(condition: .onQueue(.main))
         guard loaded, enabled, runningID == nil else { return }
-        guard let id = ForkTranscribeRules.next(in: jobs) else {
+        // Files for this Mac wait for Parakeet, and go once it is here; the
+        // remote ones never wait for it.
+        let model = ForkParakeetModelStore.shared.installedDirectory
+        for job in jobs where job.engine == .local {
+            if model == nil, job.stage == .queued || job.stage == .waitingForEngine {
+                update(job.id, saving: false) { $0.stage = .waitingForModel }
+            } else if model != nil, job.stage == .waitingForModel {
+                update(job.id, saving: false) { $0.stage = .queued }
+            }
+        }
+        guard let id = ForkTranscribeRules.next(in: jobs, modelReady: model != nil), let job = job(id) else {
+            save()
             activityChanged()
             work.async { [local] in local.unload() }
             return
         }
-        guard let model = ForkParakeetModelStore.shared.installedDirectory else {
-            for job in jobs where job.stage == .queued || job.stage == .waitingForEngine {
-                update(job.id, saving: false) { $0.stage = .waitingForModel }
-            }
-            save()
-            activityChanged()
-            return
-        }
-        // Parakeet is here: the files that waited for it only wait their turn.
-        for job in jobs where job.stage == .waitingForModel && job.id != id {
-            update(job.id, saving: false) { $0.stage = .queued }
-        }
-        // A meeting's transcript holds its own Parakeet: the file waits.
-        if ForkMeetingTranscriber.shared.running != nil {
+        // A meeting's transcript holds its own Parakeet: a file for this Mac
+        // waits.
+        if job.engine == .local, ForkMeetingTranscriber.shared.running != nil {
             update(id) { $0.stage = .waitingForEngine }
             watchMeetingTranscript()
             activityChanged()
             return
         }
-        guard let job = job(id) else { return }
         let stop = ForkMeetingTranscriptStop()
         self.stop = stop
         runningID = id
         progress = 0
         update(id) {
-            $0.stage = .loading
+            $0.stage = $0.engine == .local ? .loading : .preparing
             $0.started = Date()
             $0.finished = nil
         }
         activityChanged()
-        let settings = Settings(defaults: defaults, text: ForkTranscribeStrings.strings(L10n.shared.language))
+        let settings = Settings(defaults: defaults, language: L10n.shared.language)
         let fallback = Self.fallbackFolder
         work.async { [weak self] in
             guard let self else { return }
@@ -224,9 +232,21 @@ final class ForkTranscribeQueue: ObservableObject {
         var kinds: [ForkTranscribeOutput.Kind]
         var folder: URL?
         var replacements: [ForkDictationSupport.Replacement]
+        var vocabulary: [String]
+        var studioURL: String
+        var openAIURL: String
+        var openAIModel: String
+        var language: AppLanguage
         var text: ForkTranscribeStrings
 
-        init(defaults: UserDefaults, text: ForkTranscribeStrings) {
+        init(defaults: UserDefaults, language: AppLanguage) {
+            vocabulary = ForkTranscribeStudioAPI.vocabulary(defaults.string(forKey: ForkDefaultsKey.dictationVocabulary) ?? "")
+            studioURL = defaults.string(forKey: ForkDefaultsKey.transcribeStudioURL) ?? ForkTranscribeStudioAPI.defaultURL
+            openAIURL = defaults.string(forKey: ForkDefaultsKey.transcribeOpenAIURL) ?? ForkTranscribeOpenAIAPI.defaultURL
+            openAIModel = (defaults.string(forKey: ForkDefaultsKey.transcribeOpenAIModel) ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            self.language = language
+            let text = ForkTranscribeStrings.strings(language)
             kinds = ForkTranscribeOutput.kinds(defaults.string(forKey: ForkDefaultsKey.transcribeFormats))
             let path = defaults.string(forKey: ForkDefaultsKey.transcribeFolder) ?? ""
             folder = defaults.bool(forKey: ForkDefaultsKey.transcribeUsesFolder) && !path.isEmpty
@@ -253,42 +273,40 @@ final class ForkTranscribeQueue: ObservableObject {
     }
 
     /// Work queue: the file's text, written, or why not.
-    private func run(_ job: ForkTranscribeJob, model: URL, settings: Settings, fallback: URL,
+    private func run(_ job: ForkTranscribeJob, model: URL?, settings: Settings, fallback: URL,
                      stop: ForkMeetingTranscriptStop) -> Result {
         if let missing = Self.check(job.source) { return Result(outcome: .failure(missing)) }
-        var lastPublished = 0.0
-        let heard: ForkTranscribeLocalEngine.Heard
+        let started = Date()
+        var heard: ForkTranscribeDocument
         do {
-            heard = try local.transcribe(job.source, modelDirectory: model, language: job.language.code) { [weak self] fraction in
-                if fraction == 0 || fraction - lastPublished >= 0.004 {
-                    lastPublished = fraction
-                    DispatchQueue.main.async { self?.progressed(job.id, fraction) }
-                }
-                return !stop.isCancelled
-            }
+            heard = try transcribe(job, model: model, settings: settings, stop: stop)
         } catch is CancellationError {
             return Result(outcome: .failure(.engine), cancelled: true)
         } catch let failure as ForkTranscribeFailure {
-            log.error("file transcript failed: \(failure.rawValue, privacy: .public)")
-            return Result(outcome: .failure(failure))
+            log.error("file transcript failed (\(job.engine.rawValue, privacy: .public)): \(failure.rawValue, privacy: .public)")
+            return Result(outcome: .failure(failure), duration: Self.knownDuration(job))
         } catch {
             return Result(outcome: .failure(.engine))
         }
+        let processing = Date().timeIntervalSince(started)
         guard !stop.isCancelled else { return Result(outcome: .failure(.engine), cancelled: true) }
         DispatchQueue.main.async { [weak self] in self?.update(job.id, saving: false) { $0.stage = .writing } }
 
-        var segments = ForkTranscribeFormat.sentences(heard.words)
+        var segments = heard.segments
         if !settings.replacements.isEmpty {
             for index in segments.indices {
                 segments[index].text = ForkDictationReplacements.apply(settings.replacements, to: segments[index].text)
             }
         }
         guard !segments.isEmpty else {
-            return Result(outcome: .failure(.nothingHeard), duration: heard.duration, processing: heard.processing)
+            return Result(outcome: .failure(.nothingHeard), duration: heard.duration, processing: processing)
         }
         let words = segments.map(\.text).joined(separator: " ")
-        let language = ForkMeetingTranscript.baseLanguage(NLLanguageRecognizer.dominantLanguage(for: words)?.rawValue)
-        let document = ForkTranscribeDocument(segments: segments, duration: heard.duration, language: language)
+        let language = heard.language.flatMap { ForkMeetingTranscript.baseLanguage($0) }
+            ?? ForkMeetingTranscript.baseLanguage(NLLanguageRecognizer.dominantLanguage(for: words)?.rawValue)
+        heard.segments = segments
+        heard.language = language
+        let document = heard
         PrivateFileStore.createDirectory(at: directory)
         if let data = try? JSONEncoder().encode(document) { PrivateFileStore.write(data, to: documentURL(job.id)) }
 
@@ -297,11 +315,62 @@ final class ForkTranscribeQueue: ObservableObject {
         case let .success((outputs, usedFallback)):
             return Result(outcome: .success(Written(outputs: outputs, usedFallback: usedFallback,
                                                     words: document.wordCount, language: language)),
-                          duration: heard.duration, processing: heard.processing)
+                          duration: heard.duration, processing: processing)
         case let .failure(failure):
-            return Result(outcome: .failure(failure), duration: heard.duration, processing: heard.processing)
+            return Result(outcome: .failure(failure), duration: heard.duration, processing: processing)
         }
     }
+
+    /// Work queue: the passages heard by the job's engine.
+    private func transcribe(_ job: ForkTranscribeJob, model: URL?, settings: Settings,
+                            stop: ForkMeetingTranscriptStop) throws -> ForkTranscribeDocument {
+        let id = job.id
+        if job.engine == .local {
+            guard let model else { throw ForkTranscribeFailure.modelMissing }
+            var lastPublished = 0.0
+            let heard = try local.transcribe(job.source, modelDirectory: model, language: job.language.code) { [weak self] fraction in
+                if fraction == 0 || fraction - lastPublished >= 0.004 {
+                    lastPublished = fraction
+                    DispatchQueue.main.async { self?.progressed(id, fraction) }
+                }
+                return !stop.isCancelled
+            }
+            return ForkTranscribeDocument(segments: ForkTranscribeFormat.sentences(heard.words), duration: heard.duration,
+                                          language: nil)
+        }
+        let work = FileManager.default.temporaryDirectory
+            .appendingPathComponent("swishsaint-transcribe-\(id.uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: work) }
+        var last: (ForkTranscribeStage, Double)?
+        let report: ForkTranscribeReport = { [weak self] stage, fraction in
+            let now = (stage, fraction ?? -1)
+            if let last, last.0 == now.0, abs(last.1 - now.1) < 0.004 { return }
+            last = now
+            DispatchQueue.main.async { self?.remoteProgressed(id, stage, fraction) }
+        }
+        switch job.engine {
+        case .local:
+            throw ForkTranscribeFailure.engine
+        case .studio:
+            guard let base = URL(string: settings.studioURL.trimmingCharacters(in: .whitespacesAndNewlines)),
+                  base.scheme != nil, base.host != nil,
+                  let token = ForkTranscribeSecrets.read(ForkTranscribeSecrets.studioAccount)
+            else { throw ForkTranscribeFailure.notConfigured }
+            return try ForkTranscribeStudioEngine(base: base, token: token).transcribe(
+                job, language: job.language, speakers: ForkTranscribeSpeakers.most(job.speakers),
+                vocabulary: settings.vocabulary, work: work, stop: stop, report: report) { [weak self] remote in
+                DispatchQueue.main.async { self?.update(id) { $0.remoteID = remote } }
+            }
+        case .openAI:
+            let engine = ForkTranscribeOpenAIEngine(base: settings.openAIURL, model: settings.openAIModel,
+                                                    key: ForkTranscribeSecrets.read(ForkTranscribeSecrets.openAIAccount))
+            return try engine.transcribe(job, language: job.language, vocabulary: settings.vocabulary, work: work,
+                                         stop: stop, report: report)
+        }
+    }
+
+    private static func knownDuration(_ job: ForkTranscribeJob) -> TimeInterval? { job.duration }
 
     /// Whether the file can be read now: gone, or in iCloud and not here.
     private static func check(_ url: URL) -> ForkTranscribeFailure? {
@@ -327,7 +396,7 @@ final class ForkTranscribeQueue: ObservableObject {
     static func write(_ document: ForkTranscribeDocument, for job: ForkTranscribeJob, settings: Settings,
                       fallback: URL) -> Swift.Result<([URL], Bool), ForkTranscribeFailure> {
         let manager = FileManager.default
-        let labels = labels(for: document, settings.text, at: Date())
+        let labels = labels(for: document, job: job, language: settings.language, model: settings.openAIModel, at: Date())
         let contents: [ForkTranscribeOutput.Kind: String] = [
             .md: ForkTranscribeFormat.markdown(document, fileName: job.name, labels: labels),
             .txt: ForkTranscribeFormat.text(document, labels: labels),
@@ -353,14 +422,60 @@ final class ForkTranscribeQueue: ObservableObject {
         return .failure(.writeFailed)
     }
 
-    static func labels(for document: ForkTranscribeDocument, _ text: ForkTranscribeStrings,
-                       at date: Date) -> ForkTranscribeFormat.Labels {
+    static func labels(for document: ForkTranscribeDocument, job: ForkTranscribeJob, language: AppLanguage,
+                       model: String, at date: Date) -> ForkTranscribeFormat.Labels {
+        let text = ForkTranscribeStrings.strings(language)
+        let remote = ForkTranscribeRemoteStrings.strings(language)
         let when = DateFormatter.localizedString(from: date, dateStyle: .medium, timeStyle: .short)
+        let length = ForkTranscribeRules.clock(document.duration)
+        let summary: String
+        switch job.engine {
+        case .local: summary = String(format: text.fileSummaryLocal, length, when)
+        case .studio: summary = String(format: remote.fileSummaryRemote, length, when, remote.engineNameStudio)
+        case .openAI:
+            summary = String(format: remote.fileSummaryRemote, length, when, String(format: remote.engineNameOpenAI, model))
+        }
         return ForkTranscribeFormat.Labels(
             title: { String(format: text.fileTitle, $0) },
-            summary: String(format: text.fileSummaryLocal, ForkTranscribeRules.clock(document.duration), when),
+            summary: summary,
             voice: { String(format: text.voice, $0) },
             separator: text.separator)
+    }
+
+    /// A voice named in the reader: kept with the text, and the files this
+    /// job wrote are written again with the name.
+    func rename(_ id: UUID, speaker: String, to name: String) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        guard let job = job(id), var document = document(id) else { return }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard document.speakerNames[speaker, default: ""] != trimmed else { return }
+        document.speakerNames[speaker] = trimmed.isEmpty ? nil : trimmed
+        if let data = try? JSONEncoder().encode(document) { PrivateFileStore.write(data, to: documentURL(id)) }
+        let labels = Self.labels(for: document, job: job, language: L10n.shared.language,
+                                 model: defaults.string(forKey: ForkDefaultsKey.transcribeOpenAIModel) ?? "",
+                                 at: job.finished ?? Date())
+        for url in job.outputs where FileManager.default.fileExists(atPath: url.path) {
+            let content: String
+            switch ForkTranscribeOutput.Kind(rawValue: url.pathExtension) {
+            case .md?: content = ForkTranscribeFormat.markdown(document, fileName: job.name, labels: labels)
+            case .txt?: content = ForkTranscribeFormat.text(document, labels: labels)
+            case .srt?: content = ForkTranscribeFormat.subtitles(document, labels: labels)
+            case nil: continue
+            }
+            try? content.write(to: url, atomically: true, encoding: .utf8)
+        }
+        objectWillChange.send()
+    }
+
+    /// A remote job's step and share done (negative: unknown).
+    private func remoteProgressed(_ id: UUID, _ stage: ForkTranscribeStage, _ fraction: Double?) {
+        guard runningID == id, let job = job(id), job.stage.isRunning else { return }
+        if job.stage != stage {
+            update(id, saving: false) { $0.stage = stage }
+            progress = fraction ?? -1
+        } else {
+            progress = fraction ?? -1
+        }
     }
 
     private func progressed(_ id: UUID, _ fraction: Double) {
@@ -462,6 +577,7 @@ final class ForkTranscribeQueue: ObservableObject {
             "build: \(info?["CFBundleVersion"] as? String ?? "?") · macOS \(ProcessInfo.processInfo.operatingSystemVersionString)",
             "file: .\(job.source.pathExtension.lowercased()) · \(Self.fileSize(job.source))",
             "engine: \(job.engine.rawValue) · language: \(job.language.rawValue) · heard: \(job.heardLanguage ?? "?")",
+            "speakers: \(job.speakers ?? "auto") · remote job: \(job.remoteID ?? "-")",
             "stage: \(String(describing: job.stage))",
             "duration: \(job.duration.map { ForkTranscribeRules.clock($0) } ?? "?") · work: \(job.processingSeconds.map { String(format: "%.1f s", $0) } ?? "?")",
             "words: \(job.words.map(String.init) ?? "?") · outputs: \(job.outputs.count) · fallback: \(job.usedFallbackFolder)",

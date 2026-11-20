@@ -115,6 +115,9 @@ struct ForkTranscribeStrings {
         case .nothingHeard: return failureNothingHeard
         case .writeFailed: return failureWriteFailed
         case .interrupted: return failureInterrupted
+        // The remote engines' own: `ForkTranscribeRemoteStrings.failure`.
+        case .notConfigured, .unauthorized, .network, .serverBusy, .tooLarge, .tooLong, .remoteFailed:
+            return failureEngine
         }
     }
 

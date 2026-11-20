@@ -22,6 +22,14 @@ extension ForkDefaultsKey {
     static let transcribeReplacements = "fork.transcribe.replacements"
     /// A notice in the island when a file is done or failed.
     static let transcribeNotifies = "fork.transcribe.notifies"
+    /// The Studio's address. Its token is a secret (`ForkTranscribeSecrets`).
+    static let transcribeStudioURL = "fork.transcribe.studioURL"
+    /// Who speaks (`ForkTranscribeSpeakers`): "auto", "1"…"8".
+    static let transcribeSpeakers = "fork.transcribe.speakers"
+    /// An OpenAI-compatible service: its address (up to `/v1`) and model. Its
+    /// key is a secret (`ForkTranscribeSecrets`).
+    static let transcribeOpenAIURL = "fork.transcribe.openAIURL"
+    static let transcribeOpenAIModel = "fork.transcribe.openAIModel"
 }
 
 enum ForkTranscribeDefaults {
@@ -35,5 +43,9 @@ enum ForkTranscribeDefaults {
         ForkDefaultsKey.transcribeUsesFolder: false,
         ForkDefaultsKey.transcribeReplacements: true,
         ForkDefaultsKey.transcribeNotifies: true,
+        ForkDefaultsKey.transcribeStudioURL: ForkTranscribeStudioAPI.defaultURL,
+        ForkDefaultsKey.transcribeSpeakers: ForkTranscribeSpeakers.auto,
+        ForkDefaultsKey.transcribeOpenAIURL: ForkTranscribeOpenAIAPI.defaultURL,
+        ForkDefaultsKey.transcribeOpenAIModel: ForkTranscribeOpenAIAPI.defaultModel,
     ]
 }

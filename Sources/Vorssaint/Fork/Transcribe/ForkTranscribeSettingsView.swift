@@ -18,8 +18,12 @@ struct ForkTranscribeSettingsView: View {
     @AppStorage(ForkDefaultsKey.transcribeFolder) private var folder = ""
     @AppStorage(ForkDefaultsKey.transcribeReplacements) private var replacements = true
     @AppStorage(ForkDefaultsKey.transcribeNotifies) private var notifies = true
+    @AppStorage(ForkDefaultsKey.transcribeEngine) private var engine = ForkTranscribeEngine.local.rawValue
+    @AppStorage(ForkDefaultsKey.transcribeSpeakers) private var speakers = ForkTranscribeSpeakers.auto
 
     private var text: ForkTranscribeStrings { ForkTranscribeStrings.strings(l10n.language) }
+    private var remote: ForkTranscribeRemoteStrings { ForkTranscribeRemoteStrings.strings(l10n.language) }
+    private var chosen: ForkTranscribeEngine { ForkTranscribeEngine(stored: engine) }
     private var active: [ForkTranscribeJob] { queue.jobs.filter(\.stage.isActive) }
     private var finished: [ForkTranscribeJob] {
         queue.jobs.filter { !$0.stage.isActive }.sorted { ($0.finished ?? $0.added) > ($1.finished ?? $1.added) }
@@ -36,14 +40,30 @@ struct ForkTranscribeSettingsView: View {
             }
 
             Section(text.engineTitle) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Label(text.engineLocal, systemImage: "laptopcomputer")
-                    Text(text.engineLocalDetail)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                Picker(text.engineTitle, selection: $engine) {
+                    Label(text.engineLocal, systemImage: "laptopcomputer").tag(ForkTranscribeEngine.local.rawValue)
+                    Label(remote.engineStudio, systemImage: "person.2.wave.2").tag(ForkTranscribeEngine.studio.rawValue)
+                    Label(remote.engineOpenAI, systemImage: "network").tag(ForkTranscribeEngine.openAI.rawValue)
                 }
-                ForkTranscribeModelRow(text: text)
+                .pickerStyle(.radioGroup)
+                .labelsHidden()
+                Text(detail(chosen))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                switch chosen {
+                case .local:
+                    ForkTranscribeModelRow(text: text)
+                case .studio:
+                    ForkTranscribeStudioSettings(remote: remote)
+                    Picker(remote.speakersTitle, selection: $speakers) {
+                        ForEach(ForkTranscribeSpeakers.choices, id: \.self) { choice in
+                            Text(remote.speakers(choice)).tag(choice)
+                        }
+                    }
+                case .openAI:
+                    ForkTranscribeOpenAISettings(remote: remote)
+                }
                 Picker(text.languageTitle, selection: $language) {
                     ForEach(ForkTranscribeLanguage.allCases, id: \.rawValue) { choice in
                         Text(text.language(choice)).tag(choice.rawValue)
@@ -118,6 +138,14 @@ struct ForkTranscribeSettingsView: View {
         .onAppear { ForkTranscribePageTracker.isShown = true }
         .onDisappear { ForkTranscribePageTracker.isShown = false }
         .onChange(of: enabled) { _, _ in queue.sync() }
+    }
+
+    private func detail(_ engine: ForkTranscribeEngine) -> String {
+        switch engine {
+        case .local: return text.engineLocalDetail
+        case .studio: return remote.engineStudioDetail
+        case .openAI: return remote.engineOpenAIDetail
+        }
     }
 
     private struct Reading: Identifiable { let id: UUID }
@@ -304,19 +332,19 @@ private struct ForkTranscribeJobRow: View {
         case .waitingForEngine:
             caption(text.stageWaitingForEngine)
         case .loading:
-            HStack(spacing: 6) {
-                ProgressView().controlSize(.mini)
-                caption(text.stageLoading)
-            }
+            busy(text.stageLoading)
+        case .waking:
+            busy(remote.stageWaking)
+        case .waitingForServer:
+            busy(remote.stageWaitingForServer, color: .orange)
+        case .remoteQueued:
+            busy(remote.stageRemoteQueued)
+        case .preparing:
+            measured(remote.stagePreparing, timed: false)
+        case .uploading:
+            measured(remote.stageUploading, timed: false)
         case .transcribing:
-            TimelineView(.periodic(from: .now, by: 1)) { context in
-                HStack(spacing: 8) {
-                    ProgressView(value: queue.progress)
-                        .frame(maxWidth: 180)
-                        .animation(.linear(duration: 0.3), value: queue.progress)
-                    caption("\(text.stageTranscribing) \(percent)" + remaining(now: context.date))
-                }
-            }
+            measured(text.stageTranscribing, timed: job.engine == .local)
         case .writing:
             HStack(spacing: 6) {
                 ProgressView().controlSize(.mini)
@@ -328,9 +356,36 @@ private struct ForkTranscribeJobRow: View {
                 if job.usedFallbackFolder { caption(text.fallbackNote, color: .orange) }
             }
         case let .failed(failure):
-            caption(text.failure(failure), color: .red)
+            caption(remote.failure(failure) ?? text.failure(failure), color: .red)
         case .cancelled:
             caption(text.stageCancelled)
+        }
+    }
+
+    private var remote: ForkTranscribeRemoteStrings { ForkTranscribeRemoteStrings.strings(L10n.shared.language) }
+
+    private func busy(_ label: String, color: Color = .secondary) -> some View {
+        HStack(spacing: 6) {
+            ProgressView().controlSize(.mini)
+            caption(label, color: color)
+        }
+    }
+
+    /// A step with its bar when the share done is known (a spinner when it is
+    /// not: a server that gives none), and the time left for this Mac's work.
+    @ViewBuilder
+    private func measured(_ label: String, timed: Bool) -> some View {
+        if queue.progress < 0 {
+            busy(label)
+        } else {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                HStack(spacing: 8) {
+                    ProgressView(value: queue.progress)
+                        .frame(maxWidth: 180)
+                        .animation(.linear(duration: 0.3), value: queue.progress)
+                    caption("\(label) \(percent)" + (timed ? remaining(now: context.date) : ""))
+                }
+            }
         }
     }
 
@@ -374,6 +429,9 @@ private struct ForkTranscribeJobRow: View {
             HStack(spacing: 6) {
                 if job.stage == .done {
                     Button(text.open) { queue.reading = job.id }
+                } else if job.stage == .failed(.unreadable), job.engine == .local,
+                          ForkTranscribeSecrets.exists(ForkTranscribeSecrets.studioAccount) {
+                    Button(remote.tryOnStudio) { queue.retry(job.id, engine: .studio) }
                 } else if case let .failed(failure) = job.stage, failure.isRetryable {
                     Button(text.retry) { queue.retry(job.id) }
                 } else if job.stage == .cancelled {
@@ -464,7 +522,12 @@ struct ForkTranscribeReader: View {
         if let duration = job.duration { parts.append(ForkTranscribeRules.clock(duration)) }
         if let words = job.words { parts.append(String(format: text.doneWords, words)) }
         if let language = job.heardLanguage { parts.append(language.uppercased()) }
-        parts.append(text.engineLocal)
+        let remote = ForkTranscribeRemoteStrings.strings(L10n.shared.language)
+        switch job.engine {
+        case .local: parts.append(text.engineLocal)
+        case .studio: parts.append(remote.engineStudio)
+        case .openAI: parts.append(remote.engineOpenAI)
+        }
         return parts.joined(separator: " · ")
     }
 
@@ -472,9 +535,13 @@ struct ForkTranscribeReader: View {
         let blocks = ForkTranscribeFormat.paragraphs(document.segments)
         let needle = query.trimmingCharacters(in: .whitespaces)
         let shown = needle.isEmpty ? blocks : blocks.filter { $0.text.localizedCaseInsensitiveContains(needle) }
-        let labels = ForkTranscribeQueue.labels(for: document, text, at: job?.finished ?? Date())
+        let labels = labels(document)
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
+                if !document.speakers.isEmpty {
+                    voices(document, labels: labels)
+                    Divider()
+                }
                 ForEach(Array(shown.enumerated()), id: \.offset) { _, block in
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
                         Text(ForkTranscribeFormat.timestamp(block.start))
@@ -495,6 +562,31 @@ struct ForkTranscribeReader: View {
         }
     }
 
+    private func labels(_ document: ForkTranscribeDocument) -> ForkTranscribeFormat.Labels {
+        guard let job else {
+            return .init(title: { $0 }, summary: "", voice: { String(format: text.voice, $0) }, separator: text.separator)
+        }
+        return ForkTranscribeQueue.labels(for: document, job: job, language: L10n.shared.language,
+                                          model: UserDefaults.standard.string(forKey: ForkDefaultsKey.transcribeOpenAIModel) ?? "",
+                                          at: job.finished ?? Date())
+    }
+
+    /// The voices the Studio told apart, each with a field to name it.
+    private func voices(_ document: ForkTranscribeDocument, labels: ForkTranscribeFormat.Labels) -> some View {
+        let remote = ForkTranscribeRemoteStrings.strings(L10n.shared.language)
+        return VStack(alignment: .leading, spacing: 6) {
+            Text(remote.voicesTitle).font(.subheadline.weight(.semibold))
+            Text(remote.voicesHint).font(.caption).foregroundStyle(.secondary)
+            ForEach(Array(document.speakers.enumerated()), id: \.element) { index, speaker in
+                ForkTranscribeVoiceField(placeholder: String(format: text.voice, index + 1),
+                                         initial: document.speakerNames[speaker] ?? "") { name in
+                    queue.rename(id, speaker: speaker, to: name)
+                    self.document = queue.document(id)
+                }
+            }
+        }
+    }
+
     private func highlighted(_ string: String, _ needle: String) -> AttributedString {
         var attributed = AttributedString(string)
         guard !needle.isEmpty else { return attributed }
@@ -509,7 +601,7 @@ struct ForkTranscribeReader: View {
     private var footer: some View {
         HStack {
             if let document, let job {
-                let labels = ForkTranscribeQueue.labels(for: document, text, at: job.finished ?? Date())
+                let labels = labels(document)
                 Button(text.copyAll) {
                     ForkTranscribeClipboard.copy(ForkTranscribeFormat.text(document, labels: labels))
                     flash(text.copyAll)
@@ -537,5 +629,170 @@ struct ForkTranscribeReader: View {
     private func flash(_ what: String) {
         withAnimation { copied = what }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { withAnimation { copied = nil } }
+    }
+}
+
+/// One voice's name in the reader: saved when Return is pressed or the field
+/// is left.
+private struct ForkTranscribeVoiceField: View {
+    let placeholder: String
+    let initial: String
+    let commit: (String) -> Void
+    @State private var name = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        HStack {
+            Text(placeholder).font(.caption).foregroundStyle(.secondary).frame(width: 70, alignment: .leading)
+            TextField(placeholder, text: $name)
+                .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: 240)
+                .focused($focused)
+                .onSubmit { commit(name) }
+                .onChange(of: focused) { _, now in if !now { commit(name) } }
+        }
+        .onAppear { name = initial }
+    }
+}
+
+/// A secret's row: "Saved" with Forget once kept, a field and Save before.
+/// The secret is never shown again once saved.
+private struct ForkTranscribeSecretRow: View {
+    let title: String
+    let account: String
+    let remote: ForkTranscribeRemoteStrings
+    var importer: (() -> String?)?
+    @State private var saved = false
+    @State private var input = ""
+    @State private var note: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(title)
+                Spacer()
+                if saved {
+                    Label(remote.secretSaved, systemImage: "checkmark.seal.fill")
+                        .foregroundStyle(.green)
+                        .font(.callout)
+                    Button(remote.forget) {
+                        ForkTranscribeSecrets.delete(account)
+                        saved = false
+                    }
+                } else {
+                    SecureField(remote.secretPlaceholder, text: $input)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: 240)
+                        .onSubmit(save)
+                    Button(remote.save, action: save)
+                        .disabled(input.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+            if !saved, let importer {
+                HStack {
+                    Spacer()
+                    Button(remote.importToken) {
+                        if let token = importer(), ForkTranscribeSecrets.save(token, account: account) {
+                            saved = true
+                            note = nil
+                        } else {
+                            note = remote.importFailed
+                        }
+                    }
+                    .buttonStyle(.link)
+                    .font(.caption)
+                }
+            }
+            if let note {
+                Text(note).font(.caption).foregroundStyle(.orange)
+            }
+        }
+        .onAppear { saved = ForkTranscribeSecrets.exists(account) }
+    }
+
+    private func save() {
+        guard ForkTranscribeSecrets.save(input, account: account) else { return }
+        input = ""
+        saved = true
+        note = nil
+    }
+}
+
+/// "Test": the server answers with this address and secret, or why not.
+private struct ForkTranscribeTestRow: View {
+    let remote: ForkTranscribeRemoteStrings
+    let check: () throws -> String
+    @State private var result: (ok: Bool, text: String)?
+    @State private var testing = false
+
+    var body: some View {
+        HStack {
+            Button(remote.test) {
+                testing = true
+                result = nil
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let outcome: (Bool, String)
+                    do {
+                        outcome = (true, try check())
+                    } catch let failure as ForkTranscribeFailure {
+                        outcome = (false, remote.failure(failure)
+                            ?? ForkTranscribeStrings.strings(L10n.shared.language).failure(failure))
+                    } catch {
+                        outcome = (false, remote.failureNetwork)
+                    }
+                    DispatchQueue.main.async {
+                        result = outcome
+                        testing = false
+                    }
+                }
+            }
+            .disabled(testing)
+            if testing { ProgressView().controlSize(.small) }
+            if let result {
+                Label(result.text, systemImage: result.ok ? "checkmark.circle.fill" : "xmark.circle.fill")
+                    .foregroundStyle(result.ok ? .green : .red)
+                    .font(.callout)
+            }
+            Spacer()
+        }
+    }
+}
+
+/// The Studio: its address, this Mac's token (or the transcrire tool's),
+/// and a test.
+private struct ForkTranscribeStudioSettings: View {
+    let remote: ForkTranscribeRemoteStrings
+    @AppStorage(ForkDefaultsKey.transcribeStudioURL) private var address = ForkTranscribeStudioAPI.defaultURL
+
+    var body: some View {
+        TextField(remote.addressTitle, text: $address)
+        ForkTranscribeSecretRow(title: remote.tokenTitle, account: ForkTranscribeSecrets.studioAccount, remote: remote,
+                                importer: ForkTranscribeSecrets.transcrireToken)
+        ForkTranscribeTestRow(remote: remote) {
+            guard let base = URL(string: address.trimmingCharacters(in: .whitespaces)), base.host != nil,
+                  let token = ForkTranscribeSecrets.read(ForkTranscribeSecrets.studioAccount)
+            else { throw ForkTranscribeFailure.notConfigured }
+            let state = try ForkTranscribeStudioEngine(base: base, token: token).health(stop: ForkMeetingTranscriptStop())
+            return state == .waking ? remote.testWaking : remote.testOK
+        }
+    }
+}
+
+/// An OpenAI-compatible service: its address, model and key, and a test.
+private struct ForkTranscribeOpenAISettings: View {
+    let remote: ForkTranscribeRemoteStrings
+    @AppStorage(ForkDefaultsKey.transcribeOpenAIURL) private var address = ForkTranscribeOpenAIAPI.defaultURL
+    @AppStorage(ForkDefaultsKey.transcribeOpenAIModel) private var model = ForkTranscribeOpenAIAPI.defaultModel
+
+    var body: some View {
+        TextField(remote.addressTitle, text: $address)
+        TextField(remote.modelTitle, text: $model)
+        ForkTranscribeSecretRow(title: remote.keyTitle, account: ForkTranscribeSecrets.openAIAccount, remote: remote)
+        ForkTranscribeTestRow(remote: remote) {
+            try ForkTranscribeOpenAIEngine(base: address, model: model,
+                                           key: ForkTranscribeSecrets.read(ForkTranscribeSecrets.openAIAccount))
+                .check(stop: ForkMeetingTranscriptStop())
+            return remote.testOK
+        }
     }
 }
