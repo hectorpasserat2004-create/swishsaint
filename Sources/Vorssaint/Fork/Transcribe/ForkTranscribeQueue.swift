@@ -579,7 +579,7 @@ final class ForkTranscribeQueue: ObservableObject {
             "engine: \(job.engine.rawValue) · language: \(job.language.rawValue) · heard: \(job.heardLanguage ?? "?")",
             "speakers: \(job.speakers ?? "auto") · remote job: \(job.remoteID ?? "-")",
             "stage: \(String(describing: job.stage))",
-            "duration: \(job.duration.map { ForkTranscribeRules.clock($0) } ?? "?") · work: \(job.processingSeconds.map { String(format: "%.1f s", $0) } ?? "?")",
+            "duration: \(job.duration.map { ForkTranscribeRules.clock($0) } ?? "?") · work: \(job.processingSeconds.map { String(format: "%.1f s", locale: Locale(identifier: "en_US_POSIX"), $0) } ?? "?")",
             "words: \(job.words.map(String.init) ?? "?") · outputs: \(job.outputs.count) · fallback: \(job.usedFallbackFolder)",
             "model: \(ForkParakeetModelStore.shared.installedDirectory == nil ? "missing" : "installed")",
         ]
