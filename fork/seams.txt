@@ -108,6 +108,7 @@ notch-glance-event   Sources/Vorssaint/Services/Notch/NotchSupport.swift        
 notch-glance-event2  Sources/Vorssaint/Services/Notch/NotchSupport.swift        # focus au regard : clé, priorité 1 et durée 4 s de NotchEvent.glance (switch exhaustifs)
 notch-glance-event3  Sources/Vorssaint/Services/Notch/NotchSupport.swift        # focus au regard : routage de NotchEvent.glance par le crochet (switch exhaustif) — ne nomme aucun type du fork (TEST_SOURCES)
 command-bar-glance   Sources/Vorssaint/Services/CommandBar/CommandBarCatalog.swift  # focus au regard : lignes de la Command Bar (pause, reprendre, recentrer, calibrer, modes, réglages)
+command-bar-transcribe  Sources/Vorssaint/Services/CommandBar/CommandBarCatalog.swift  # transcription de fichiers : lignes de la Command Bar (transcrire un fichier, ouvrir la page)
 
 # Tests officiels
 tests-settings-search  Tests/SettingsSearchCoverageTests.swift  # le scan « chaque titre des Réglages est trouvable » ne lit que le code officiel : les pages du fork sont indexées par page (ForkSettingsPages), pas réglage par réglage

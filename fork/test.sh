@@ -110,6 +110,8 @@ shopt -s nullglob
 FORK_SOURCES+=(Sources/Vorssaint/Fork/MacBackup/Core/*.swift Sources/Vorssaint/Fork/MacBackup/*/Pure/*.swift)
 # Glance Focus: the same, its pure and strings folders.
 FORK_SOURCES+=(Sources/Vorssaint/Fork/Glance/Pure/*.swift Sources/Vorssaint/Fork/Glance/Strings/*.swift)
+# File Transcription: its pure folder.
+FORK_SOURCES+=(Sources/Vorssaint/Fork/Transcribe/Pure/*.swift)
 shopt -u nullglob
 
 # La liste officielle : les lignes Sources/… du bloc TEST_SOURCES=( … ) de build.sh.

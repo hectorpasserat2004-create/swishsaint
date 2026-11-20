@@ -220,6 +220,7 @@ enum CommandBarCatalog {
             + ForkMeetingCommandBar.entries() // FORK(command-bar-meeting)
             + ForkMacBackupCommandBar.entries() // FORK(command-bar-macbackup)
             + ForkGlanceCommandBar.entries() // FORK(command-bar-glance)
+            + ForkTranscribeCommandBar.entries() // FORK(command-bar-transcribe)
     }
 
     /// Read both languages from the same definitions, including live action

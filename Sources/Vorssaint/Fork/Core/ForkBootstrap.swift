@@ -16,6 +16,7 @@ enum ForkBootstrap {
         NotchNotice.forkActivate = { notice in // seam notch-notice-activate
             ForkDictationIsland.activate(notice) || ForkMeetingIsland.activate(notice)
                 || ForkMacBackupIsland.activate(notice) || ForkGlanceIsland.activate(notice)
+                || ForkTranscribeIsland.activate(notice)
         }
         SettingsDirectoryItem.forkSections = { ForkSettingsPages.sections($0, language: $1) } // seam settings3
         ForkNotchDictations.start()
@@ -26,6 +27,7 @@ enum ForkBootstrap {
         ForkGlanceIsland.start()
         ForkGlanceWindowIndex.start()
         ForkGlance.start()
+        ForkTranscribeQueue.shared.start()
         // Once the official launch is done: the official Window Layout only
         // syncs while its feature is available, and is only told of an
         // Accessibility change while one of its own inputs is on. The

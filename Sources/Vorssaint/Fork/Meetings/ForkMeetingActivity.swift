@@ -29,8 +29,10 @@ enum ForkMeetingActivity {
         var finalizing = 0
         var transcribing = false
         var summarizing = false
+        /// File Transcription: a dropped file is being transcribed or waits.
+        var transcribingFiles = false
 
-        var isBusy: Bool { recording || finalizing > 0 || transcribing || summarizing }
+        var isBusy: Bool { recording || finalizing > 0 || transcribing || summarizing || transcribingFiles }
     }
 
     private final class Shared: @unchecked Sendable {
@@ -62,6 +64,12 @@ enum ForkMeetingActivity {
     /// update would quit the app in the middle of it.
     static func setSummarizing(_ summarizing: Bool) {
         change { $0.summarizing = summarizing }
+    }
+
+    /// File Transcription (`ForkTranscribeQueue`): a file is transcribed or
+    /// waits its turn. An update would quit the app in the middle of it.
+    static func setTranscribingFiles(_ busy: Bool) {
+        change { $0.transcribingFiles = busy }
     }
 
     /// The finalizer: one more final pass queued.

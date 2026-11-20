@@ -29,6 +29,7 @@ enum ForkSettingsPages {
             item(.glanceFocus, language: language),
         ], utilitiesAfterCapture: [item(.meetings, language: language)], utilitiesAtEnd: [
             item(.dictation, language: language),
+            item(.fileTranscription, language: language),
             item(.macBackup, language: language),
         ], app: [ForkExtrasSettings.directoryItem(language: language)])
     }
@@ -58,6 +59,7 @@ extension ForkFeature {
         case .meetings: return "meetings"
         case .macBackup: return "macbackup"
         case .glanceFocus: return "glance-focus"
+        case .fileTranscription: return "file-transcription"
         }
     }
 
@@ -90,6 +92,10 @@ extension ForkFeature {
                     "backup", "kopia", "restore", "nas", "s3", "minio", "time machine"]
         case .glanceFocus:
             return [text.glanceSummary, "glance", "gaze", "head", "camera", "focus", "webcam"]
+        case .fileTranscription:
+            let transcribe = ForkTranscribeStrings.strings(language)
+            return [text.transcribeSummary, transcribe.barKeywords, ForkTranscribeStrings.enUS.barKeywords,
+                    "whisper", "mp3", "m4a", "wav", "mp4"]
         }
     }
 }
@@ -166,6 +172,8 @@ struct ForkFeatureSettingsPage: View {
             ForkMacBackupSettingsView()
         case .glanceFocus:
             ForkGlanceSettingsView()
+        case .fileTranscription:
+            ForkTranscribeSettingsView()
         }
     }
 }

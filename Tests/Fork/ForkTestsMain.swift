@@ -20,6 +20,7 @@ struct ForkTests {
             ("fork-dictation", { ForkDictationTests.run(suite) }),
             ("fork-dictation-machine", { ForkDictationMachineTests.run(suite) }),
             ("fork-dictation-replacements", { ForkDictationReplacementsTests.run(suite) }),
+            ("fork-transcribe", { ForkTranscribeTests.run(suite) }),
             ("fork-dictation-shortcuts", { ForkDictationShortcutTests.run(suite) }),
             ("fork-dictation-parakeet-offer", { ForkDictationParakeetOfferTests.run(suite) }),
             ("fork-dictation-history", { ForkDictationHistoryTests.run(suite) }),
