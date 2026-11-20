@@ -20,6 +20,11 @@ enum ForkDictationIsland {
             && !island.expanded && !island.dragPlaceholder && island.captureControls == nil
     }
 
+    /// The display the island is on, nil while it has no window.
+    static var display: CGDirectDisplayID? {
+        NotchService.shared.presentationWindow?.screen?.notchDisplayID
+    }
+
     /// False when the island refused it: the caller falls back on the bubble.
     @discardableResult
     static func show(_ presentation: ForkDictationPresentation, level: Float, now: Date,

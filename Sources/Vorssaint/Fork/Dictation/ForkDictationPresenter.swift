@@ -185,7 +185,9 @@ final class ForkDictationPresenter {
     private var choosesIsland: Bool {
         let stored = UserDefaults.standard.string(forKey: ForkDefaultsKey.dictationFeedback) ?? ""
         let setting = ForkDictationFeedbackSetting(rawValue: stored) ?? .auto
-        return setting != .bubble && ForkDictationIsland.isAvailable
+        return setting.usesIsland(islandAvailable: ForkDictationIsland.isAvailable,
+                                  islandDisplay: ForkDictationIsland.display,
+                                  workDisplay: ForkDictationHUD.activeScreen()?.notchDisplayID)
     }
 
     private func render() {
