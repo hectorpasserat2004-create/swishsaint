@@ -60,4 +60,20 @@ enum ForkDictationFeedbackSetting: String, CaseIterable {
     case bubble
 
     static let fallback: ForkDictationFeedbackSetting = .auto
+
+    /// Whether this dictation shows in the island. Automatic takes it only
+    /// on the display the person works on: by default the island sits on
+    /// the laptop's notch, and someone typing on an external display would
+    /// see nothing move there, only hear the end. Unknown displays count as
+    /// the same one, as before. Chosen by hand, the island stays the island.
+    func usesIsland(islandAvailable: Bool, islandDisplay: UInt32?, workDisplay: UInt32?) -> Bool {
+        switch self {
+        case .bubble: return false
+        case .island: return islandAvailable
+        case .auto:
+            guard islandAvailable else { return false }
+            guard let islandDisplay, let workDisplay else { return true }
+            return islandDisplay == workDisplay
+        }
+    }
 }

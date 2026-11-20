@@ -114,7 +114,7 @@ extension ForkDictationService {
     private func guardFailure() -> ForkDictationFailure? {
         if !AXIsProcessTrusted() { return .accessibilityMissing }
         if MicMuteService.shared.isMuted { return .microphoneMutedInVorssaint }
-        if ForkDictationPaster.isSecureInputActive {
+        if ForkDictationPaster.blocksTyping(in: target) {
             return .secureInput(app: ForkDictationPaster.secureInputHolderName())
         }
         switch AVCaptureDevice.authorizationStatus(for: .audio) {

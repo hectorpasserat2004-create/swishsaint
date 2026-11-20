@@ -14,8 +14,9 @@ import os
 /// 1. The target is the app in front when the shortcut was pressed. It is
 ///    brought back before ⌘V, and the text stays on the clipboard rather
 ///    than landing in whatever app is in front by then.
-/// 2. Secure input is checked before the write and again before ⌘V: macOS
-///    drops synthetic keystrokes while a password field holds it.
+/// 2. A password field is checked before the write and again before ⌘V:
+///    the dictation never types into one. Secure input alone does not stop
+///    it (`blocksTyping`).
 /// 3. Written for this Mac only (`.currentHostOnly`): a dictation must not
 ///    reach the iPhone through Universal Clipboard.
 /// 4. Every pasteboard access runs on the app's shared lane; the write has
@@ -110,7 +111,7 @@ final class ForkDictationPaster {
         generation &+= 1
         let generation = generation
         let copyOnly = action == .copy
-        let willTry = !copyOnly && target.map { !$0.isTerminated } == true && !Self.isSecureInputActive
+        let willTry = !copyOnly && target.map { !$0.isTerminated } == true && !Self.blocksTyping(in: target)
 
         // A previous paste still waiting to give the clipboard back: its
         // snapshot is the person's real clipboard, ours only sits on top.
@@ -162,7 +163,7 @@ final class ForkDictationPaster {
                 completion(.copied)
                 return
             }
-            guard willTry, let target, !target.isTerminated, !Self.isSecureInputActive else {
+            guard willTry, let target, !target.isTerminated, !Self.blocksTyping(in: target) else {
                 completion(.keptInClipboard)
                 return
             }
@@ -171,7 +172,7 @@ final class ForkDictationPaster {
                     completion(.superseded)
                     return
                 }
-                guard isFront, !Self.isSecureInputActive else {
+                guard isFront, !Self.blocksTyping(in: target) else {
                     completion(.keptInClipboard)
                     return
                 }
@@ -206,8 +207,37 @@ final class ForkDictationPaster {
 
     // MARK: - Secure input
 
-    /// While on, macOS drops synthetic keystrokes and blinds event taps.
+    /// While on, macOS hides the keyboard from event taps. It does not stop
+    /// a synthetic ⌘V: checked on macOS 27, text posted while it is on still
+    /// reaches the focused field.
     static var isSecureInputActive: Bool { IsSecureEventInputEnabled() }
+
+    /// Typing stays out only of a real password field. Secure input on its
+    /// own is not one: Chrome, among others, leaves it on long after its
+    /// password field is gone, and the app macOS records is only the one
+    /// that was in front when it turned on.
+    static func blocksTyping(in app: NSRunningApplication? = nil) -> Bool {
+        isSecureInputActive && isPasswordFieldFocused(in: app ?? NSWorkspace.shared.frontmostApplication)
+    }
+
+    /// The app's focused element is a secure text field, as Accessibility
+    /// reports it. False when it cannot tell (an app that does not answer in
+    /// time). Asked of the app: the system-wide element often cannot answer.
+    static func isPasswordFieldFocused(in app: NSRunningApplication?) -> Bool {
+        guard let app, !app.isTerminated else { return false }
+        let element = AXUIElementCreateApplication(app.processIdentifier)
+        AXUIElementSetMessagingTimeout(element, 0.25)
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, kAXFocusedUIElementAttribute as CFString, &value) == .success,
+              let value, CFGetTypeID(value) == AXUIElementGetTypeID() else { return false }
+        let focused = value as! AXUIElement
+        AXUIElementSetMessagingTimeout(focused, 0.25)
+        var role: CFTypeRef?
+        var subrole: CFTypeRef?
+        AXUIElementCopyAttributeValue(focused, kAXRoleAttribute as CFString, &role)
+        AXUIElementCopyAttributeValue(focused, kAXSubroleAttribute as CFString, &subrole)
+        return subrole as? String == kAXSecureTextFieldSubrole || role as? String == kAXSecureTextFieldSubrole
+    }
 
     /// The app holding secure input, nil when it cannot be named.
     static func secureInputHolderName() -> String? {
@@ -285,7 +315,7 @@ final class ForkDictationPaster {
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
             GeneralPasteboardAccess.shared.async({ NSPasteboard.general.changeCount == changeCount }) { isCurrent in
-                guard isCurrent, self.generation == generation, !Self.isSecureInputActive else {
+                guard isCurrent, self.generation == generation, !Self.blocksTyping() else {
                     completion(false)
                     return
                 }

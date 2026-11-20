@@ -166,6 +166,17 @@ enum ForkDictationShortcutTests {
                         && ForkDictationPresentation.keptInClipboard.holdDuration == 4
                         && ForkDictationPresentation.transcribing.holdDuration == nil,
                      "each state stays the time the plan gives it")
+        let auto = ForkDictationFeedbackSetting.auto
+        suite.expect(auto.usesIsland(islandAvailable: true, islandDisplay: 1, workDisplay: 1)
+                        && !auto.usesIsland(islandAvailable: true, islandDisplay: 1, workDisplay: 2),
+                     "automatic: the island on the display worked on, else the bubble there")
+        suite.expect(auto.usesIsland(islandAvailable: true, islandDisplay: nil, workDisplay: 2)
+                        && !auto.usesIsland(islandAvailable: false, islandDisplay: 1, workDisplay: 1),
+                     "automatic: an unknown display keeps the island, an unavailable one never")
+        suite.expect(ForkDictationFeedbackSetting.island.usesIsland(islandAvailable: true, islandDisplay: 1, workDisplay: 2)
+                        && !ForkDictationFeedbackSetting.bubble.usesIsland(islandAvailable: true, islandDisplay: 1,
+                                                                           workDisplay: 1),
+                     "a surface chosen by hand is kept")
 
         var wave = ForkDictationWaveform()
         let quiet = wave.samples(at: 0)
