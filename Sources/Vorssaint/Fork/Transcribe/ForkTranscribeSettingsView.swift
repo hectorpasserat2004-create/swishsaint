@@ -681,6 +681,7 @@ private struct ForkTranscribeSecretRow: View {
                     }
                 } else {
                     SecureField(remote.secretPlaceholder, text: $input)
+                        .labelsHidden()
                         .textFieldStyle(.roundedBorder)
                         .frame(maxWidth: 240)
                         .onSubmit(save)
